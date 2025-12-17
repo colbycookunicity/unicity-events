@@ -1,0 +1,132 @@
+Based on the discussion, here are the high-level requirements and notes for the **Punta Cana MVP**, targeted for launch by **January 1st or 2nd**.
+
+### 1. Core Objectives
+
+* 
+**Goal:** Replace "Bizzabo" with a custom internal platform to save costs and better integrate with Unicity data.
+
+
+* 
+**Target Event:** Punta Cana (Early June).
+
+
+* 
+**MVP Deadline:** Registration form and database must be live by early January to capture qualifiers.
+
+
+* 
+**Long-Term Vision:** Treat event data as first-class Unicity data (history, recognition, compliance) rather than isolated third-party records.
+
+
+
+### 2. Registration & Authentication
+
+* **Login Method:** Use **OTP (One-Time Password)** or Magic Link tied to the Distributor ID and email. Avoid password management.
+
+
+* 
+**Validation:** Validate the user against their Unicity Distributor ID.
+
+
+* **Guest/Spouse Handling:**
+* "Plus Ones" do not have Unicity IDs.
+
+
+* Guests must be linked to the primary Distributor's ID (e.g., as a sub-record or via a "G" suffix).
+
+
+* Distributors typically pay for and register their own guests.
+
+
+
+
+* 
+**Translations:** **English and Spanish** support is a critical "top goal" for launch.
+
+
+
+### 3. Payments (Buy-Ins)
+
+* **Requirement:** Need to process payments for "Buy-ins" (guests/spouses) directly in the flow .
+* 
+**Provider Decision Needed:** The team currently uses **Square**, but Tyler recommended **Stripe** to reduce PCI compliance headaches and handle API integrations easier.
+
+
+* 
+**"No-Show" Fees:** The system needs the ability to collect credit card info for a potential "no-show fee" (even if they aren't actually charged, it’s used as a deterrent).
+
+
+
+### 4. Logistics & Data Collection
+
+* **Flights & Airfare:**
+* 
+**Data Needed:** Airline, Flight Number, Departure City, Arrival City.
+
+
+* 
+**Reimbursement:** Qualifiers need to upload a **PDF receipt** of their flight for finance to process.
+
+
+* 
+**Status Tracking:** Admins need a checkbox to mark "Reimbursement Complete".
+
+
+* 
+**Wishlist:** Integration with **FlightAware** to auto-check arrival times and delays (Tyler/Colby to explore).
+
+
+
+
+* **Swag Management:**
+* Collect shirt sizes during registration.
+
+
+* 
+**On-site feature:** A simple admin toggle to mark "Swag Picked Up" to prevent disputes about who received their items.
+
+
+
+
+
+### 5. Communication (Iterable Integration)
+
+* 
+**Platform:** Integration with **Iterable** is required (Mikele to provide API).
+
+
+* **Required Automated Flows:**
+* 
+**Confirmation:** Immediate email upon registration.
+
+
+* 
+**Nudge:** "You qualified but haven't registered" (sent repeatedly).
+
+
+* 
+**Resend Capability:** Admins need a button to manually "Resend Confirmation" or "Resend Qualification Email" if a user claims they missed it (current Bizzabo pain point).
+
+
+
+
+
+### 6. Admin Dashboard Requirements
+
+* 
+**Role-Based Access:** Admins (edit capability) vs. Viewers (Market-specific read-only access).
+
+
+* 
+**Filtering:** Ability to filter attendees by status (Registered, Not Coming, Swag Picked Up, Reimbursement Pending).
+
+
+* **User Management:** Ability to edit names/details on the fly .
+
+### 7. Out of Scope (For Now)
+
+* **On-Site Badge Printing:** De-scoped for the MVP. Punta Cana will likely use pre-printed or manual solutions; printing is a long-term goal for larger events like Convention.
+
+
+* 
+**Side Events (Diamond Camp):** While mentioned as a future need, the immediate focus is strictly Punta Cana.
