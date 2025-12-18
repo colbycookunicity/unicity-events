@@ -71,11 +71,26 @@ export const registrations = pgTable("registrations", {
   phone: text("phone"),
   status: text("status").notNull().default("qualified"),
   language: text("language").notNull().default("en"),
+  // Personal info
+  gender: text("gender"),
+  dateOfBirth: timestamp("date_of_birth"),
+  // Passport info
+  passportNumber: text("passport_number"),
+  passportCountry: text("passport_country"),
+  passportExpiration: timestamp("passport_expiration"),
+  // Emergency contact
+  emergencyContact: text("emergency_contact"),
+  emergencyContactPhone: text("emergency_contact_phone"),
   // Swag info
   shirtSize: text("shirt_size"),
+  pantSize: text("pant_size"),
   swagStatus: text("swag_status").default("pending"),
-  // Dietary
+  // Dietary & accommodations
   dietaryRestrictions: text("dietary_restrictions"),
+  adaAccommodations: boolean("ada_accommodations").default(false),
+  roomType: text("room_type"),
+  // Custom form data for event-specific fields
+  formData: jsonb("form_data"),
   // Terms acceptance
   termsAccepted: boolean("terms_accepted").default(false),
   termsAcceptedAt: timestamp("terms_accepted_at"),
