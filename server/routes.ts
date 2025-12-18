@@ -240,19 +240,20 @@ export async function registerRoutes(
     }
   });
 
-  // Public event endpoint for registration page
-  app.get("/api/events/:id/public", async (req, res) => {
+  // Public event endpoint for registration page (supports both ID and slug)
+  app.get("/api/events/:idOrSlug/public", async (req, res) => {
     try {
-      const event = await storage.getEvent(req.params.id);
+      const event = await storage.getEventByIdOrSlug(req.params.idOrSlug);
       if (!event) {
         return res.status(404).json({ error: "Event not found" });
       }
       if (event.status !== "published") {
         return res.status(404).json({ error: "Event not available" });
       }
-      // Return public-safe event data
+      // Return public-safe event data including registration settings
       res.json({
         id: event.id,
+        slug: event.slug,
         name: event.name,
         nameEs: event.nameEs,
         description: event.description,
@@ -262,6 +263,8 @@ export async function registerRoutes(
         endDate: event.endDate,
         capacity: event.capacity,
         buyInPrice: event.buyInPrice,
+        formFields: event.formFields,
+        registrationSettings: event.registrationSettings,
       });
     } catch (error) {
       console.error("Get public event error:", error);
@@ -320,10 +323,10 @@ export async function registerRoutes(
     }
   });
 
-  // Public Event Registration
-  app.post("/api/events/:eventId/register", async (req, res) => {
+  // Public Event Registration (supports both ID and slug)
+  app.post("/api/events/:eventIdOrSlug/register", async (req, res) => {
     try {
-      const event = await storage.getEvent(req.params.eventId);
+      const event = await storage.getEventByIdOrSlug(req.params.eventIdOrSlug);
       if (!event) {
         return res.status(404).json({ error: "Event not found" });
       }

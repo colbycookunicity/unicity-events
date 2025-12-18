@@ -11,7 +11,7 @@ import {
   type EventWithStats, type RegistrationWithDetails,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, gte, sql, count } from "drizzle-orm";
+import { eq, desc, and, gte, sql, count, or } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -23,6 +23,8 @@ export interface IStorage {
   // Events
   getEvents(): Promise<EventWithStats[]>;
   getEvent(id: string): Promise<Event | undefined>;
+  getEventBySlug(slug: string): Promise<Event | undefined>;
+  getEventByIdOrSlug(idOrSlug: string): Promise<Event | undefined>;
   getRecentEvents(limit?: number): Promise<Event[]>;
   createEvent(event: InsertEvent): Promise<Event>;
   updateEvent(id: string, data: Partial<InsertEvent>): Promise<Event | undefined>;
@@ -126,6 +128,19 @@ export class DatabaseStorage implements IStorage {
 
   async getEvent(id: string): Promise<Event | undefined> {
     const [event] = await db.select().from(events).where(eq(events.id, id));
+    return event || undefined;
+  }
+
+  async getEventBySlug(slug: string): Promise<Event | undefined> {
+    const [event] = await db.select().from(events).where(eq(events.slug, slug));
+    return event || undefined;
+  }
+
+  async getEventByIdOrSlug(idOrSlug: string): Promise<Event | undefined> {
+    // Try by ID first (UUIDs are specific format), then by slug
+    const [event] = await db.select().from(events).where(
+      or(eq(events.id, idOrSlug), eq(events.slug, idOrSlug))
+    );
     return event || undefined;
   }
 
