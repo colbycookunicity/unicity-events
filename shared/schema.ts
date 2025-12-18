@@ -37,9 +37,27 @@ export const users = pgTable("users", {
   lastModified: timestamp("last_modified").defaultNow().notNull(),
 });
 
+// Registration page layout options
+export const registrationLayoutEnum = ["standard", "split", "hero-background"] as const;
+export type RegistrationLayout = typeof registrationLayoutEnum[number];
+
+// Registration page settings type
+export type RegistrationSettings = {
+  heroImagePath?: string;
+  heading?: string;
+  headingEs?: string;
+  subheading?: string;
+  subheadingEs?: string;
+  ctaLabel?: string;
+  ctaLabelEs?: string;
+  layout?: RegistrationLayout;
+  accentColor?: string;
+};
+
 // Events table
 export const events = pgTable("events", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  slug: text("slug").unique(),
   name: text("name").notNull(),
   nameEs: text("name_es"),
   description: text("description"),
@@ -54,6 +72,7 @@ export const events = pgTable("events", {
   qualificationStartDate: timestamp("qualification_start_date"),
   qualificationEndDate: timestamp("qualification_end_date"),
   formFields: jsonb("form_fields"),
+  registrationSettings: jsonb("registration_settings").$type<RegistrationSettings>(),
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   lastModified: timestamp("last_modified").defaultNow().notNull(),
