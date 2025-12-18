@@ -12,6 +12,13 @@ const HYDRA_API_BASE = process.env.NODE_ENV === "production"
   ? "https://hydra.unicity.net/v6"
   : "https://hydraqa.unicity.net/v6-test";
 
+// Whitelist of admin email addresses (case-insensitive)
+const ADMIN_EMAILS = [
+  "colby.cook@unicity.com",
+  "biani.gonzalez@unicity.com",
+  "ashley.milliken@unicity.com",
+].map(e => e.toLowerCase());
+
 interface AuthenticatedRequest extends Request {
   user?: { id: string; email: string; role: string };
 }
@@ -62,6 +69,11 @@ export async function registerRoutes(
       const { email } = req.body;
       if (!email) {
         return res.status(400).json({ error: "Email is required" });
+      }
+
+      // Only allow whitelisted admin emails to log in
+      if (!ADMIN_EMAILS.includes(email.toLowerCase())) {
+        return res.status(403).json({ error: "Access denied. This login is for authorized administrators only." });
       }
 
       // For development, simulate OTP
@@ -158,10 +170,12 @@ export async function registerRoutes(
       let user = await storage.getUserByEmail(email);
       
       if (!user) {
+        // Only whitelisted emails get admin role
+        const role = ADMIN_EMAILS.includes(email.toLowerCase()) ? "admin" : "readonly";
         user = await storage.createUser({
           email,
           name: email.split("@")[0],
-          role: email.endsWith("@unicity.com") ? "admin" : "readonly",
+          role,
           customerId,
         });
       }
