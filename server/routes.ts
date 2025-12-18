@@ -3,6 +3,10 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertEventSchema, insertRegistrationSchema, insertGuestSchema, insertFlightSchema, insertReimbursementSchema } from "@shared/schema";
 import { z } from "zod";
+import { stripeService } from "./stripeService";
+import { getStripePublishableKey } from "./stripeClient";
+import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import { ObjectPermission } from "./objectAcl";
 
 const HYDRA_API_BASE = process.env.NODE_ENV === "production" 
   ? "https://hydra.unicity.net/v6"
@@ -578,6 +582,155 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Delete reimbursement error:", error);
       res.status(500).json({ error: "Failed to delete reimbursement" });
+    }
+  });
+
+  // Stripe Payment Routes
+  app.get("/api/stripe/config", async (req, res) => {
+    try {
+      const publishableKey = await getStripePublishableKey();
+      res.json({ publishableKey });
+    } catch (error) {
+      console.error("Get Stripe config error:", error);
+      res.status(500).json({ error: "Failed to get Stripe configuration" });
+    }
+  });
+
+  app.post("/api/guests/:guestId/checkout", authenticateToken, async (req, res) => {
+    try {
+      const guest = await storage.getGuestsByRegistration(req.params.guestId);
+      const guestData = guest.find(g => g.id === req.params.guestId);
+      
+      if (!guestData) {
+        return res.status(404).json({ error: "Guest not found" });
+      }
+
+      const registration = await storage.getRegistration(guestData.registrationId);
+      if (!registration) {
+        return res.status(404).json({ error: "Registration not found" });
+      }
+
+      const event = await storage.getEvent(registration.eventId);
+      if (!event || !event.buyInPrice) {
+        return res.status(400).json({ error: "Event buy-in price not configured" });
+      }
+
+      const host = req.headers.host || 'localhost:5000';
+      const protocol = req.headers['x-forwarded-proto'] || 'http';
+      const baseUrl = `${protocol}://${host}`;
+
+      const session = await stripeService.createCheckoutSessionForGuest(
+        guestData.id,
+        `${guestData.firstName} ${guestData.lastName}`,
+        event.buyInPrice * 100, // Convert to cents
+        event.name,
+        `${baseUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+        `${baseUrl}/payment/cancel`
+      );
+
+      res.json({ url: session.url });
+    } catch (error) {
+      console.error("Checkout error:", error);
+      res.status(500).json({ error: "Failed to create checkout session" });
+    }
+  });
+
+  app.post("/api/payment/verify", authenticateToken, async (req, res) => {
+    try {
+      const { sessionId } = req.body;
+      if (!sessionId) {
+        return res.status(400).json({ error: "Session ID required" });
+      }
+
+      const success = await stripeService.handlePaymentSuccess(sessionId);
+      res.json({ success });
+    } catch (error) {
+      console.error("Payment verification error:", error);
+      res.status(500).json({ error: "Failed to verify payment" });
+    }
+  });
+
+  // Object Storage Routes for Receipt Uploads
+  app.get("/objects/:objectPath(*)", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    const userId = req.user!.id;
+    const objectStorageService = new ObjectStorageService();
+    try {
+      const objectFile = await objectStorageService.getObjectEntityFile(req.path);
+      const canAccess = await objectStorageService.canAccessObjectEntity({
+        objectFile,
+        userId,
+        requestedPermission: ObjectPermission.READ,
+      });
+      if (!canAccess) {
+        return res.sendStatus(401);
+      }
+      objectStorageService.downloadObject(objectFile, res);
+    } catch (error) {
+      console.error("Error checking object access:", error);
+      if (error instanceof ObjectNotFoundError) {
+        return res.sendStatus(404);
+      }
+      return res.sendStatus(500);
+    }
+  });
+
+  app.post("/api/objects/upload", authenticateToken, async (req, res) => {
+    try {
+      const objectStorageService = new ObjectStorageService();
+      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      res.json({ uploadURL });
+    } catch (error) {
+      console.error("Get upload URL error:", error);
+      res.status(500).json({ error: "Failed to get upload URL" });
+    }
+  });
+
+  app.put("/api/reimbursements/:id/receipt", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { receiptURL } = req.body;
+      if (!receiptURL) {
+        return res.status(400).json({ error: "receiptURL is required" });
+      }
+
+      const userId = req.user!.id;
+      const objectStorageService = new ObjectStorageService();
+      
+      const objectPath = await objectStorageService.trySetObjectEntityAclPolicy(
+        receiptURL,
+        {
+          owner: userId,
+          visibility: "private",
+        }
+      );
+
+      const reimbursement = await storage.updateReimbursement(req.params.id, {
+        receiptPath: objectPath,
+      });
+
+      if (!reimbursement) {
+        return res.status(404).json({ error: "Reimbursement not found" });
+      }
+
+      res.json({ objectPath, reimbursement });
+    } catch (error) {
+      console.error("Error setting receipt:", error);
+      res.status(500).json({ error: "Failed to update receipt" });
+    }
+  });
+
+  // Public assets serving
+  app.get("/public-objects/:filePath(*)", async (req, res) => {
+    const filePath = req.params.filePath;
+    const objectStorageService = new ObjectStorageService();
+    try {
+      const file = await objectStorageService.searchPublicObject(filePath);
+      if (!file) {
+        return res.status(404).json({ error: "File not found" });
+      }
+      objectStorageService.downloadObject(file, res);
+    } catch (error) {
+      console.error("Error searching for public object:", error);
+      return res.status(500).json({ error: "Internal server error" });
     }
   });
 
