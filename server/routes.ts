@@ -274,8 +274,12 @@ export async function registerRoutes(
 
   app.post("/api/events", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
     try {
+      // Normalize slug: empty/whitespace -> null
+      const normalizedSlug = req.body.slug?.trim() || null;
+      
       const data = insertEventSchema.parse({
         ...req.body,
+        slug: normalizedSlug,
         startDate: req.body.startDate ? new Date(req.body.startDate) : undefined,
         endDate: req.body.endDate ? new Date(req.body.endDate) : undefined,
         qualificationStartDate: req.body.qualificationStartDate ? new Date(req.body.qualificationStartDate) : undefined,
@@ -295,8 +299,14 @@ export async function registerRoutes(
 
   app.patch("/api/events/:id", authenticateToken, requireRole("admin", "event_manager"), async (req, res) => {
     try {
+      // Normalize slug: empty/whitespace -> null
+      const normalizedSlug = req.body.slug !== undefined 
+        ? (req.body.slug?.trim() || null) 
+        : undefined;
+      
       const updates = {
         ...req.body,
+        slug: normalizedSlug,
         startDate: req.body.startDate ? new Date(req.body.startDate) : undefined,
         endDate: req.body.endDate ? new Date(req.body.endDate) : undefined,
         qualificationStartDate: req.body.qualificationStartDate ? new Date(req.body.qualificationStartDate) : undefined,

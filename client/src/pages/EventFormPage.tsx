@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useLocation, useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowLeft, Loader2, Copy, ExternalLink, Check } from "lucide-react";
+import { ArrowLeft, Loader2, Copy, ExternalLink, Check, Upload, Image } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,8 +15,8 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTranslation } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient, apiRequest } from "@/lib/queryClient";
-import type { Event } from "@shared/schema";
+import { queryClient, apiRequest, getAuthHeaders } from "@/lib/queryClient";
+import type { Event, RegistrationSettings } from "@shared/schema";
 
 const eventFormSchema = z.object({
   name: z.string().min(1, "Event name is required"),
@@ -32,6 +32,18 @@ const eventFormSchema = z.object({
   requiresQualification: z.boolean().default(false),
   qualificationStartDate: z.string().optional(),
   qualificationEndDate: z.string().optional(),
+  slug: z.string().regex(/^[a-z0-9-]+$/, "Only lowercase letters, numbers, and hyphens allowed").min(3).max(50).optional().or(z.literal("")),
+  registrationSettings: z.object({
+    heroImagePath: z.string().optional(),
+    heading: z.string().optional(),
+    headingEs: z.string().optional(),
+    subheading: z.string().optional(),
+    subheadingEs: z.string().optional(),
+    ctaLabel: z.string().optional(),
+    ctaLabelEs: z.string().optional(),
+    layout: z.enum(["standard", "split", "hero-background"]).optional(),
+    accentColor: z.string().optional(),
+  }).optional(),
 });
 
 type EventFormData = z.infer<typeof eventFormSchema>;
@@ -64,11 +76,24 @@ export default function EventFormPage() {
       requiresQualification: false,
       qualificationStartDate: "",
       qualificationEndDate: "",
+      slug: "",
+      registrationSettings: {
+        heroImagePath: "",
+        heading: "",
+        headingEs: "",
+        subheading: "",
+        subheadingEs: "",
+        ctaLabel: "",
+        ctaLabelEs: "",
+        layout: "standard",
+        accentColor: "",
+      },
     },
   });
 
   useEffect(() => {
     if (event) {
+      const settings = event.registrationSettings as RegistrationSettings | undefined;
       form.reset({
         name: event.name,
         nameEs: event.nameEs || "",
@@ -87,6 +112,18 @@ export default function EventFormPage() {
         qualificationEndDate: event.qualificationEndDate
           ? new Date(event.qualificationEndDate).toISOString().slice(0, 16)
           : "",
+        slug: event.slug || "",
+        registrationSettings: {
+          heroImagePath: settings?.heroImagePath || "",
+          heading: settings?.heading || "",
+          headingEs: settings?.headingEs || "",
+          subheading: settings?.subheading || "",
+          subheadingEs: settings?.subheadingEs || "",
+          ctaLabel: settings?.ctaLabel || "",
+          ctaLabelEs: settings?.ctaLabelEs || "",
+          layout: settings?.layout || "standard",
+          accentColor: settings?.accentColor || "",
+        },
       });
     }
   }, [event, form]);
@@ -120,10 +157,19 @@ export default function EventFormPage() {
   });
 
   const onSubmit = (data: EventFormData) => {
+    // Normalize slug: convert empty string to undefined so backend stores null
+    const normalizedData = {
+      ...data,
+      slug: data.slug?.trim() || undefined,
+      registrationSettings: data.registrationSettings && Object.values(data.registrationSettings).some(v => v) 
+        ? data.registrationSettings 
+        : undefined,
+    };
+    
     if (isEditing) {
-      updateMutation.mutate(data);
+      updateMutation.mutate(normalizedData);
     } else {
-      createMutation.mutate(data);
+      createMutation.mutate(normalizedData);
     }
   };
 
@@ -174,7 +220,7 @@ export default function EventFormPage() {
             <CardDescription>Share this link with qualified distributors to register</CardDescription>
           </CardHeader>
           <CardContent>
-            <RegistrationLinkCopy eventId={event.id} />
+            <RegistrationLinkCopy eventId={event.id} slug={event.slug || undefined} />
           </CardContent>
         </Card>
       )}
@@ -408,6 +454,168 @@ export default function EventFormPage() {
             </CardContent>
           </Card>
 
+          {isEditing && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Registration Page Customization</CardTitle>
+                <CardDescription>Customize how the public registration page looks</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <FormField
+                  control={form.control}
+                  name="slug"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Custom URL Slug</FormLabel>
+                      <FormControl>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground">{window.location.origin}/register/</span>
+                          <Input 
+                            {...field} 
+                            placeholder="rise-2026" 
+                            className="max-w-xs"
+                            data-testid="input-event-slug" 
+                          />
+                        </div>
+                      </FormControl>
+                      <FormDescription>
+                        Leave empty to use the event ID. Use lowercase letters, numbers, and hyphens only.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="space-y-4">
+                  <h4 className="text-sm font-medium">Layout</h4>
+                  <FormField
+                    control={form.control}
+                    name="registrationSettings.layout"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Page Layout</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || "standard"}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-layout">
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="standard">Standard - Form centered on page</SelectItem>
+                            <SelectItem value="split">Split - Image on left, form on right</SelectItem>
+                            <SelectItem value="hero-background">Hero Background - Full-width hero image</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="text-sm font-medium">Hero Image</h4>
+                  <HeroImageUpload 
+                    eventId={params.id!}
+                    currentPath={form.watch("registrationSettings.heroImagePath")}
+                    onUpload={(path) => form.setValue("registrationSettings.heroImagePath", path)}
+                  />
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="text-sm font-medium">Custom Headings (Optional)</h4>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <FormField
+                      control={form.control}
+                      name="registrationSettings.heading"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Heading (English)</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="Join Us in Paradise" data-testid="input-heading" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="registrationSettings.headingEs"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Heading (Spanish)</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="Unete a Nosotros en el Paraiso" data-testid="input-heading-es" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <FormField
+                      control={form.control}
+                      name="registrationSettings.subheading"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Subheading (English)</FormLabel>
+                          <FormControl>
+                            <Textarea {...field} rows={2} placeholder="Register now for an unforgettable experience" data-testid="input-subheading" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="registrationSettings.subheadingEs"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Subheading (Spanish)</FormLabel>
+                          <FormControl>
+                            <Textarea {...field} rows={2} placeholder="Registrese ahora para una experiencia inolvidable" data-testid="input-subheading-es" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="text-sm font-medium">Call-to-Action Button (Optional)</h4>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <FormField
+                      control={form.control}
+                      name="registrationSettings.ctaLabel"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Button Text (English)</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="Register Now" data-testid="input-cta" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="registrationSettings.ctaLabelEs"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Button Text (Spanish)</FormLabel>
+                          <FormControl>
+                            <Input {...field} placeholder="Registrarse Ahora" data-testid="input-cta-es" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <div className="flex justify-end gap-4">
             <Button type="button" variant="outline" onClick={() => setLocation("/admin/events")} data-testid="button-cancel">
               {t("cancel")}
@@ -423,9 +631,9 @@ export default function EventFormPage() {
   );
 }
 
-function RegistrationLinkCopy({ eventId }: { eventId: string }) {
+function RegistrationLinkCopy({ eventId, slug }: { eventId: string; slug?: string }) {
   const [copied, setCopied] = useState(false);
-  const registrationUrl = `${window.location.origin}/register/${eventId}`;
+  const registrationUrl = `${window.location.origin}/register/${slug || eventId}`;
 
   const copyToClipboard = async () => {
     try {
@@ -465,6 +673,159 @@ function RegistrationLinkCopy({ eventId }: { eventId: string }) {
           <ExternalLink className="h-4 w-4" />
         </a>
       </Button>
+    </div>
+  );
+}
+
+function HeroImageUpload({ 
+  eventId, 
+  currentPath, 
+  onUpload 
+}: { 
+  eventId: string; 
+  currentPath?: string; 
+  onUpload: (path: string) => void;
+}) {
+  const { toast } = useToast();
+  const [isUploading, setIsUploading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (currentPath) {
+      fetchSignedUrl(currentPath);
+    }
+  }, [currentPath]);
+
+  const fetchSignedUrl = async (path: string) => {
+    try {
+      const authHeaders = getAuthHeaders();
+      const res = await fetch(`/api/objects/public/${path}?redirect=false`, {
+        headers: authHeaders,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPreviewUrl(data.url);
+      }
+    } catch (err) {
+      console.error("Failed to fetch preview:", err);
+    }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast({ title: "Error", description: "Please select an image file", variant: "destructive" });
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "Error", description: "Image must be less than 5MB", variant: "destructive" });
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const authHeaders = getAuthHeaders();
+      const objectPath = `events/${eventId}/hero-${Date.now()}.${file.name.split('.').pop()}`;
+      
+      const presignRes = await fetch('/api/objects/presign', {
+        method: 'POST',
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          objectPath,
+          contentType: file.type,
+          permission: 'public-read',
+        }),
+      });
+
+      if (!presignRes.ok) {
+        throw new Error('Failed to get upload URL');
+      }
+
+      const { uploadUrl } = await presignRes.json();
+
+      const uploadRes = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': file.type,
+        },
+        body: file,
+      });
+
+      if (!uploadRes.ok) {
+        throw new Error('Failed to upload image');
+      }
+
+      onUpload(objectPath);
+      setPreviewUrl(URL.createObjectURL(file));
+      toast({ title: "Success", description: "Hero image uploaded successfully" });
+    } catch (err) {
+      console.error("Upload failed:", err);
+      toast({ title: "Error", description: "Failed to upload image", variant: "destructive" });
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileSelect}
+        className="hidden"
+        data-testid="input-hero-image"
+      />
+      
+      {previewUrl ? (
+        <div className="relative">
+          <img
+            src={previewUrl}
+            alt="Hero preview"
+            className="w-full max-h-48 object-cover rounded-md"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+            className="absolute bottom-2 right-2"
+            data-testid="button-change-hero"
+          >
+            {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Change Image"}
+          </Button>
+        </div>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isUploading}
+          className="w-full h-32 border-dashed"
+          data-testid="button-upload-hero"
+        >
+          {isUploading ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <Upload className="h-4 w-4 mr-2" />
+          )}
+          {isUploading ? "Uploading..." : "Upload Hero Image"}
+        </Button>
+      )}
+      <p className="text-xs text-muted-foreground">
+        Recommended: 1920x600px or larger. JPG, PNG, or WebP. Max 5MB.
+      </p>
     </div>
   );
 }
