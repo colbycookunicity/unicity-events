@@ -1,29 +1,35 @@
-import { Button } from "@/components/ui/button";
 import { useLanguage, type Language } from "@/lib/i18n";
 
 export function LanguageToggle() {
   const { language, setLanguage } = useLanguage();
 
-  const toggleLanguage = () => {
-    const newLang: Language = language === "en" ? "es" : "en";
-    setLanguage(newLang);
-  };
-
   return (
-    <Button
-      variant="ghost"
-      size="sm"
-      onClick={toggleLanguage}
-      className="font-medium gap-1"
-      data-testid="button-language-toggle"
+    <div 
+      className="flex items-center bg-muted rounded-full p-0.5"
+      data-testid="toggle-language"
     >
-      <span className={language === "en" ? "text-foreground" : "text-muted-foreground"}>
+      <button
+        onClick={() => setLanguage("en")}
+        className={`px-3 py-1 text-sm font-medium rounded-full transition-colors ${
+          language === "en"
+            ? "bg-primary text-primary-foreground"
+            : "text-muted-foreground hover:text-foreground"
+        }`}
+        data-testid="button-language-en"
+      >
         EN
-      </span>
-      <span className="text-muted-foreground">/</span>
-      <span className={language === "es" ? "text-foreground" : "text-muted-foreground"}>
+      </button>
+      <button
+        onClick={() => setLanguage("es")}
+        className={`px-3 py-1 text-sm font-medium rounded-full transition-colors ${
+          language === "es"
+            ? "bg-primary text-primary-foreground"
+            : "text-muted-foreground hover:text-foreground"
+        }`}
+        data-testid="button-language-es"
+      >
         ES
-      </span>
-    </Button>
+      </button>
+    </div>
   );
 }
