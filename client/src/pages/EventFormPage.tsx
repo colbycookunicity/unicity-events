@@ -1,10 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Copy, ExternalLink, Check } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -166,6 +166,18 @@ export default function EventFormPage() {
           </p>
         </div>
       </div>
+
+      {isEditing && event && (
+        <Card className="bg-muted/50">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Registration Link</CardTitle>
+            <CardDescription>Share this link with qualified distributors to register</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <RegistrationLinkCopy eventId={event.id} />
+          </CardContent>
+        </Card>
+      )}
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -407,6 +419,52 @@ export default function EventFormPage() {
           </div>
         </form>
       </Form>
+    </div>
+  );
+}
+
+function RegistrationLinkCopy({ eventId }: { eventId: string }) {
+  const [copied, setCopied] = useState(false);
+  const registrationUrl = `${window.location.origin}/register/${eventId}`;
+
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(registrationUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <Input
+        readOnly
+        value={registrationUrl}
+        className="font-mono text-sm bg-background"
+        data-testid="input-registration-url"
+      />
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        onClick={copyToClipboard}
+        data-testid="button-copy-link"
+      >
+        {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        asChild
+        data-testid="button-open-link"
+      >
+        <a href={registrationUrl} target="_blank" rel="noopener noreferrer">
+          <ExternalLink className="h-4 w-4" />
+        </a>
+      </Button>
     </div>
   );
 }
