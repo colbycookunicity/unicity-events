@@ -9,7 +9,10 @@ import { LanguageToggle } from "@/components/LanguageToggle";
 import { AppSidebar } from "@/components/AppSidebar";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { useAuth, getAuthToken } from "@/lib/auth";
-import unicityLogo from "@/assets/unicity-logo.png";
+import unicityLogoDark from "@/assets/unicity-logo-dark.png";
+import unicityLogoWhite from "@/assets/unicity-logo-white.png";
+import unicityIcon from "@/assets/unicity-logo.png";
+import { useTheme } from "@/components/ThemeProvider";
 import { useEffect } from "react";
 
 import NotFound from "@/pages/not-found";
@@ -23,6 +26,9 @@ import RegistrationPage from "@/pages/RegistrationPage";
 import UserDashboard from "@/pages/UserDashboard";
 
 function AdminLayout({ children }: { children: React.ReactNode }) {
+  const { theme } = useTheme();
+  const unicityLogo = theme === 'dark' ? unicityLogoWhite : unicityLogoDark;
+  
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3.5rem",
@@ -34,7 +40,15 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
         <AppSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
           <header className="flex items-center justify-between gap-4 p-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-            <SidebarTrigger data-testid="button-sidebar-toggle" />
+            <div className="flex items-center gap-3">
+              <SidebarTrigger data-testid="button-sidebar-toggle" />
+              <img 
+                src={unicityLogo} 
+                alt="Unicity" 
+                className="h-6 object-contain"
+                data-testid="img-header-logo"
+              />
+            </div>
             <div className="flex items-center gap-2">
               <LanguageToggle />
               <ThemeToggle />
@@ -82,6 +96,8 @@ function PublicRouter() {
 function AppRouter() {
   const { isAuthenticated, isLoading, setUser, setLoading } = useAuth();
   const [location, setLocation] = useLocation();
+  const { theme } = useTheme();
+  const unicityLogo = theme === 'dark' ? unicityLogoWhite : unicityLogoDark;
 
   useEffect(() => {
     const checkAuth = async (retries = 3) => {
@@ -123,7 +139,7 @@ function AppRouter() {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
           <img 
-            src={unicityLogo} 
+            src={unicityIcon} 
             alt="Unicity" 
             className="h-14 w-14 rounded-md object-cover animate-pulse"
           />

@@ -12,7 +12,7 @@ import { LanguageToggle } from "@/components/LanguageToggle";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Loader2, Mail, ShieldCheck } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
-import unicityLogo from "@/assets/unicity-logo.png";
+import unicityIcon from "@/assets/unicity-logo.png";
 
 type LoginStep = "email" | "otp";
 
@@ -115,7 +115,7 @@ export default function LoginPage() {
         <Card className="w-full max-w-md">
           <CardHeader className="text-center space-y-4">
             <img 
-              src={unicityLogo} 
+              src={unicityIcon} 
               alt="Unicity" 
               className="mx-auto h-14 w-14 rounded-md object-cover"
               data-testid="img-unicity-logo"
