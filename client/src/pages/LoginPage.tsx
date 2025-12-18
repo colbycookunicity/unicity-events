@@ -25,6 +25,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isVerified, setIsVerified] = useState(false);
 
   const handleSendCode = async () => {
     if (!email || !email.includes("@")) {
@@ -56,6 +57,8 @@ export default function LoginPage() {
   };
 
   const handleVerifyCode = async () => {
+    if (isVerified || isLoading) return;
+    
     if (otpCode.length !== 6) {
       toast({
         title: t("invalidCode"),
@@ -73,6 +76,7 @@ export default function LoginPage() {
       });
       
       if (response.user) {
+        setIsVerified(true);
         setUser(response.user);
         setAuthToken(response.token);
         toast({
@@ -88,7 +92,6 @@ export default function LoginPage() {
         variant: "destructive",
       });
       setOtpCode("");
-    } finally {
       setIsLoading(false);
     }
   };
@@ -183,7 +186,7 @@ export default function LoginPage() {
                   <Button
                     className="w-full"
                     onClick={handleVerifyCode}
-                    disabled={isLoading || otpCode.length !== 6}
+                    disabled={isLoading || isVerified || otpCode.length !== 6}
                     data-testid="button-verify-code"
                   >
                     {isLoading ? (
