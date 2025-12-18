@@ -9,6 +9,7 @@ import { LanguageToggle } from "@/components/LanguageToggle";
 import { AppSidebar } from "@/components/AppSidebar";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { useAuth, getAuthToken } from "@/lib/auth";
+import unicityLogo from "@/assets/unicity-logo.png";
 import { useEffect } from "react";
 
 import NotFound from "@/pages/not-found";
@@ -83,7 +84,7 @@ function AppRouter() {
   const [location, setLocation] = useLocation();
 
   useEffect(() => {
-    const checkAuth = async () => {
+    const checkAuth = async (retries = 3) => {
       const token = getAuthToken();
       if (token) {
         try {
@@ -95,17 +96,20 @@ function AppRouter() {
           if (response.ok) {
             const data = await response.json();
             setUser(data.user);
-          } else {
+          } else if (response.status === 401) {
             if (typeof window !== 'undefined') {
               localStorage.removeItem("authToken");
             }
             setLoading(false);
+          } else {
+            setLoading(false);
           }
         } catch {
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem("authToken");
+          if (retries > 0) {
+            setTimeout(() => checkAuth(retries - 1), 1000);
+          } else {
+            setLoading(false);
           }
-          setLoading(false);
         }
       } else {
         setLoading(false);
@@ -118,9 +122,11 @@ function AppRouter() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-2xl animate-pulse">
-            U
-          </div>
+          <img 
+            src={unicityLogo} 
+            alt="Unicity" 
+            className="h-14 w-14 rounded-md object-cover animate-pulse"
+          />
           <p className="text-muted-foreground">Loading...</p>
         </div>
       </div>
@@ -129,8 +135,9 @@ function AppRouter() {
 
   const isAdminRoute = location.startsWith("/admin");
   const isPublicRoute = location.startsWith("/register/") || location === "/my-dashboard";
+  const hasToken = typeof window !== 'undefined' && !!localStorage.getItem('authToken');
 
-  if (isAdminRoute && !isAuthenticated) {
+  if (isAdminRoute && !isAuthenticated && !hasToken) {
     setLocation("/login");
     return null;
   }
