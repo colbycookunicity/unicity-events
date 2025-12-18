@@ -1,5 +1,5 @@
 import {
-  users, events, registrations, guests, flights, reimbursements, otpSessions,
+  users, events, registrations, guests, flights, reimbursements, otpSessions, authSessions,
   type User, type InsertUser,
   type Event, type InsertEvent,
   type Registration, type InsertRegistration,
@@ -7,6 +7,7 @@ import {
   type Flight, type InsertFlight,
   type Reimbursement, type InsertReimbursement,
   type OtpSession, type InsertOtpSession,
+  type AuthSession, type InsertAuthSession,
   type EventWithStats, type RegistrationWithDetails,
 } from "@shared/schema";
 import { db } from "./db";
@@ -61,6 +62,11 @@ export interface IStorage {
   createOtpSession(session: InsertOtpSession): Promise<OtpSession>;
   updateOtpSession(id: string, data: Partial<InsertOtpSession>): Promise<OtpSession | undefined>;
   deleteOtpSession(id: string): Promise<boolean>;
+
+  // Auth Sessions
+  getAuthSession(token: string): Promise<AuthSession | undefined>;
+  createAuthSession(session: InsertAuthSession): Promise<AuthSession>;
+  deleteAuthSession(token: string): Promise<boolean>;
 
   // Stats
   getDashboardStats(): Promise<{
@@ -300,6 +306,23 @@ export class DatabaseStorage implements IStorage {
 
   async deleteOtpSession(id: string): Promise<boolean> {
     await db.delete(otpSessions).where(eq(otpSessions.id, id));
+    return true;
+  }
+
+  // Auth Sessions
+  async getAuthSession(token: string): Promise<AuthSession | undefined> {
+    const [session] = await db.select().from(authSessions)
+      .where(and(eq(authSessions.token, token), gte(authSessions.expiresAt, new Date())));
+    return session || undefined;
+  }
+
+  async createAuthSession(session: InsertAuthSession): Promise<AuthSession> {
+    const [newSession] = await db.insert(authSessions).values(session).returning();
+    return newSession;
+  }
+
+  async deleteAuthSession(token: string): Promise<boolean> {
+    await db.delete(authSessions).where(eq(authSessions.token, token));
     return true;
   }
 

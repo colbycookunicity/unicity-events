@@ -20,8 +20,6 @@ function generateToken(): string {
   return Math.random().toString(36).substring(2) + Date.now().toString(36);
 }
 
-const tokenStore = new Map<string, { userId: string; email: string; expiresAt: Date }>();
-
 async function authenticateToken(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   const token = authHeader?.split(" ")[1];
@@ -30,9 +28,8 @@ async function authenticateToken(req: AuthenticatedRequest, res: Response, next:
     return res.status(401).json({ error: "Authentication required" });
   }
 
-  const session = tokenStore.get(token);
-  if (!session || session.expiresAt < new Date()) {
-    tokenStore.delete(token);
+  const session = await storage.getAuthSession(token);
+  if (!session) {
     return res.status(401).json({ error: "Invalid or expired token" });
   }
 
@@ -170,7 +167,8 @@ export async function registerRoutes(
       }
 
       const token = generateToken();
-      tokenStore.set(token, {
+      await storage.createAuthSession({
+        token,
         userId: user.id,
         email: user.email,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
@@ -188,11 +186,11 @@ export async function registerRoutes(
     res.json({ user });
   });
 
-  app.post("/api/auth/logout", (req, res) => {
+  app.post("/api/auth/logout", async (req, res) => {
     const authHeader = req.headers.authorization;
     const token = authHeader?.split(" ")[1];
     if (token) {
-      tokenStore.delete(token);
+      await storage.deleteAuthSession(token);
     }
     res.json({ success: true });
   });

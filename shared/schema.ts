@@ -153,6 +153,16 @@ export const otpSessions = pgTable("otp_sessions", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Auth Sessions table - for persistent login tokens
+export const authSessions = pgTable("auth_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  token: text("token").notNull().unique(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  email: text("email").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   events: many(events),
@@ -248,6 +258,11 @@ export const insertOtpSessionSchema = createInsertSchema(otpSessions).omit({
   createdAt: true,
 });
 
+export const insertAuthSessionSchema = createInsertSchema(authSessions).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -269,6 +284,9 @@ export type Reimbursement = typeof reimbursements.$inferSelect;
 
 export type InsertOtpSession = z.infer<typeof insertOtpSessionSchema>;
 export type OtpSession = typeof otpSessions.$inferSelect;
+
+export type InsertAuthSession = z.infer<typeof insertAuthSessionSchema>;
+export type AuthSession = typeof authSessions.$inferSelect;
 
 // Extended types for API responses
 export type RegistrationWithDetails = Registration & {
