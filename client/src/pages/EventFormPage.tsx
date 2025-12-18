@@ -518,6 +518,7 @@ export default function EventFormPage() {
                     eventId={params.id!}
                     currentPath={form.watch("registrationSettings.heroImagePath")}
                     onUpload={(path) => form.setValue("registrationSettings.heroImagePath", path)}
+                    layout={form.watch("registrationSettings.layout") || "standard"}
                   />
                 </div>
 
@@ -677,14 +678,27 @@ function RegistrationLinkCopy({ eventId, slug }: { eventId: string; slug?: strin
   );
 }
 
+function getImageRecommendation(layout: string) {
+  switch (layout) {
+    case "split":
+      return "Recommended: 1200x1800px or taller (portrait orientation). JPG, PNG, or WebP. Max 5MB.";
+    case "hero-background":
+      return "Recommended: 1920x800px or larger (wide landscape). JPG, PNG, or WebP. Max 5MB.";
+    default:
+      return "Recommended: 1920x600px or larger (landscape). JPG, PNG, or WebP. Max 5MB.";
+  }
+}
+
 function HeroImageUpload({ 
   eventId, 
   currentPath, 
-  onUpload 
+  onUpload,
+  layout = "standard"
 }: { 
   eventId: string; 
   currentPath?: string; 
   onUpload: (path: string) => void;
+  layout?: string;
 }) {
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
@@ -824,7 +838,7 @@ function HeroImageUpload({
         </Button>
       )}
       <p className="text-xs text-muted-foreground">
-        Recommended: 1920x600px or larger. JPG, PNG, or WebP. Max 5MB.
+        {getImageRecommendation(layout)}
       </p>
     </div>
   );
