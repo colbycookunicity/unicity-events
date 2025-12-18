@@ -39,7 +39,8 @@ export default function LoginPage() {
 
     setIsLoading(true);
     try {
-      await apiRequest("POST", "/api/auth/otp/generate", { email });
+      const res = await apiRequest("POST", "/api/auth/otp/generate", { email });
+      await res.json();
       setStep("otp");
       toast({
         title: t("emailSent"),
@@ -70,15 +71,16 @@ export default function LoginPage() {
 
     setIsLoading(true);
     try {
-      const response = await apiRequest("POST", "/api/auth/otp/validate", {
+      const res = await apiRequest("POST", "/api/auth/otp/validate", {
         email,
         code: otpCode,
       });
+      const data = await res.json();
       
-      if (response.user) {
+      if (data.success && data.user) {
         setIsVerified(true);
-        setUser(response.user);
-        setAuthToken(response.token);
+        setUser(data.user);
+        setAuthToken(data.token);
         toast({
           title: t("success"),
           description: "Successfully signed in",
