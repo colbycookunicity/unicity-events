@@ -308,6 +308,7 @@ export async function registerRoutes(
         });
 
         const data = await response.json();
+        console.log("Hydra OTP validation response:", JSON.stringify(data, null, 2));
         
         if (response.ok && data.success) {
           isValid = true;
@@ -373,15 +374,26 @@ export async function registerRoutes(
         }
       }
 
-      // Extract profile data from customer response
+      // Try to get qualifier data to supplement Hydra data
+      let qualifierData: any = null;
+      if (eventId) {
+        const event = await storage.getEventByIdOrSlug(eventId);
+        if (event) {
+          qualifierData = await storage.getQualifiedRegistrantByEmail(event.id, email);
+        }
+      }
+
+      // Extract profile data from customer response, with qualifier fallback
       const profile = {
-        unicityId: customerData?.id?.unicity || customerData?.unicity_id || "",
+        unicityId: customerData?.id?.unicity || customerData?.unicity_id || qualifierData?.unicityId || "",
         email: email,
-        firstName: customerData?.humanName?.firstName || customerData?.first_name || "",
-        lastName: customerData?.humanName?.lastName || customerData?.last_name || "",
+        firstName: customerData?.humanName?.firstName || customerData?.first_name || qualifierData?.firstName || "",
+        lastName: customerData?.humanName?.lastName || customerData?.last_name || qualifierData?.lastName || "",
         phone: customerData?.phone || customerData?.mobilePhone || "",
         customerId: customerId,
       };
+
+      console.log("Profile extracted:", profile);
 
       res.json({ 
         success: true, 
