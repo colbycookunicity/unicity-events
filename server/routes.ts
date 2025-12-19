@@ -447,9 +447,10 @@ export async function registerRoutes(
         token: authToken,
         user: adminUser,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Registration OTP validate error:", error);
-      res.status(500).json({ error: "Failed to validate code" });
+      console.error("Error stack:", error?.stack);
+      res.status(500).json({ error: "Failed to validate code", details: error?.message });
     }
   });
 
