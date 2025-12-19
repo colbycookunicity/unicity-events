@@ -852,7 +852,10 @@ export default function RegistrationPage() {
           {getEventDescription() && !getCustomSubheading() && (
             <Card className="mb-6">
               <CardContent className="p-6">
-                <p className="text-muted-foreground">{getEventDescription()}</p>
+                <div 
+                  className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground"
+                  dangerouslySetInnerHTML={{ __html: getEventDescription() || "" }}
+                />
               </CardContent>
             </Card>
           )}

@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor } from "@/components/RichTextEditor";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -270,7 +271,12 @@ export default function EventFormPage() {
                     <FormItem>
                       <FormLabel>{t("eventDescription")} (English)</FormLabel>
                       <FormControl>
-                        <Textarea {...field} rows={4} placeholder="Event description..." data-testid="input-event-description" />
+                        <RichTextEditor 
+                          value={field.value || ""} 
+                          onChange={field.onChange}
+                          placeholder="Event description..."
+                          data-testid="input-event-description"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -283,7 +289,12 @@ export default function EventFormPage() {
                     <FormItem>
                       <FormLabel>{t("eventDescription")} (Spanish)</FormLabel>
                       <FormControl>
-                        <Textarea {...field} rows={4} placeholder="Descripcion del evento..." data-testid="input-event-description-es" />
+                        <RichTextEditor 
+                          value={field.value || ""} 
+                          onChange={field.onChange}
+                          placeholder="Descripcion del evento..."
+                          data-testid="input-event-description-es"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
