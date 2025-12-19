@@ -1140,7 +1140,7 @@ export default function RegistrationPage() {
               {registerMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                t("submitRegistration")
+                getCtaLabel()
               )}
             </Button>
           </form>
