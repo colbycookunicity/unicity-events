@@ -599,6 +599,19 @@ export default function RegistrationPage() {
               {language === "es" ? "Verificar" : "Verify"}
             </Button>
             <Button 
+              variant="outline" 
+              onClick={() => {
+                setOtpCode("");
+                handleSendOtp();
+              }}
+              disabled={isVerifying}
+              className="w-full"
+              data-testid="button-resend-code"
+            >
+              {isVerifying && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              {language === "es" ? "Reenviar código" : "Resend Code"}
+            </Button>
+            <Button 
               variant="ghost" 
               onClick={() => {
                 setVerificationStep("email");
