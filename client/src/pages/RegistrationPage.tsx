@@ -1207,7 +1207,7 @@ export default function RegistrationPage() {
   // Split layout - image on left, form on right (matches Punta Cana design)
   if (layout === "split") {
     return (
-      <div className="h-screen bg-background flex flex-col lg:flex-row">
+      <div className="h-screen bg-background flex flex-col lg:flex-row overflow-hidden">
         {/* Left side - Hero image with title at bottom (40% width) - fixed on desktop */}
         <div className="shrink-0 lg:w-[40%] lg:fixed lg:left-0 lg:top-0 lg:h-screen relative bg-[#0f2a42]">
           {heroImageUrl ? (
