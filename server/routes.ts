@@ -17,6 +17,7 @@ const ADMIN_EMAILS = [
   "colby.cook@unicity.com",
   "biani.gonzalez@unicity.com",
   "ashley.milliken@unicity.com",
+  "william.hall@unicity.com",
 ].map(e => e.toLowerCase());
 
 interface AuthenticatedRequest extends Request {
