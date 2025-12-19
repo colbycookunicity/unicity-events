@@ -702,20 +702,21 @@ export default function RegistrationPage() {
                       {dietaryOptions.map((option) => {
                         const isSelected = (field.value || []).includes(option.value);
                         return (
-                          <div
+                          <label
                             key={option.value}
                             className={`flex items-center space-x-2 rounded-md border p-2 cursor-pointer transition-colors ${
-                              isSelected ? "bg-primary/10 border-primary" : "hover-elevate"
+                              isSelected ? "bg-primary/10 border-primary" : ""
                             }`}
-                            onClick={() => toggleDietaryRestriction(option.value)}
                             data-testid={`dietary-option-${option.value}`}
                           >
                             <Checkbox 
                               checked={isSelected}
-                              onCheckedChange={() => toggleDietaryRestriction(option.value)}
+                              onCheckedChange={(checked) => {
+                                toggleDietaryRestriction(option.value);
+                              }}
                             />
                             <span className="text-sm">{getDietaryLabel(option)}</span>
-                          </div>
+                          </label>
                         );
                       })}
                     </div>
