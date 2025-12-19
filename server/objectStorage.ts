@@ -144,6 +144,18 @@ export class ObjectStorageService {
     });
   }
 
+  async getSignedDownloadUrl(file: File, ttlSec: number = 3600): Promise<string> {
+    const bucketName = file.bucket.name;
+    const objectName = file.name;
+    
+    return signObjectURL({
+      bucketName,
+      objectName,
+      method: "GET",
+      ttlSec,
+    });
+  }
+
   async getObjectEntityFile(objectPath: string): Promise<File> {
     if (!objectPath.startsWith("/objects/")) {
       throw new ObjectNotFoundError();

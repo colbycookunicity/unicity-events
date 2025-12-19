@@ -779,7 +779,32 @@ export async function registerRoutes(
     }
   });
 
-  // Public assets serving
+  // Get signed URL for public objects (used by registration pages for hero images)
+  app.get("/api/objects/public/:filePath(*)", async (req, res) => {
+    const filePath = req.params.filePath;
+    const redirect = req.query.redirect !== 'false';
+    const objectStorageService = new ObjectStorageService();
+    
+    try {
+      const file = await objectStorageService.searchPublicObject(filePath);
+      if (!file) {
+        return res.status(404).json({ error: "File not found" });
+      }
+      
+      const signedUrl = await objectStorageService.getSignedDownloadUrl(file);
+      
+      if (redirect) {
+        return res.redirect(signedUrl);
+      }
+      
+      res.json({ url: signedUrl });
+    } catch (error) {
+      console.error("Error getting public object URL:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Public assets serving (direct download)
   app.get("/public-objects/:filePath(*)", async (req, res) => {
     const filePath = req.params.filePath;
     const objectStorageService = new ObjectStorageService();
