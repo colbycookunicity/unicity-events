@@ -39,11 +39,14 @@ export default function EventsPage() {
     return event.name;
   };
 
+  const stripHtml = (html: string | null) => {
+    if (!html) return "";
+    return html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
+  };
+
   const getEventDescription = (event: EventWithStats) => {
-    if (language === "es" && event.descriptionEs) {
-      return event.descriptionEs;
-    }
-    return event.description;
+    const desc = language === "es" && event.descriptionEs ? event.descriptionEs : event.description;
+    return stripHtml(desc);
   };
 
   return (
