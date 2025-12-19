@@ -342,6 +342,8 @@ export default function RegistrationPage() {
 
   const form = useForm<RegistrationFormData>({
     resolver: zodResolver(registrationSchema),
+    mode: "onSubmit",
+    reValidateMode: "onSubmit",
     defaultValues: {
       unicityId: prePopulatedUnicityId,
       email: prePopulatedEmail,
