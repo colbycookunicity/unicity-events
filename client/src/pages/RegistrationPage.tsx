@@ -180,8 +180,8 @@ export default function RegistrationPage() {
     queryKey: ["/api/events", params.eventId, "public"],
   });
 
-  // Check if this event requires verification
-  const requiresVerification = event?.requiresQualification && !skipVerification;
+  // Check if this event requires verification (default true if not set)
+  const requiresVerification = (event?.registrationSettings?.requiresVerification !== false) && !skipVerification;
 
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
   

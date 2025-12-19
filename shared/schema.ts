@@ -52,6 +52,7 @@ export type RegistrationSettings = {
   ctaLabelEs?: string;
   layout?: RegistrationLayout;
   accentColor?: string;
+  requiresVerification?: boolean;
 };
 
 // Events table
