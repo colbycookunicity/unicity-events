@@ -97,7 +97,10 @@ const registrationSchema = z.object({
   dateOfBirth: z.string().min(1, "Date of birth is required"),
   passportNumber: z.string().min(1, "Passport number is required"),
   passportCountry: z.string().min(1, "Passport country is required"),
-  passportExpiration: z.string().min(1, "Passport expiration is required"),
+  passportExpiration: z.string().min(1, "Passport expiration is required").refine((val) => {
+    const date = new Date(val);
+    return date > new Date();
+  }, "Passport must not be expired"),
   emergencyContact: z.string().min(1, "Emergency contact name is required"),
   emergencyContactPhone: z.string().min(1, "Emergency contact phone is required"),
   shirtSize: z.string().min(1, "T-shirt size is required"),
@@ -570,7 +573,12 @@ export default function RegistrationPage() {
                     <FormItem>
                       <FormLabel>{language === "es" ? "Fecha de Vencimiento" : "Passport Expiration"} *</FormLabel>
                       <FormControl>
-                        <Input type="date" {...field} data-testid="input-passport-expiration" />
+                        <Input 
+                          type="date" 
+                          {...field} 
+                          min={new Date().toISOString().split('T')[0]}
+                          data-testid="input-passport-expiration" 
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
