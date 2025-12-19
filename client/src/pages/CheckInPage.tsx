@@ -73,31 +73,33 @@ export default function CheckInPage() {
   const totalCount = registrations?.length ?? 0;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{t("checkIn")}</h1>
-        <p className="text-muted-foreground">Check in attendees and manage swag distribution</p>
-      </div>
+    <div className="flex flex-col gap-6 p-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("checkIn")}</h1>
+          <p className="text-muted-foreground">Check in attendees and manage swag distribution</p>
+        </div>
 
-      <div className="flex items-center gap-4 flex-wrap">
-        <Select value={selectedEvent} onValueChange={setSelectedEvent}>
-          <SelectTrigger className="w-[300px]" data-testid="select-checkin-event">
-            <SelectValue placeholder="Select an event" />
-          </SelectTrigger>
-          <SelectContent>
-            {events?.filter(e => e.status === "published").map((event) => (
-              <SelectItem key={event.id} value={event.id}>
-                {event.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex flex-wrap items-center gap-3">
+          <Select value={selectedEvent} onValueChange={setSelectedEvent}>
+            <SelectTrigger className="w-[220px]" data-testid="select-checkin-event">
+              <SelectValue placeholder="Select an event" />
+            </SelectTrigger>
+            <SelectContent>
+              {events?.filter(e => e.status === "published").map((event) => (
+                <SelectItem key={event.id} value={event.id}>
+                  {event.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-        {selectedEvent && (
-          <Badge variant="secondary" className="text-sm">
-            {checkedInCount} / {totalCount} checked in
-          </Badge>
-        )}
+          {selectedEvent && (
+            <Badge variant="secondary" className="text-sm">
+              {checkedInCount} / {totalCount} checked in
+            </Badge>
+          )}
+        </div>
       </div>
 
       {selectedEvent && (
