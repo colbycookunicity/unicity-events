@@ -24,7 +24,7 @@ export default function CheckInPage() {
   });
 
   const { data: registrations, isLoading } = useQuery<Registration[]>({
-    queryKey: ["/api/registrations", selectedEvent],
+    queryKey: [`/api/registrations?eventId=${selectedEvent}`],
     enabled: !!selectedEvent,
   });
 
@@ -33,7 +33,9 @@ export default function CheckInPage() {
       return apiRequest("POST", `/api/registrations/${id}/check-in`, {});
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/registrations"] });
+      queryClient.invalidateQueries({ predicate: (query) => 
+        String(query.queryKey[0]).startsWith("/api/registrations")
+      });
       toast({ title: t("success"), description: "Attendee checked in successfully" });
     },
     onError: () => {
@@ -46,7 +48,9 @@ export default function CheckInPage() {
       return apiRequest("PATCH", `/api/registrations/${id}`, { swagStatus: "picked_up" });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/registrations"] });
+      queryClient.invalidateQueries({ predicate: (query) => 
+        String(query.queryKey[0]).startsWith("/api/registrations")
+      });
       toast({ title: t("success"), description: "Swag marked as picked up" });
     },
     onError: () => {

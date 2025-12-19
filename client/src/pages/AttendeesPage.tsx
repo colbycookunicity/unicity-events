@@ -40,20 +40,12 @@ export default function AttendeesPage() {
     queryKey: ["/api/events"],
   });
 
+  const registrationsUrl = eventFilter === "all" 
+    ? "/api/registrations" 
+    : `/api/registrations?eventId=${eventFilter}`;
+    
   const { data: registrations, isLoading } = useQuery<Registration[]>({
-    queryKey: ["/api/registrations", eventFilter],
-    queryFn: async () => {
-      const url = eventFilter === "all" 
-        ? "/api/registrations" 
-        : `/api/registrations?eventId=${eventFilter}`;
-      const token = localStorage.getItem('authToken');
-      const res = await fetch(url, {
-        credentials: "include",
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-      });
-      if (!res.ok) throw new Error('Failed to fetch registrations');
-      return res.json();
-    },
+    queryKey: [registrationsUrl],
   });
 
   const updateStatusMutation = useMutation({
@@ -61,7 +53,9 @@ export default function AttendeesPage() {
       return apiRequest("PATCH", `/api/registrations/${id}`, { status });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/registrations"] });
+      queryClient.invalidateQueries({ predicate: (query) => 
+        String(query.queryKey[0]).startsWith("/api/registrations")
+      });
       toast({ title: t("success"), description: "Status updated successfully" });
     },
     onError: () => {

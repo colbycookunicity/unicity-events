@@ -162,6 +162,7 @@ export default function AdminDashboard() {
               isLoading={registrationsLoading}
               getRowKey={(reg) => reg.id}
               emptyMessage="No recent registrations"
+              onRowClick={() => setLocation("/admin/attendees")}
             />
           </CardContent>
         </Card>
