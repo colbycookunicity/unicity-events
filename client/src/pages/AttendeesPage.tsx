@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Search, Download, Filter, MoreHorizontal, Mail, Edit, Trash2 } from "lucide-react";
+import { Search, Download, Filter, MoreHorizontal, Mail, Edit, Trash2, X, User, Phone, MapPin, Plane, Shirt, UtensilsCrossed } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DataTable } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Separator } from "@/components/ui/separator";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,6 +28,13 @@ export default function AttendeesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [eventFilter, setEventFilter] = useState<string>("all");
+  const [selectedAttendee, setSelectedAttendee] = useState<Registration | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const handleRowClick = (reg: Registration) => {
+    setSelectedAttendee(reg);
+    setDrawerOpen(true);
+  };
 
   const { data: events } = useQuery<Event[]>({
     queryKey: ["/api/events"],
@@ -32,6 +42,18 @@ export default function AttendeesPage() {
 
   const { data: registrations, isLoading } = useQuery<Registration[]>({
     queryKey: ["/api/registrations", eventFilter],
+    queryFn: async () => {
+      const url = eventFilter === "all" 
+        ? "/api/registrations" 
+        : `/api/registrations?eventId=${eventFilter}`;
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(url, {
+        credentials: "include",
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error('Failed to fetch registrations');
+      return res.json();
+    },
   });
 
   const updateStatusMutation = useMutation({
@@ -251,7 +273,175 @@ export default function AttendeesPage() {
         isLoading={isLoading}
         getRowKey={(reg) => reg.id}
         emptyMessage="No attendees found"
+        onRowClick={handleRowClick}
       />
+
+      {/* Attendee Detail Drawer */}
+      <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              {selectedAttendee?.firstName} {selectedAttendee?.lastName}
+            </SheetTitle>
+            <SheetDescription>
+              {selectedAttendee?.unicityId && `Distributor ID: ${selectedAttendee.unicityId}`}
+            </SheetDescription>
+          </SheetHeader>
+          
+          {selectedAttendee && (
+            <div className="mt-6 space-y-6">
+              {/* Status Section */}
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Status</p>
+                  <StatusBadge status={selectedAttendee.status} />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Swag</p>
+                  <StatusBadge status={selectedAttendee.swagStatus || "pending"} type="swag" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Registered</p>
+                  <span className="text-sm font-medium">
+                    {selectedAttendee.registeredAt 
+                      ? format(new Date(selectedAttendee.registeredAt), "MMM d, yyyy") 
+                      : "-"}
+                  </span>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Contact Info */}
+              <div className="space-y-3">
+                <h4 className="font-medium">Contact Information</h4>
+                <div className="grid gap-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Email</span>
+                    <span>{selectedAttendee.email}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Phone</span>
+                    <span>{selectedAttendee.phone || "-"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Gender</span>
+                    <span className="capitalize">{selectedAttendee.gender || "-"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Date of Birth</span>
+                    <span>
+                      {selectedAttendee.dateOfBirth 
+                        ? format(new Date(selectedAttendee.dateOfBirth), "MMM d, yyyy") 
+                        : "-"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Passport Info */}
+              <div className="space-y-3">
+                <h4 className="font-medium">Passport Information</h4>
+                <div className="grid gap-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Passport Number</span>
+                    <span>{selectedAttendee.passportNumber || "-"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Country</span>
+                    <span>{selectedAttendee.passportCountry || "-"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Expiration</span>
+                    <span>
+                      {selectedAttendee.passportExpiration 
+                        ? format(new Date(selectedAttendee.passportExpiration), "MMM d, yyyy") 
+                        : "-"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Emergency Contact */}
+              <div className="space-y-3">
+                <h4 className="font-medium">Emergency Contact</h4>
+                <div className="grid gap-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Name</span>
+                    <span>{selectedAttendee.emergencyContact || "-"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Phone</span>
+                    <span>{selectedAttendee.emergencyContactPhone || "-"}</span>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Apparel & Preferences */}
+              <div className="space-y-3">
+                <h4 className="font-medium">Apparel & Preferences</h4>
+                <div className="grid gap-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Shirt Size</span>
+                    <span>{selectedAttendee.shirtSize || "-"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Pant Size</span>
+                    <span>{selectedAttendee.pantSize || "-"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Room Type</span>
+                    <span>{selectedAttendee.roomType || "-"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Dietary Restrictions</span>
+                    <span>
+                      {selectedAttendee.dietaryRestrictions?.length 
+                        ? selectedAttendee.dietaryRestrictions.join(", ") 
+                        : "None"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">ADA Accommodations</span>
+                    <span>{selectedAttendee.adaAccommodations ? "Yes" : "No"}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick Actions */}
+              <div className="flex gap-2 pt-4">
+                <Select 
+                  value={selectedAttendee.status} 
+                  onValueChange={(status) => {
+                    updateStatusMutation.mutate({ id: selectedAttendee.id, status });
+                    setSelectedAttendee({ ...selectedAttendee, status });
+                  }}
+                >
+                  <SelectTrigger className="flex-1" data-testid="select-status-drawer">
+                    <SelectValue placeholder="Change Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="qualified">Qualified</SelectItem>
+                    <SelectItem value="registered">Registered</SelectItem>
+                    <SelectItem value="checked_in">Checked In</SelectItem>
+                    <SelectItem value="not_coming">Not Coming</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" onClick={() => setDrawerOpen(false)}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
