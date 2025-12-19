@@ -1,5 +1,6 @@
 import {
   users, events, registrations, guests, flights, reimbursements, otpSessions, authSessions,
+  swagItems, swagAssignments,
   type User, type InsertUser,
   type Event, type InsertEvent,
   type Registration, type InsertRegistration,
@@ -8,7 +9,10 @@ import {
   type Reimbursement, type InsertReimbursement,
   type OtpSession, type InsertOtpSession,
   type AuthSession, type InsertAuthSession,
+  type SwagItem, type InsertSwagItem,
+  type SwagAssignment, type InsertSwagAssignment,
   type EventWithStats, type RegistrationWithDetails,
+  type SwagItemWithStats, type SwagAssignmentWithDetails,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, sql, count, or } from "drizzle-orm";
@@ -77,6 +81,23 @@ export interface IStorage {
     checkedInCount: number;
     upcomingEvents: number;
   }>;
+
+  // Swag Items
+  getSwagItemsByEvent(eventId: string): Promise<SwagItemWithStats[]>;
+  getSwagItem(id: string): Promise<SwagItem | undefined>;
+  createSwagItem(item: InsertSwagItem): Promise<SwagItem>;
+  updateSwagItem(id: string, data: Partial<InsertSwagItem>): Promise<SwagItem | undefined>;
+  deleteSwagItem(id: string): Promise<boolean>;
+
+  // Swag Assignments
+  getSwagAssignmentsByItem(swagItemId: string): Promise<SwagAssignmentWithDetails[]>;
+  getSwagAssignmentsByRegistration(registrationId: string): Promise<SwagAssignmentWithDetails[]>;
+  getSwagAssignmentsByGuest(guestId: string): Promise<SwagAssignmentWithDetails[]>;
+  getSwagAssignmentsByEvent(eventId: string): Promise<SwagAssignmentWithDetails[]>;
+  createSwagAssignment(assignment: InsertSwagAssignment): Promise<SwagAssignment>;
+  updateSwagAssignment(id: string, data: Partial<InsertSwagAssignment>): Promise<SwagAssignment | undefined>;
+  deleteSwagAssignment(id: string): Promise<boolean>;
+  markSwagReceived(id: string, receivedBy: string): Promise<SwagAssignment | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -358,6 +379,150 @@ export class DatabaseStorage implements IStorage {
       checkedInCount: Number(regStats?.checkedIn) || 0,
       upcomingEvents: Number(upcomingStats?.total) || 0,
     };
+  }
+
+  // Swag Items
+  async getSwagItemsByEvent(eventId: string): Promise<SwagItemWithStats[]> {
+    const items = await db.select().from(swagItems)
+      .where(eq(swagItems.eventId, eventId))
+      .orderBy(swagItems.sortOrder, swagItems.name);
+    
+    const itemsWithStats: SwagItemWithStats[] = await Promise.all(
+      items.map(async (item) => {
+        const [stats] = await db
+          .select({
+            assignedCount: count(),
+            receivedCount: sql<number>`count(*) filter (where ${swagAssignments.status} = 'received')`,
+          })
+          .from(swagAssignments)
+          .where(eq(swagAssignments.swagItemId, item.id));
+        
+        const assignedCount = Number(stats?.assignedCount) || 0;
+        return {
+          ...item,
+          assignedCount,
+          receivedCount: Number(stats?.receivedCount) || 0,
+          remainingQuantity: item.totalQuantity - assignedCount,
+        };
+      })
+    );
+    
+    return itemsWithStats;
+  }
+
+  async getSwagItem(id: string): Promise<SwagItem | undefined> {
+    const [item] = await db.select().from(swagItems).where(eq(swagItems.id, id));
+    return item || undefined;
+  }
+
+  async createSwagItem(item: InsertSwagItem): Promise<SwagItem> {
+    const [newItem] = await db.insert(swagItems).values(item).returning();
+    return newItem;
+  }
+
+  async updateSwagItem(id: string, data: Partial<InsertSwagItem>): Promise<SwagItem | undefined> {
+    const [updated] = await db.update(swagItems)
+      .set({ ...data, lastModified: new Date() })
+      .where(eq(swagItems.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteSwagItem(id: string): Promise<boolean> {
+    await db.delete(swagAssignments).where(eq(swagAssignments.swagItemId, id));
+    await db.delete(swagItems).where(eq(swagItems.id, id));
+    return true;
+  }
+
+  // Swag Assignments
+  async getSwagAssignmentsByItem(swagItemId: string): Promise<SwagAssignmentWithDetails[]> {
+    const assignments = await db.select().from(swagAssignments)
+      .where(eq(swagAssignments.swagItemId, swagItemId));
+    
+    return Promise.all(assignments.map(async (assignment) => {
+      const [item] = await db.select().from(swagItems).where(eq(swagItems.id, assignment.swagItemId));
+      const registration = assignment.registrationId 
+        ? (await db.select().from(registrations).where(eq(registrations.id, assignment.registrationId)))[0]
+        : undefined;
+      const guest = assignment.guestId 
+        ? (await db.select().from(guests).where(eq(guests.id, assignment.guestId)))[0]
+        : undefined;
+      
+      return { ...assignment, swagItem: item, registration, guest };
+    }));
+  }
+
+  async getSwagAssignmentsByRegistration(registrationId: string): Promise<SwagAssignmentWithDetails[]> {
+    const assignments = await db.select().from(swagAssignments)
+      .where(eq(swagAssignments.registrationId, registrationId));
+    
+    return Promise.all(assignments.map(async (assignment) => {
+      const [item] = await db.select().from(swagItems).where(eq(swagItems.id, assignment.swagItemId));
+      return { ...assignment, swagItem: item };
+    }));
+  }
+
+  async getSwagAssignmentsByGuest(guestId: string): Promise<SwagAssignmentWithDetails[]> {
+    const assignments = await db.select().from(swagAssignments)
+      .where(eq(swagAssignments.guestId, guestId));
+    
+    return Promise.all(assignments.map(async (assignment) => {
+      const [item] = await db.select().from(swagItems).where(eq(swagItems.id, assignment.swagItemId));
+      return { ...assignment, swagItem: item };
+    }));
+  }
+
+  async getSwagAssignmentsByEvent(eventId: string): Promise<SwagAssignmentWithDetails[]> {
+    const items = await db.select().from(swagItems).where(eq(swagItems.eventId, eventId));
+    const itemIds = items.map(i => i.id);
+    
+    if (itemIds.length === 0) return [];
+    
+    const assignments = await db.select().from(swagAssignments)
+      .where(sql`${swagAssignments.swagItemId} = ANY(${itemIds})`);
+    
+    return Promise.all(assignments.map(async (assignment) => {
+      const [item] = await db.select().from(swagItems).where(eq(swagItems.id, assignment.swagItemId));
+      const registration = assignment.registrationId 
+        ? (await db.select().from(registrations).where(eq(registrations.id, assignment.registrationId)))[0]
+        : undefined;
+      const guest = assignment.guestId 
+        ? (await db.select().from(guests).where(eq(guests.id, assignment.guestId)))[0]
+        : undefined;
+      
+      return { ...assignment, swagItem: item, registration, guest };
+    }));
+  }
+
+  async createSwagAssignment(assignment: InsertSwagAssignment): Promise<SwagAssignment> {
+    const [newAssignment] = await db.insert(swagAssignments).values(assignment).returning();
+    return newAssignment;
+  }
+
+  async updateSwagAssignment(id: string, data: Partial<InsertSwagAssignment>): Promise<SwagAssignment | undefined> {
+    const [updated] = await db.update(swagAssignments)
+      .set({ ...data, lastModified: new Date() })
+      .where(eq(swagAssignments.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteSwagAssignment(id: string): Promise<boolean> {
+    await db.delete(swagAssignments).where(eq(swagAssignments.id, id));
+    return true;
+  }
+
+  async markSwagReceived(id: string, receivedBy: string): Promise<SwagAssignment | undefined> {
+    const [updated] = await db.update(swagAssignments)
+      .set({ 
+        status: 'received', 
+        receivedAt: new Date(), 
+        receivedBy,
+        lastModified: new Date() 
+      })
+      .where(eq(swagAssignments.id, id))
+      .returning();
+    return updated || undefined;
   }
 }
 

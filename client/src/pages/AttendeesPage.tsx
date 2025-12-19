@@ -22,7 +22,7 @@ import { useTranslation } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
-import type { Registration, Event } from "@shared/schema";
+import type { Registration, Event, SwagAssignmentWithDetails } from "@shared/schema";
 
 const DIETARY_OPTIONS = [
   { value: "vegetarian", label: "Vegetarian" },
@@ -82,6 +82,11 @@ export default function AttendeesPage() {
     
   const { data: registrations, isLoading } = useQuery<Registration[]>({
     queryKey: [registrationsUrl],
+  });
+
+  const { data: swagAssignments } = useQuery<SwagAssignmentWithDetails[]>({
+    queryKey: [`/api/registrations/${selectedAttendee?.id}/swag-assignments`],
+    enabled: !!selectedAttendee && drawerOpen,
   });
 
   const updateStatusMutation = useMutation({
@@ -506,6 +511,43 @@ export default function AttendeesPage() {
                     <span>{selectedAttendee.adaAccommodations ? "Yes" : "No"}</span>
                   </div>
                 </div>
+              </div>
+
+              <Separator />
+
+              {/* Swag Assignments */}
+              <div className="space-y-3">
+                <h4 className="font-medium flex items-center gap-2">
+                  <Shirt className="h-4 w-4" />
+                  Swag Assignments
+                </h4>
+                {swagAssignments && swagAssignments.length > 0 ? (
+                  <div className="space-y-2">
+                    {swagAssignments.map((assignment) => (
+                      <div 
+                        key={assignment.id} 
+                        className="flex items-center justify-between text-sm p-2 rounded-md bg-muted/50"
+                        data-testid={`swag-assignment-${assignment.id}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{assignment.swagItem?.name}</span>
+                          {assignment.size && (
+                            <span className="text-muted-foreground">({assignment.size})</span>
+                          )}
+                        </div>
+                        <span className={`text-xs px-2 py-1 rounded ${
+                          assignment.status === 'received' 
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' 
+                            : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                        }`}>
+                          {assignment.status === 'received' ? 'Received' : 'Assigned'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No swag assigned yet</p>
+                )}
               </div>
 
               {/* Quick Actions */}

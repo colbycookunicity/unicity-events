@@ -22,6 +22,7 @@ import EventsPage from "@/pages/EventsPage";
 import EventFormPage from "@/pages/EventFormPage";
 import AttendeesPage from "@/pages/AttendeesPage";
 import CheckInPage from "@/pages/CheckInPage";
+import SwagPage from "@/pages/SwagPage";
 import RegistrationPage from "@/pages/RegistrationPage";
 import UserDashboard from "@/pages/UserDashboard";
 
@@ -73,6 +74,7 @@ function AdminRouter() {
         <Route path="/admin/events/:id" component={EventFormPage} />
         <Route path="/admin/attendees" component={AttendeesPage} />
         <Route path="/admin/check-in" component={CheckInPage} />
+        <Route path="/admin/swag" component={SwagPage} />
         <Route path="/admin/reports" component={AdminDashboard} />
         <Route path="/admin/settings" component={AdminDashboard} />
         <Route component={NotFound} />

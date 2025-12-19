@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertEventSchema, insertRegistrationSchema, insertGuestSchema, insertFlightSchema, insertReimbursementSchema } from "@shared/schema";
+import { insertEventSchema, insertRegistrationSchema, insertGuestSchema, insertFlightSchema, insertReimbursementSchema, insertSwagItemSchema, insertSwagAssignmentSchema } from "@shared/schema";
 import { z } from "zod";
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
@@ -991,6 +991,200 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error searching for public object:", error);
       return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // ============ Swag Item Routes ============
+  
+  // Get all swag items for an event
+  app.get("/api/events/:eventId/swag-items", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const items = await storage.getSwagItemsByEvent(req.params.eventId);
+      res.json(items);
+    } catch (error) {
+      console.error("Error fetching swag items:", error);
+      res.status(500).json({ error: "Failed to fetch swag items" });
+    }
+  });
+
+  // Get a single swag item
+  app.get("/api/swag-items/:id", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const item = await storage.getSwagItem(req.params.id);
+      if (!item) {
+        return res.status(404).json({ error: "Swag item not found" });
+      }
+      res.json(item);
+    } catch (error) {
+      console.error("Error fetching swag item:", error);
+      res.status(500).json({ error: "Failed to fetch swag item" });
+    }
+  });
+
+  // Create a new swag item
+  app.post("/api/events/:eventId/swag-items", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const data = { ...req.body, eventId: req.params.eventId };
+      const validatedData = insertSwagItemSchema.parse(data);
+      const item = await storage.createSwagItem(validatedData);
+      res.status(201).json(item);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid input", details: error.errors });
+      }
+      console.error("Error creating swag item:", error);
+      res.status(500).json({ error: "Failed to create swag item" });
+    }
+  });
+
+  // Update a swag item
+  app.patch("/api/swag-items/:id", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const item = await storage.updateSwagItem(req.params.id, req.body);
+      if (!item) {
+        return res.status(404).json({ error: "Swag item not found" });
+      }
+      res.json(item);
+    } catch (error) {
+      console.error("Error updating swag item:", error);
+      res.status(500).json({ error: "Failed to update swag item" });
+    }
+  });
+
+  // Delete a swag item
+  app.delete("/api/swag-items/:id", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      await storage.deleteSwagItem(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting swag item:", error);
+      res.status(500).json({ error: "Failed to delete swag item" });
+    }
+  });
+
+  // ============ Swag Assignment Routes ============
+  
+  // Get assignments by event
+  app.get("/api/events/:eventId/swag-assignments", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const assignments = await storage.getSwagAssignmentsByEvent(req.params.eventId);
+      res.json(assignments);
+    } catch (error) {
+      console.error("Error fetching swag assignments:", error);
+      res.status(500).json({ error: "Failed to fetch swag assignments" });
+    }
+  });
+
+  // Get assignments by registration
+  app.get("/api/registrations/:registrationId/swag-assignments", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const assignments = await storage.getSwagAssignmentsByRegistration(req.params.registrationId);
+      res.json(assignments);
+    } catch (error) {
+      console.error("Error fetching swag assignments:", error);
+      res.status(500).json({ error: "Failed to fetch swag assignments" });
+    }
+  });
+
+  // Get assignments by guest
+  app.get("/api/guests/:guestId/swag-assignments", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const assignments = await storage.getSwagAssignmentsByGuest(req.params.guestId);
+      res.json(assignments);
+    } catch (error) {
+      console.error("Error fetching swag assignments:", error);
+      res.status(500).json({ error: "Failed to fetch swag assignments" });
+    }
+  });
+
+  // Create a swag assignment
+  app.post("/api/swag-assignments", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const validatedData = insertSwagAssignmentSchema.parse(req.body);
+      const assignment = await storage.createSwagAssignment(validatedData);
+      res.status(201).json(assignment);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid input", details: error.errors });
+      }
+      console.error("Error creating swag assignment:", error);
+      res.status(500).json({ error: "Failed to create swag assignment" });
+    }
+  });
+
+  // Bulk create swag assignments (for assigning to all attendees)
+  app.post("/api/swag-assignments/bulk", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const { swagItemId, registrationIds, guestIds, size } = req.body;
+      const assignments = [];
+      
+      if (registrationIds?.length) {
+        for (const registrationId of registrationIds) {
+          const assignment = await storage.createSwagAssignment({
+            swagItemId,
+            registrationId,
+            size,
+            status: 'assigned',
+          });
+          assignments.push(assignment);
+        }
+      }
+      
+      if (guestIds?.length) {
+        for (const guestId of guestIds) {
+          const assignment = await storage.createSwagAssignment({
+            swagItemId,
+            guestId,
+            size,
+            status: 'assigned',
+          });
+          assignments.push(assignment);
+        }
+      }
+      
+      res.status(201).json(assignments);
+    } catch (error) {
+      console.error("Error creating bulk swag assignments:", error);
+      res.status(500).json({ error: "Failed to create swag assignments" });
+    }
+  });
+
+  // Update a swag assignment
+  app.patch("/api/swag-assignments/:id", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const assignment = await storage.updateSwagAssignment(req.params.id, req.body);
+      if (!assignment) {
+        return res.status(404).json({ error: "Swag assignment not found" });
+      }
+      res.json(assignment);
+    } catch (error) {
+      console.error("Error updating swag assignment:", error);
+      res.status(500).json({ error: "Failed to update swag assignment" });
+    }
+  });
+
+  // Mark swag as received
+  app.post("/api/swag-assignments/:id/receive", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const assignment = await storage.markSwagReceived(req.params.id, req.user!.id);
+      if (!assignment) {
+        return res.status(404).json({ error: "Swag assignment not found" });
+      }
+      res.json(assignment);
+    } catch (error) {
+      console.error("Error marking swag as received:", error);
+      res.status(500).json({ error: "Failed to mark swag as received" });
+    }
+  });
+
+  // Delete a swag assignment
+  app.delete("/api/swag-assignments/:id", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      await storage.deleteSwagAssignment(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting swag assignment:", error);
+      res.status(500).json({ error: "Failed to delete swag assignment" });
     }
   });
 

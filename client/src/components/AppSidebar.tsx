@@ -4,6 +4,7 @@ import {
   Calendar,
   Users,
   ClipboardCheck,
+  Package,
   FileBarChart,
   Settings,
   LogOut,
@@ -51,6 +52,11 @@ export function AppSidebar() {
       title: t("checkIn"),
       url: "/admin/check-in",
       icon: ClipboardCheck,
+    },
+    {
+      title: "Swag",
+      url: "/admin/swag",
+      icon: Package,
     },
     {
       title: t("reports"),
