@@ -5,6 +5,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Loader2, CheckCircle, Calendar, MapPin, ExternalLink } from "lucide-react";
+import PhoneInput, { isPossiblePhoneNumber } from "react-phone-number-input";
+import "react-phone-number-input/style.css";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -475,7 +477,14 @@ export default function RegistrationPage() {
                   <FormItem>
                     <FormLabel>{language === "es" ? "Numero de Celular" : "Mobile Number"}</FormLabel>
                     <FormControl>
-                      <Input type="tel" {...field} data-testid="input-phone" />
+                      <PhoneInput
+                        international
+                        defaultCountry="US"
+                        value={field.value}
+                        onChange={field.onChange}
+                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-within:ring-1 focus-within:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+                        data-testid="input-phone"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
