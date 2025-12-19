@@ -102,7 +102,11 @@ const registrationSchema = z.object({
     return date > new Date();
   }, "Passport must not be expired"),
   emergencyContact: z.string().min(1, "Emergency contact name is required"),
-  emergencyContactPhone: z.string().min(1, "Emergency contact phone is required"),
+  emergencyContactPhone: z.string().min(1, "Emergency contact phone is required").refine((val) => {
+    if (!val) return false;
+    // Basic check for international phone format (+1234567890)
+    return /^\+[1-9]\d{6,14}$/.test(val.replace(/\s/g, ''));
+  }, "Please enter a valid phone number"),
   shirtSize: z.string().min(1, "T-shirt size is required"),
   pantSize: z.string().min(1, "Pant size is required"),
   dietaryRestrictions: z.array(z.string()).default([]),
@@ -614,7 +618,14 @@ export default function RegistrationPage() {
                     <FormItem>
                       <FormLabel>{language === "es" ? "Telefono del Contacto" : "Contact Phone"} *</FormLabel>
                       <FormControl>
-                        <Input type="tel" {...field} data-testid="input-emergency-phone" />
+                        <PhoneInput
+                          international
+                          defaultCountry="US"
+                          value={field.value}
+                          onChange={field.onChange}
+                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-within:ring-1 focus-within:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+                          data-testid="input-emergency-phone"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
