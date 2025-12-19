@@ -33,7 +33,7 @@ const registrationSchema = z.object({
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Valid email is required"),
   phone: z.string().optional(),
-  unicityId: z.string().optional(),
+  unicityId: z.string().min(1, "Unicity ID is required"),
   shirtSize: z.string().optional(),
   dietaryRestrictions: z.string().optional(),
   termsAccepted: z.literal(true, {
@@ -330,14 +330,14 @@ export default function RegistrationPage() {
               name="unicityId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Unicity ID</FormLabel>
+                  <FormLabel>Unicity ID *</FormLabel>
                   <FormControl>
-                    <Input {...field} placeholder="Optional" data-testid="input-unicity-id" />
+                    <Input {...field} placeholder={language === "es" ? "Su ID de distribuidor" : "Your distributor ID"} data-testid="input-unicity-id" />
                   </FormControl>
                   <FormDescription>
                     {language === "es"
-                      ? "Ingrese su ID de distribuidor de Unicity si tiene uno"
-                      : "Enter your Unicity distributor ID if you have one"}
+                      ? "Ingrese su ID de distribuidor de Unicity"
+                      : "Enter your Unicity distributor ID"}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
