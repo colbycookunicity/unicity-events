@@ -209,6 +209,180 @@ export async function registerRoutes(
     res.json({ success: true });
   });
 
+  // Public Registration OTP (for distributor verification - no admin whitelist)
+  app.post("/api/register/otp/generate", async (req, res) => {
+    try {
+      const { email, eventId } = req.body;
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+
+      // Verify event exists and is published
+      if (eventId) {
+        const event = await storage.getEventByIdOrSlug(eventId);
+        if (!event) {
+          return res.status(404).json({ error: "Event not found" });
+        }
+        if (event.status !== "published") {
+          return res.status(400).json({ error: "Registration is not open for this event" });
+        }
+      }
+
+      // For development, simulate OTP
+      if (process.env.NODE_ENV !== "production") {
+        const devCode = "123456";
+        await storage.createOtpSession({
+          email,
+          validationId: `dev-reg-${Date.now()}`,
+          verified: false,
+          expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        });
+        console.log(`DEV MODE: Registration OTP for ${email} is ${devCode}`);
+        return res.json({ success: true, message: "Verification code sent", devCode });
+      }
+
+      // Production: Call Hydra API
+      const response = await fetch(`${HYDRA_API_BASE}/otp/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok || !data.success) {
+        return res.status(400).json({ error: data.data?.message || "Failed to send verification code" });
+      }
+
+      await storage.createOtpSession({
+        email,
+        validationId: data.data.validation_id,
+        verified: false,
+        expiresAt: new Date(data.data.expires_at),
+      });
+
+      res.json({ success: true, message: "Verification code sent" });
+    } catch (error) {
+      console.error("Registration OTP generate error:", error);
+      res.status(500).json({ error: "Failed to send verification code" });
+    }
+  });
+
+  app.post("/api/register/otp/validate", async (req, res) => {
+    try {
+      const { email, code, eventId } = req.body;
+      if (!email || !code) {
+        return res.status(400).json({ error: "Email and code are required" });
+      }
+
+      // Verify there's a pending session
+      const session = await storage.getOtpSession(email);
+      if (!session) {
+        return res.status(400).json({ error: "No pending verification. Please request a new code." });
+      }
+
+      if (session.verified) {
+        return res.status(400).json({ error: "Code already used. Please request a new code." });
+      }
+
+      let isValid = false;
+      let customerId: number | undefined;
+      let bearerToken: string | undefined;
+      let customerData: any = null;
+
+      // For development, accept test code
+      if (process.env.NODE_ENV !== "production" && code === "123456") {
+        isValid = true;
+        // Mock customer data for development
+        customerData = {
+          id: { unicity: "12345678" },
+          humanName: { firstName: "Test", lastName: "User" },
+          email: email,
+        };
+      } else if (process.env.NODE_ENV === "production") {
+        // Production: Validate with Hydra
+        const response = await fetch(`${HYDRA_API_BASE}/otp/magic-link`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, code }),
+        });
+
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+          isValid = true;
+          customerId = data.customer?.id;
+          bearerToken = data.token;
+          customerData = data.customer;
+        }
+      }
+
+      if (!isValid) {
+        return res.status(400).json({ error: "Invalid verification code" });
+      }
+
+      // Mark session as verified
+      await storage.updateOtpSession(session.id, {
+        verified: true,
+        verifiedAt: new Date(),
+        customerId,
+        bearerToken,
+      });
+
+      // Check qualification if event requires it
+      let isQualified = true;
+      let qualificationMessage = "";
+      
+      if (eventId) {
+        const event = await storage.getEventByIdOrSlug(eventId);
+        if (event?.requiresQualification) {
+          // Check if user already has a registration (pre-qualified list)
+          const existingReg = await storage.getRegistrationByEmail(event.id, email);
+          if (existingReg) {
+            isQualified = true;
+            qualificationMessage = "You are pre-qualified for this event.";
+          } else {
+            // In production, you would check qualification via Hydra API
+            // For now, check if qualification period is active
+            const now = new Date();
+            if (event.qualificationStartDate && event.qualificationEndDate) {
+              const start = new Date(event.qualificationStartDate);
+              const end = new Date(event.qualificationEndDate);
+              if (now < start) {
+                isQualified = false;
+                qualificationMessage = "Qualification period has not started yet.";
+              } else if (now > end) {
+                isQualified = false;
+                qualificationMessage = "Qualification period has ended.";
+              }
+            }
+          }
+        }
+      }
+
+      // Extract profile data from customer response
+      const profile = {
+        unicityId: customerData?.id?.unicity || customerData?.unicity_id || "",
+        email: email,
+        firstName: customerData?.humanName?.firstName || customerData?.first_name || "",
+        lastName: customerData?.humanName?.lastName || customerData?.last_name || "",
+        phone: customerData?.phone || customerData?.mobilePhone || "",
+        customerId: customerId,
+      };
+
+      res.json({ 
+        success: true, 
+        verified: true,
+        profile,
+        isQualified,
+        qualificationMessage,
+      });
+    } catch (error) {
+      console.error("Registration OTP validate error:", error);
+      res.status(500).json({ error: "Failed to validate code" });
+    }
+  });
+
   // Dashboard Stats
   app.get("/api/admin/stats", authenticateToken, async (req, res) => {
     try {

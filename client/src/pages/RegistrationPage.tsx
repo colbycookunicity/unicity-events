@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, CheckCircle, Calendar, MapPin, ExternalLink } from "lucide-react";
+import { Loader2, CheckCircle, Calendar, MapPin, ExternalLink, Mail, ShieldCheck, AlertCircle } from "lucide-react";
 import PhoneInput, { isPossiblePhoneNumber } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,11 +16,23 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Skeleton } from "@/components/ui/skeleton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LanguageToggle } from "@/components/LanguageToggle";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useTranslation } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
 import type { Event, RegistrationSettings } from "@shared/schema";
+
+type VerificationStep = "email" | "otp" | "form";
+
+type VerifiedProfile = {
+  unicityId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  customerId?: number;
+};
 
 type PublicEvent = Event & {
   formFields?: any;
@@ -124,8 +136,17 @@ export default function RegistrationPage() {
   const { toast } = useToast();
   const params = useParams<{ eventId: string }>();
   const [isSuccess, setIsSuccess] = useState(false);
+  
+  // Verification flow state
+  const [verificationStep, setVerificationStep] = useState<VerificationStep>("email");
+  const [verificationEmail, setVerificationEmail] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verifiedProfile, setVerifiedProfile] = useState<VerifiedProfile | null>(null);
+  const [isQualified, setIsQualified] = useState(true);
+  const [qualificationMessage, setQualificationMessage] = useState("");
 
-  // Parse URL query params for pre-population
+  // Parse URL query params for pre-population (skip verification if pre-populated)
   const urlParams = new URLSearchParams(window.location.search);
   const prePopulatedUnicityId = urlParams.get("uid") || urlParams.get("unicityId") || "";
   const prePopulatedEmail = urlParams.get("email") || "";
@@ -133,12 +154,18 @@ export default function RegistrationPage() {
   const prePopulatedLastName = urlParams.get("lastName") || "";
   const prePopulatedPhone = urlParams.get("phone") || "";
   
-  // Unicity ID is locked if it was pre-populated via URL
-  const isUnicityIdLocked = Boolean(prePopulatedUnicityId);
+  // Skip verification if URL params provide identity (pre-qualified link)
+  const skipVerification = Boolean(prePopulatedUnicityId && prePopulatedEmail);
+  
+  // Identity fields are locked after verification
+  const isIdentityLocked = Boolean(verifiedProfile) || skipVerification;
 
   const { data: event, isLoading } = useQuery<PublicEvent>({
     queryKey: ["/api/events", params.eventId, "public"],
   });
+
+  // Check if this event requires verification
+  const requiresVerification = event?.requiresQualification && !skipVerification;
 
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
   
@@ -161,6 +188,103 @@ export default function RegistrationPage() {
       fetchHeroImage();
     }
   }, [event]);
+
+  // Skip to form if pre-populated or verification not required
+  useEffect(() => {
+    if (skipVerification || (event && !requiresVerification)) {
+      setVerificationStep("form");
+    }
+  }, [skipVerification, event, requiresVerification]);
+
+  const handleSendOtp = async () => {
+    if (!verificationEmail || !verificationEmail.includes("@")) {
+      toast({
+        title: language === "es" ? "Correo inv\u00e1lido" : "Invalid Email",
+        description: language === "es" ? "Por favor ingrese un correo electr\u00f3nico v\u00e1lido" : "Please enter a valid email address",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsVerifying(true);
+    try {
+      const res = await apiRequest("POST", "/api/register/otp/generate", { 
+        email: verificationEmail,
+        eventId: params.eventId,
+      });
+      const data = await res.json();
+      
+      setVerificationStep("otp");
+      toast({
+        title: language === "es" ? "C\u00f3digo enviado" : "Code Sent",
+        description: language === "es" ? `C\u00f3digo enviado a ${verificationEmail}` : `Verification code sent to ${verificationEmail}`,
+      });
+      
+      // Show dev code in development
+      if (data.devCode) {
+        console.log("DEV MODE: Use code", data.devCode);
+      }
+    } catch (error: any) {
+      toast({
+        title: t("error"),
+        description: error.message || "Failed to send verification code",
+        variant: "destructive",
+      });
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (otpCode.length !== 6) {
+      toast({
+        title: language === "es" ? "C\u00f3digo inv\u00e1lido" : "Invalid Code",
+        description: language === "es" ? "Por favor ingrese el c\u00f3digo de 6 d\u00edgitos" : "Please enter the 6-digit code",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsVerifying(true);
+    try {
+      const res = await apiRequest("POST", "/api/register/otp/validate", {
+        email: verificationEmail,
+        code: otpCode,
+        eventId: params.eventId,
+      });
+      const data = await res.json();
+      
+      if (data.verified) {
+        setVerifiedProfile(data.profile);
+        setIsQualified(data.isQualified);
+        setQualificationMessage(data.qualificationMessage || "");
+        
+        // Pre-populate form with verified data
+        form.setValue("unicityId", data.profile.unicityId);
+        form.setValue("email", data.profile.email);
+        form.setValue("firstName", data.profile.firstName);
+        form.setValue("lastName", data.profile.lastName);
+        if (data.profile.phone) {
+          form.setValue("phone", data.profile.phone);
+        }
+        
+        setVerificationStep("form");
+        toast({
+          title: language === "es" ? "Verificado" : "Verified",
+          description: language === "es" ? "Su identidad ha sido verificada" : "Your identity has been verified",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: language === "es" ? "C\u00f3digo inv\u00e1lido" : "Invalid Code",
+        description: error.message || "Please check your code and try again",
+        variant: "destructive",
+      });
+      setOtpCode("");
+    } finally {
+      setIsVerifying(false);
+    }
+  };
 
   const form = useForm<RegistrationFormData>({
     resolver: zodResolver(registrationSchema),
@@ -376,6 +500,152 @@ export default function RegistrationPage() {
     </div>
   );
 
+  // Verification step UI
+  const renderVerificationStep = () => {
+    if (verificationStep === "email") {
+      return (
+        <Card>
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+              <Mail className="w-6 h-6 text-primary" />
+            </div>
+            <CardTitle>
+              {language === "es" ? "Verifique su identidad" : "Verify Your Identity"}
+            </CardTitle>
+            <CardDescription>
+              {language === "es" 
+                ? "Ingrese su correo electronico para recibir un codigo de verificacion"
+                : "Enter your email to receive a verification code"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Input
+                type="email"
+                placeholder={language === "es" ? "correo@ejemplo.com" : "email@example.com"}
+                value={verificationEmail}
+                onChange={(e) => setVerificationEmail(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
+                data-testid="input-verification-email"
+              />
+            </div>
+            <Button 
+              onClick={handleSendOtp} 
+              disabled={isVerifying || !verificationEmail}
+              className="w-full"
+              data-testid="button-send-code"
+            >
+              {isVerifying && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              {language === "es" ? "Enviar codigo" : "Send Code"}
+            </Button>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    if (verificationStep === "otp") {
+      return (
+        <Card>
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+              <ShieldCheck className="w-6 h-6 text-primary" />
+            </div>
+            <CardTitle>
+              {language === "es" ? "Ingrese el codigo" : "Enter Verification Code"}
+            </CardTitle>
+            <CardDescription>
+              {language === "es" 
+                ? `Enviamos un codigo de 6 digitos a ${verificationEmail}`
+                : `We sent a 6-digit code to ${verificationEmail}`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex justify-center">
+              <InputOTP
+                maxLength={6}
+                value={otpCode}
+                onChange={(value) => setOtpCode(value)}
+                onComplete={handleVerifyOtp}
+                data-testid="input-otp-code"
+              >
+                <InputOTPGroup>
+                  <InputOTPSlot index={0} />
+                  <InputOTPSlot index={1} />
+                  <InputOTPSlot index={2} />
+                  <InputOTPSlot index={3} />
+                  <InputOTPSlot index={4} />
+                  <InputOTPSlot index={5} />
+                </InputOTPGroup>
+              </InputOTP>
+            </div>
+            <Button 
+              onClick={handleVerifyOtp} 
+              disabled={isVerifying || otpCode.length !== 6}
+              className="w-full"
+              data-testid="button-verify-code"
+            >
+              {isVerifying && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              {language === "es" ? "Verificar" : "Verify"}
+            </Button>
+            <Button 
+              variant="ghost" 
+              onClick={() => {
+                setVerificationStep("email");
+                setOtpCode("");
+              }}
+              className="w-full"
+              data-testid="button-back-to-email"
+            >
+              {language === "es" ? "Usar otro correo" : "Use a different email"}
+            </Button>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    return null;
+  };
+
+  // Not qualified message
+  const renderNotQualifiedMessage = () => (
+    <Card className="border-destructive">
+      <CardHeader className="text-center">
+        <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+          <AlertCircle className="w-6 h-6 text-destructive" />
+        </div>
+        <CardTitle className="text-destructive">
+          {language === "es" ? "No califica" : "Not Qualified"}
+        </CardTitle>
+        <CardDescription>
+          {qualificationMessage || (language === "es" 
+            ? "Lo sentimos, no califica para este evento en este momento."
+            : "Sorry, you do not qualify for this event at this time.")}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="text-center text-muted-foreground text-sm">
+        {language === "es" 
+          ? "Si cree que esto es un error, contacte al soporte."
+          : "If you believe this is an error, please contact support."}
+      </CardContent>
+    </Card>
+  );
+
+  // Main content renderer - decides what to show based on verification state
+  const renderMainContent = () => {
+    // If verification required and not yet completed, show verification step
+    if (requiresVerification && verificationStep !== "form") {
+      return renderVerificationStep();
+    }
+    
+    // If verified but not qualified, show not qualified message
+    if (verifiedProfile && !isQualified) {
+      return renderNotQualifiedMessage();
+    }
+    
+    // Otherwise show the registration form
+    return renderFormCard();
+  };
+
   const renderFormCard = () => (
     <Card>
       <CardHeader>
@@ -395,6 +665,14 @@ export default function RegistrationPage() {
                 {language === "es" ? "Informacion Personal" : "Personal Information"}
               </h3>
               
+              {/* Verified identity indicator */}
+              {verifiedProfile && (
+                <div className="flex items-center gap-2 p-3 rounded-md bg-green-500/10 text-green-700 dark:text-green-400 text-sm mb-4">
+                  <ShieldCheck className="w-4 h-4" />
+                  {language === "es" ? "Identidad verificada" : "Identity verified"}
+                </div>
+              )}
+
               <FormField
                 control={form.control}
                 name="unicityId"
@@ -406,15 +684,15 @@ export default function RegistrationPage() {
                         {...field} 
                         placeholder={language === "es" ? "Su ID de distribuidor" : "Your distributor ID"} 
                         data-testid="input-unicity-id"
-                        disabled={isUnicityIdLocked}
-                        className={isUnicityIdLocked ? "bg-muted" : ""}
+                        disabled={isIdentityLocked}
+                        className={isIdentityLocked ? "bg-muted" : ""}
                       />
                     </FormControl>
                     <FormDescription>
-                      {isUnicityIdLocked 
+                      {isIdentityLocked 
                         ? (language === "es" 
-                            ? "Este campo ha sido prellenado y no puede ser editado" 
-                            : "This field has been pre-filled and cannot be edited")
+                            ? "Este campo ha sido verificado y no puede ser editado" 
+                            : "This field has been verified and cannot be edited")
                         : (language === "es"
                             ? "Ingrese su ID de distribuidor de Unicity"
                             : "Enter your Unicity distributor ID")}
@@ -431,7 +709,13 @@ export default function RegistrationPage() {
                   <FormItem>
                     <FormLabel>{t("email")} *</FormLabel>
                     <FormControl>
-                      <Input type="email" {...field} data-testid="input-reg-email" />
+                      <Input 
+                        type="email" 
+                        {...field} 
+                        data-testid="input-reg-email"
+                        disabled={isIdentityLocked}
+                        className={isIdentityLocked ? "bg-muted" : ""}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -451,7 +735,12 @@ export default function RegistrationPage() {
                         </span>
                       </FormLabel>
                       <FormControl>
-                        <Input {...field} data-testid="input-first-name" />
+                        <Input 
+                          {...field} 
+                          data-testid="input-first-name"
+                          disabled={isIdentityLocked}
+                          className={isIdentityLocked ? "bg-muted" : ""}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -469,7 +758,12 @@ export default function RegistrationPage() {
                         </span>
                       </FormLabel>
                       <FormControl>
-                        <Input {...field} data-testid="input-last-name" />
+                        <Input 
+                          {...field} 
+                          data-testid="input-last-name"
+                          disabled={isIdentityLocked}
+                          className={isIdentityLocked ? "bg-muted" : ""}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -889,7 +1183,7 @@ export default function RegistrationPage() {
             </Card>
           )}
 
-          {renderFormCard()}
+          {renderMainContent()}
 
           <footer className="mt-8 text-center text-sm text-muted-foreground">
             Unicity International
@@ -973,7 +1267,7 @@ export default function RegistrationPage() {
           {/* Scrollable form content */}
           <div className="flex-1 overflow-y-auto p-6 lg:p-10">
             <div className="max-w-xl mx-auto">
-              {renderFormCard()}
+              {renderMainContent()}
               <footer className="mt-8 pb-8 text-center text-sm text-muted-foreground">
                 Unicity International
               </footer>
@@ -1024,7 +1318,7 @@ export default function RegistrationPage() {
         </div>
       )}
       <div className="max-w-2xl mx-auto p-4 pb-12 -mt-8 relative z-10">
-        {renderFormCard()}
+        {renderMainContent()}
         <footer className="mt-8 text-center text-sm text-muted-foreground">
           Unicity International
         </footer>
