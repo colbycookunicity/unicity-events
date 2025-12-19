@@ -201,10 +201,10 @@ export default function PublicLoginPage() {
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {t("sending")}
+                      {language === "es" ? "Enviando..." : "Sending..."}
                     </>
                   ) : (
-                    t("sendCode")
+                    language === "es" ? "Enviar Código" : "Send Code"
                   )}
                 </Button>
               </div>

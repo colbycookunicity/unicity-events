@@ -252,6 +252,15 @@ export default function AttendeesPage() {
       ),
     },
     {
+      key: "lastModified",
+      header: "Last Modified",
+      render: (reg: Registration) => (
+        <span className="text-muted-foreground text-sm">
+          {reg.lastModified ? format(new Date(reg.lastModified), "MMM d, yyyy h:mm a") : "-"}
+        </span>
+      ),
+    },
+    {
       key: "actions",
       header: "",
       className: "w-[50px]",
@@ -390,7 +399,7 @@ export default function AttendeesPage() {
           {selectedAttendee && !isEditing && (
             <div className="mt-6 space-y-6">
               {/* Status Section */}
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Status</p>
                   <StatusBadge status={selectedAttendee.status} />
@@ -404,6 +413,14 @@ export default function AttendeesPage() {
                   <span className="text-sm font-medium">
                     {selectedAttendee.registeredAt 
                       ? format(new Date(selectedAttendee.registeredAt), "MMM d, yyyy") 
+                      : "-"}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Last Modified</p>
+                  <span className="text-sm font-medium">
+                    {selectedAttendee.lastModified 
+                      ? format(new Date(selectedAttendee.lastModified), "MMM d, yyyy h:mm a") 
                       : "-"}
                   </span>
                 </div>

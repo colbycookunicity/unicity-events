@@ -619,15 +619,25 @@ export class DatabaseStorage implements IStorage {
           ));
 
         if (qualifiedReg) {
-          // Check if qualification period is active (if set)
-          if (event.qualificationStartDate && event.qualificationEndDate) {
-            const now = new Date();
+          // Check if qualification period is active (check each boundary independently)
+          const now = new Date();
+          let isWithinWindow = true;
+          
+          if (event.qualificationStartDate) {
             const start = new Date(event.qualificationStartDate);
-            const end = new Date(event.qualificationEndDate);
-            if (now >= start && now <= end) {
-              results.push({ event, registration: null, qualifiedRegistrant: qualifiedReg });
+            if (now < start) {
+              isWithinWindow = false;
             }
-          } else {
+          }
+          
+          if (event.qualificationEndDate) {
+            const end = new Date(event.qualificationEndDate);
+            if (now > end) {
+              isWithinWindow = false;
+            }
+          }
+          
+          if (isWithinWindow) {
             results.push({ event, registration: null, qualifiedRegistrant: qualifiedReg });
           }
         }
