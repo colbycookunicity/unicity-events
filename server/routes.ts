@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertEventSchema, insertRegistrationSchema, insertGuestSchema, insertFlightSchema, insertReimbursementSchema, insertSwagItemSchema, insertSwagAssignmentSchema } from "@shared/schema";
+import { insertEventSchema, insertRegistrationSchema, insertGuestSchema, insertFlightSchema, insertReimbursementSchema, insertSwagItemSchema, insertSwagAssignmentSchema, insertQualifiedRegistrantSchema } from "@shared/schema";
 import { z } from "zod";
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
@@ -1196,6 +1196,132 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error deleting swag assignment:", error);
       res.status(500).json({ error: "Failed to delete swag assignment" });
+    }
+  });
+
+  // ==================== QUALIFIED REGISTRANTS ====================
+
+  // Get all qualified registrants for an event
+  app.get("/api/events/:eventId/qualifiers", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const qualifiers = await storage.getQualifiedRegistrantsByEvent(req.params.eventId);
+      res.json(qualifiers);
+    } catch (error) {
+      console.error("Error fetching qualified registrants:", error);
+      res.status(500).json({ error: "Failed to fetch qualified registrants" });
+    }
+  });
+
+  // Check if an email is qualified for an event (public endpoint for registration check)
+  app.get("/api/events/:eventId/qualifiers/check", async (req, res) => {
+    try {
+      const email = req.query.email as string;
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+      const qualifier = await storage.getQualifiedRegistrantByEmail(req.params.eventId, email);
+      res.json({ qualified: !!qualifier, qualifier: qualifier || null });
+    } catch (error) {
+      console.error("Error checking qualification:", error);
+      res.status(500).json({ error: "Failed to check qualification" });
+    }
+  });
+
+  // Create a single qualified registrant
+  app.post("/api/events/:eventId/qualifiers", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const data = { ...req.body, eventId: req.params.eventId, importedBy: req.user!.id };
+      const validatedData = insertQualifiedRegistrantSchema.parse(data);
+      const qualifier = await storage.createQualifiedRegistrant(validatedData);
+      res.status(201).json(qualifier);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid input", details: error.errors });
+      }
+      console.error("Error creating qualified registrant:", error);
+      res.status(500).json({ error: "Failed to create qualified registrant" });
+    }
+  });
+
+  // Bulk import qualified registrants from CSV data
+  const csvImportSchema = z.object({
+    registrants: z.array(z.object({
+      firstName: z.string().min(1),
+      lastName: z.string().min(1),
+      email: z.string().email(),
+      unicityId: z.string().optional(),
+    })),
+    clearExisting: z.boolean().optional().default(false),
+  });
+
+  app.post("/api/events/:eventId/qualifiers/import", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const validated = csvImportSchema.parse(req.body);
+      const eventId = req.params.eventId;
+      const importedBy = req.user!.id;
+
+      // Optionally clear existing qualifiers
+      if (validated.clearExisting) {
+        await storage.deleteQualifiedRegistrantsByEvent(eventId);
+      }
+
+      // Prepare registrants for bulk insert
+      const registrantsToInsert = validated.registrants.map(r => ({
+        eventId,
+        firstName: r.firstName.trim(),
+        lastName: r.lastName.trim(),
+        email: r.email.trim().toLowerCase(),
+        unicityId: r.unicityId?.trim() || null,
+        importedBy,
+      }));
+
+      const created = await storage.createQualifiedRegistrantsBulk(registrantsToInsert);
+      res.status(201).json({ 
+        imported: created.length, 
+        registrants: created 
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid CSV data", details: error.errors });
+      }
+      console.error("Error importing qualified registrants:", error);
+      res.status(500).json({ error: "Failed to import qualified registrants" });
+    }
+  });
+
+  // Update a qualified registrant
+  app.patch("/api/qualifiers/:id", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const qualifier = await storage.updateQualifiedRegistrant(req.params.id, req.body);
+      if (!qualifier) {
+        return res.status(404).json({ error: "Qualified registrant not found" });
+      }
+      res.json(qualifier);
+    } catch (error) {
+      console.error("Error updating qualified registrant:", error);
+      res.status(500).json({ error: "Failed to update qualified registrant" });
+    }
+  });
+
+  // Delete a qualified registrant
+  app.delete("/api/qualifiers/:id", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      await storage.deleteQualifiedRegistrant(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting qualified registrant:", error);
+      res.status(500).json({ error: "Failed to delete qualified registrant" });
+    }
+  });
+
+  // Delete all qualifiers for an event
+  app.delete("/api/events/:eventId/qualifiers", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const deleted = await storage.deleteQualifiedRegistrantsByEvent(req.params.eventId);
+      res.json({ deleted });
+    } catch (error) {
+      console.error("Error deleting qualified registrants:", error);
+      res.status(500).json({ error: "Failed to delete qualified registrants" });
     }
   });
 
