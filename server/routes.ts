@@ -1113,9 +1113,17 @@ export async function registerRoutes(
   });
 
   // Bulk create swag assignments (for assigning to all attendees)
+  const bulkSwagAssignmentSchema = z.object({
+    swagItemId: z.string(),
+    registrationIds: z.array(z.string()).optional(),
+    guestIds: z.array(z.string()).optional(),
+    size: z.string().optional(),
+  });
+  
   app.post("/api/swag-assignments/bulk", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
     try {
-      const { swagItemId, registrationIds, guestIds, size } = req.body;
+      const validated = bulkSwagAssignmentSchema.parse(req.body);
+      const { swagItemId, registrationIds, guestIds, size } = validated;
       const assignments = [];
       
       if (registrationIds?.length) {
@@ -1144,6 +1152,9 @@ export async function registerRoutes(
       
       res.status(201).json(assignments);
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid input", details: error.errors });
+      }
       console.error("Error creating bulk swag assignments:", error);
       res.status(500).json({ error: "Failed to create swag assignments" });
     }
