@@ -878,8 +878,8 @@ export default function RegistrationPage() {
         <div className="lg:w-1/2 lg:fixed lg:left-0 lg:top-0 lg:h-screen relative">
           {heroImageUrl ? (
             <div 
-              className="h-64 lg:h-full w-full bg-cover bg-center"
-              style={{ backgroundImage: `url(${heroImageUrl})` }}
+              className="h-64 lg:h-full w-full bg-contain bg-no-repeat bg-center lg:bg-left"
+              style={{ backgroundImage: `url(${heroImageUrl})`, backgroundColor: '#1a3a5c' }}
             >
               {/* Gradient overlay for text readability */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
