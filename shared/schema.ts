@@ -197,6 +197,42 @@ export const authSessions = pgTable("auth_sessions", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Swag Items table - Event-specific swag catalog
+export const swagItems = pgTable("swag_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  eventId: varchar("event_id").references(() => events.id).notNull(),
+  name: text("name").notNull(),
+  nameEs: text("name_es"),
+  description: text("description"),
+  category: text("category"), // e.g., "apparel", "accessory", "gift"
+  sizeRequired: boolean("size_required").default(false),
+  sizeField: text("size_field"), // "shirtSize" or "pantSize" - which field to use
+  totalQuantity: integer("total_quantity").notNull().default(0),
+  sortOrder: integer("sort_order").default(0),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  lastModified: timestamp("last_modified").defaultNow().notNull(),
+});
+
+// Swag status for individual assignments
+export const swagAssignmentStatusEnum = ["assigned", "received"] as const;
+export type SwagAssignmentStatus = typeof swagAssignmentStatusEnum[number];
+
+// Swag Assignments table - Links swag items to attendees/guests
+export const swagAssignments = pgTable("swag_assignments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  swagItemId: varchar("swag_item_id").references(() => swagItems.id).notNull(),
+  registrationId: varchar("registration_id").references(() => registrations.id),
+  guestId: varchar("guest_id").references(() => guests.id),
+  size: text("size"), // Captured at assignment time for apparel
+  status: text("status").notNull().default("assigned"), // "assigned" | "received"
+  receivedAt: timestamp("received_at"),
+  receivedBy: varchar("received_by").references(() => users.id),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  lastModified: timestamp("last_modified").defaultNow().notNull(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   events: many(events),
@@ -209,6 +245,7 @@ export const eventsRelations = relations(events, ({ one, many }) => ({
     references: [users.id],
   }),
   registrations: many(registrations),
+  swagItems: many(swagItems),
 }));
 
 export const registrationsRelations = relations(registrations, ({ one, many }) => ({
@@ -223,13 +260,15 @@ export const registrationsRelations = relations(registrations, ({ one, many }) =
   guests: many(guests),
   flights: many(flights),
   reimbursements: many(reimbursements),
+  swagAssignments: many(swagAssignments),
 }));
 
-export const guestsRelations = relations(guests, ({ one }) => ({
+export const guestsRelations = relations(guests, ({ one, many }) => ({
   registration: one(registrations, {
     fields: [guests.registrationId],
     references: [registrations.id],
   }),
+  swagAssignments: many(swagAssignments),
 }));
 
 export const flightsRelations = relations(flights, ({ one }) => ({
@@ -246,6 +285,33 @@ export const reimbursementsRelations = relations(reimbursements, ({ one }) => ({
   }),
   processedByUser: one(users, {
     fields: [reimbursements.processedBy],
+    references: [users.id],
+  }),
+}));
+
+export const swagItemsRelations = relations(swagItems, ({ one, many }) => ({
+  event: one(events, {
+    fields: [swagItems.eventId],
+    references: [events.id],
+  }),
+  assignments: many(swagAssignments),
+}));
+
+export const swagAssignmentsRelations = relations(swagAssignments, ({ one }) => ({
+  swagItem: one(swagItems, {
+    fields: [swagAssignments.swagItemId],
+    references: [swagItems.id],
+  }),
+  registration: one(registrations, {
+    fields: [swagAssignments.registrationId],
+    references: [registrations.id],
+  }),
+  guest: one(guests, {
+    fields: [swagAssignments.guestId],
+    references: [guests.id],
+  }),
+  receivedByUser: one(users, {
+    fields: [swagAssignments.receivedBy],
     references: [users.id],
   }),
 }));
@@ -297,6 +363,18 @@ export const insertAuthSessionSchema = createInsertSchema(authSessions).omit({
   createdAt: true,
 });
 
+export const insertSwagItemSchema = createInsertSchema(swagItems).omit({
+  id: true,
+  createdAt: true,
+  lastModified: true,
+});
+
+export const insertSwagAssignmentSchema = createInsertSchema(swagAssignments).omit({
+  id: true,
+  createdAt: true,
+  lastModified: true,
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -322,6 +400,12 @@ export type OtpSession = typeof otpSessions.$inferSelect;
 export type InsertAuthSession = z.infer<typeof insertAuthSessionSchema>;
 export type AuthSession = typeof authSessions.$inferSelect;
 
+export type InsertSwagItem = z.infer<typeof insertSwagItemSchema>;
+export type SwagItem = typeof swagItems.$inferSelect;
+
+export type InsertSwagAssignment = z.infer<typeof insertSwagAssignmentSchema>;
+export type SwagAssignment = typeof swagAssignments.$inferSelect;
+
 // Extended types for API responses
 export type RegistrationWithDetails = Registration & {
   guests?: Guest[];
@@ -333,4 +417,16 @@ export type EventWithStats = Event & {
   totalRegistrations?: number;
   checkedInCount?: number;
   qualifiedCount?: number;
+};
+
+export type SwagItemWithStats = SwagItem & {
+  assignedCount: number;
+  receivedCount: number;
+  remainingQuantity: number;
+};
+
+export type SwagAssignmentWithDetails = SwagAssignment & {
+  swagItem?: SwagItem;
+  registration?: Registration;
+  guest?: Guest;
 };
