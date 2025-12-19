@@ -749,8 +749,6 @@ export default function RegistrationPage() {
                         <Input 
                           {...field} 
                           data-testid="input-first-name"
-                          disabled={isIdentityLocked}
-                          className={isIdentityLocked ? "bg-muted" : ""}
                         />
                       </FormControl>
                       <FormMessage />
@@ -772,8 +770,6 @@ export default function RegistrationPage() {
                         <Input 
                           {...field} 
                           data-testid="input-last-name"
-                          disabled={isIdentityLocked}
-                          className={isIdentityLocked ? "bg-muted" : ""}
                         />
                       </FormControl>
                       <FormMessage />
