@@ -238,6 +238,8 @@ export default function PublicLoginPage() {
                     value={otpCode}
                     onChange={setOtpCode}
                     disabled={isLoading}
+                    inputMode="numeric"
+                    autoFocus
                     data-testid="input-otp"
                   >
                     <InputOTPGroup>
