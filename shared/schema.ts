@@ -233,6 +233,20 @@ export const swagAssignments = pgTable("swag_assignments", {
   lastModified: timestamp("last_modified").defaultNow().notNull(),
 });
 
+// Qualified Registrants table - Pre-approved users allowed to register for an event
+export const qualifiedRegistrants = pgTable("qualified_registrants", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  eventId: varchar("event_id").references(() => events.id).notNull(),
+  email: text("email").notNull(),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
+  unicityId: text("unicity_id"),
+  importedAt: timestamp("imported_at").defaultNow().notNull(),
+  importedBy: varchar("imported_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  lastModified: timestamp("last_modified").defaultNow().notNull(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   events: many(events),
@@ -375,6 +389,13 @@ export const insertSwagAssignmentSchema = createInsertSchema(swagAssignments).om
   lastModified: true,
 });
 
+export const insertQualifiedRegistrantSchema = createInsertSchema(qualifiedRegistrants).omit({
+  id: true,
+  importedAt: true,
+  createdAt: true,
+  lastModified: true,
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -405,6 +426,9 @@ export type SwagItem = typeof swagItems.$inferSelect;
 
 export type InsertSwagAssignment = z.infer<typeof insertSwagAssignmentSchema>;
 export type SwagAssignment = typeof swagAssignments.$inferSelect;
+
+export type InsertQualifiedRegistrant = z.infer<typeof insertQualifiedRegistrantSchema>;
+export type QualifiedRegistrant = typeof qualifiedRegistrants.$inferSelect;
 
 // Extended types for API responses
 export type RegistrationWithDetails = Registration & {
