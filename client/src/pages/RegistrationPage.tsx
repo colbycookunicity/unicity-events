@@ -870,49 +870,77 @@ export default function RegistrationPage() {
     );
   }
 
-  // Split layout - image on left, form on right
+  // Split layout - image on left, form on right (matches Punta Cana design)
   if (layout === "split") {
     return (
-      <div className="min-h-screen bg-background relative">
-        {renderHeader()}
-        <div className="flex flex-col lg:flex-row min-h-screen">
-          <div className="lg:w-1/2 relative">
-            {heroImageUrl ? (
-              <div 
-                className="h-64 lg:h-full bg-cover bg-center"
-                style={{ backgroundImage: `url(${heroImageUrl})` }}
-              >
-                <div className="absolute inset-0 bg-black/40 flex items-center justify-center p-8">
-                  <div className="text-center text-white">
-                    <h1 className="text-4xl font-bold mb-4">
-                      {getCustomHeading() || getEventName()}
-                    </h1>
-                    {getCustomSubheading() && (
-                      <p className="text-lg opacity-90">{getCustomSubheading()}</p>
-                    )}
-                  </div>
-                </div>
+      <div className="min-h-screen bg-background flex flex-col lg:flex-row">
+        {/* Left side - Hero image with title at bottom */}
+        <div className="lg:w-1/2 lg:fixed lg:left-0 lg:top-0 lg:h-screen relative">
+          {heroImageUrl ? (
+            <div 
+              className="h-64 lg:h-full w-full bg-cover bg-center"
+              style={{ backgroundImage: `url(${heroImageUrl})` }}
+            >
+              {/* Gradient overlay for text readability */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+              {/* Event title positioned at bottom left */}
+              <div className="absolute bottom-0 left-0 p-8 lg:p-12">
+                <h1 className="text-2xl lg:text-4xl font-bold text-white leading-tight max-w-md">
+                  {getCustomHeading() || getEventName()}
+                </h1>
+                {getCustomSubheading() && (
+                  <p className="text-white/90 mt-2 text-lg">{getCustomSubheading()}</p>
+                )}
               </div>
-            ) : (
-              <div className="h-64 lg:h-full bg-primary flex items-center justify-center p-8">
-                <div className="text-center text-primary-foreground">
-                  <h1 className="text-4xl font-bold mb-4">
-                    {getCustomHeading() || getEventName()}
-                  </h1>
-                  {getCustomSubheading() && (
-                    <p className="text-lg opacity-90">{getCustomSubheading()}</p>
-                  )}
-                </div>
+            </div>
+          ) : (
+            <div className="h-64 lg:h-full w-full bg-primary flex items-end p-8 lg:p-12">
+              <div className="text-primary-foreground">
+                <h1 className="text-2xl lg:text-4xl font-bold leading-tight max-w-md">
+                  {getCustomHeading() || getEventName()}
+                </h1>
+                {getCustomSubheading() && (
+                  <p className="opacity-90 mt-2 text-lg">{getCustomSubheading()}</p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+        
+        {/* Right side - Form with sticky header */}
+        <div className="lg:w-1/2 lg:ml-[50%] min-h-screen flex flex-col">
+          {/* Sticky header with date, location, and controls */}
+          <div className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b px-6 py-4">
+            <div className="flex items-center justify-between gap-4 flex-wrap max-w-lg mx-auto">
+              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                {event?.startDate && (
+                  <div className="flex items-center gap-1">
+                    <Calendar className="w-4 h-4" />
+                    <span>
+                      {format(new Date(event.startDate), "MMM d, yyyy")}
+                      {event.endDate && ` - ${format(new Date(event.endDate), "MMM d, yyyy")}`}
+                    </span>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <LanguageToggle />
+                <ThemeToggle />
+              </div>
+            </div>
+            {event?.location && (
+              <div className="flex items-center gap-1 text-sm text-muted-foreground mt-2 max-w-lg mx-auto">
+                <MapPin className="w-4 h-4" />
+                <span>{event.location}</span>
               </div>
             )}
           </div>
-          <div className="lg:w-1/2 p-8 overflow-y-auto">
-            <div className="max-w-lg mx-auto pt-8">
-              {renderEventInfo()}
-              <div className="mt-6">
-                {renderFormCard()}
-              </div>
-              <footer className="mt-8 text-center text-sm text-muted-foreground">
+          
+          {/* Form content */}
+          <div className="flex-1 p-6 lg:p-8 overflow-y-auto">
+            <div className="max-w-lg mx-auto">
+              {renderFormCard()}
+              <footer className="mt-8 pb-8 text-center text-sm text-muted-foreground">
                 Unicity International
               </footer>
             </div>
