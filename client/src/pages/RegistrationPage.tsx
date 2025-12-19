@@ -907,16 +907,16 @@ export default function RegistrationPage() {
         <div className="shrink-0 lg:w-[40%] lg:fixed lg:left-0 lg:top-0 lg:h-screen relative bg-[#0f2a42]">
           {heroImageUrl ? (
             <div className="h-64 lg:h-full w-full p-4 lg:p-6 flex flex-col">
-              {/* Image container with padding */}
+              {/* Image container with padding and shadow */}
               <div 
-                className="flex-1 rounded-lg bg-cover bg-center relative overflow-hidden"
+                className="flex-1 rounded-lg bg-cover bg-center relative overflow-hidden shadow-xl"
                 style={{ backgroundImage: `url(${heroImageUrl})` }}
               >
                 {/* Gradient overlay for text readability */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
                 {/* Event title positioned at bottom left */}
                 <div className="absolute bottom-0 left-0 p-6 lg:p-8">
-                  <h1 className="text-xl lg:text-3xl font-bold text-white leading-tight max-w-sm">
+                  <h1 className="text-2xl lg:text-4xl font-bold text-white leading-tight max-w-sm">
                     {getCustomHeading() || getEventName()}
                   </h1>
                   {getCustomSubheading() && (
