@@ -902,8 +902,8 @@ export default function RegistrationPage() {
   // Split layout - image on left, form on right (matches Punta Cana design)
   if (layout === "split") {
     return (
-      <div className="h-screen bg-background flex flex-col lg:flex-row overflow-hidden">
-        {/* Left side - Hero image with title at bottom (40% width) */}
+      <div className="h-screen bg-background flex flex-col lg:flex-row">
+        {/* Left side - Hero image with title at bottom (40% width) - fixed on desktop */}
         <div className="shrink-0 lg:w-[40%] lg:fixed lg:left-0 lg:top-0 lg:h-screen relative bg-[#0f2a42]">
           {heroImageUrl ? (
             <div className="h-64 lg:h-full w-full p-4 lg:p-6 flex flex-col">
@@ -942,9 +942,9 @@ export default function RegistrationPage() {
         </div>
         
         {/* Right side - Form with sticky header (60% width) */}
-        <div className="flex-1 lg:w-[60%] lg:ml-[40%] flex flex-col overflow-y-auto">
-          {/* Sticky header with date, location, and controls */}
-          <div className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b px-6 py-4 shrink-0">
+        <div className="flex-1 lg:w-[60%] lg:ml-[40%] flex flex-col h-full lg:h-screen overflow-hidden">
+          {/* Sticky header with date, location, and controls - always at top */}
+          <div className="shrink-0 bg-background border-b px-6 py-4 z-50">
             <div className="flex items-center justify-between gap-4 flex-wrap max-w-xl mx-auto">
               <div className="flex items-center gap-4 text-sm text-muted-foreground">
                 {event?.startDate && (
@@ -970,8 +970,8 @@ export default function RegistrationPage() {
             )}
           </div>
           
-          {/* Form content */}
-          <div className="p-6 lg:p-10">
+          {/* Scrollable form content */}
+          <div className="flex-1 overflow-y-auto p-6 lg:p-10">
             <div className="max-w-xl mx-auto">
               {renderFormCard()}
               <footer className="mt-8 pb-8 text-center text-sm text-muted-foreground">
