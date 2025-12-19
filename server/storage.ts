@@ -1,6 +1,6 @@
 import {
   users, events, registrations, guests, flights, reimbursements, otpSessions, authSessions,
-  swagItems, swagAssignments,
+  swagItems, swagAssignments, qualifiedRegistrants,
   type User, type InsertUser,
   type Event, type InsertEvent,
   type Registration, type InsertRegistration,
@@ -11,6 +11,7 @@ import {
   type AuthSession, type InsertAuthSession,
   type SwagItem, type InsertSwagItem,
   type SwagAssignment, type InsertSwagAssignment,
+  type QualifiedRegistrant, type InsertQualifiedRegistrant,
   type EventWithStats, type RegistrationWithDetails,
   type SwagItemWithStats, type SwagAssignmentWithDetails,
 } from "@shared/schema";
@@ -98,6 +99,16 @@ export interface IStorage {
   updateSwagAssignment(id: string, data: Partial<InsertSwagAssignment>): Promise<SwagAssignment | undefined>;
   deleteSwagAssignment(id: string): Promise<boolean>;
   markSwagReceived(id: string, receivedBy: string): Promise<SwagAssignment | undefined>;
+
+  // Qualified Registrants
+  getQualifiedRegistrantsByEvent(eventId: string): Promise<QualifiedRegistrant[]>;
+  getQualifiedRegistrant(id: string): Promise<QualifiedRegistrant | undefined>;
+  getQualifiedRegistrantByEmail(eventId: string, email: string): Promise<QualifiedRegistrant | undefined>;
+  createQualifiedRegistrant(registrant: InsertQualifiedRegistrant): Promise<QualifiedRegistrant>;
+  createQualifiedRegistrantsBulk(registrants: InsertQualifiedRegistrant[]): Promise<QualifiedRegistrant[]>;
+  updateQualifiedRegistrant(id: string, data: Partial<InsertQualifiedRegistrant>): Promise<QualifiedRegistrant | undefined>;
+  deleteQualifiedRegistrant(id: string): Promise<boolean>;
+  deleteQualifiedRegistrantsByEvent(eventId: string): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -523,6 +534,57 @@ export class DatabaseStorage implements IStorage {
       .where(eq(swagAssignments.id, id))
       .returning();
     return updated || undefined;
+  }
+
+  // Qualified Registrants
+  async getQualifiedRegistrantsByEvent(eventId: string): Promise<QualifiedRegistrant[]> {
+    return db.select().from(qualifiedRegistrants)
+      .where(eq(qualifiedRegistrants.eventId, eventId))
+      .orderBy(qualifiedRegistrants.lastName, qualifiedRegistrants.firstName);
+  }
+
+  async getQualifiedRegistrant(id: string): Promise<QualifiedRegistrant | undefined> {
+    const [registrant] = await db.select().from(qualifiedRegistrants).where(eq(qualifiedRegistrants.id, id));
+    return registrant || undefined;
+  }
+
+  async getQualifiedRegistrantByEmail(eventId: string, email: string): Promise<QualifiedRegistrant | undefined> {
+    const [registrant] = await db.select().from(qualifiedRegistrants)
+      .where(and(
+        eq(qualifiedRegistrants.eventId, eventId),
+        sql`LOWER(${qualifiedRegistrants.email}) = LOWER(${email})`
+      ));
+    return registrant || undefined;
+  }
+
+  async createQualifiedRegistrant(registrant: InsertQualifiedRegistrant): Promise<QualifiedRegistrant> {
+    const [newRegistrant] = await db.insert(qualifiedRegistrants).values(registrant).returning();
+    return newRegistrant;
+  }
+
+  async createQualifiedRegistrantsBulk(registrants: InsertQualifiedRegistrant[]): Promise<QualifiedRegistrant[]> {
+    if (registrants.length === 0) return [];
+    return db.insert(qualifiedRegistrants).values(registrants).returning();
+  }
+
+  async updateQualifiedRegistrant(id: string, data: Partial<InsertQualifiedRegistrant>): Promise<QualifiedRegistrant | undefined> {
+    const [updated] = await db.update(qualifiedRegistrants)
+      .set({ ...data, lastModified: new Date() })
+      .where(eq(qualifiedRegistrants.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteQualifiedRegistrant(id: string): Promise<boolean> {
+    await db.delete(qualifiedRegistrants).where(eq(qualifiedRegistrants.id, id));
+    return true;
+  }
+
+  async deleteQualifiedRegistrantsByEvent(eventId: string): Promise<number> {
+    const result = await db.delete(qualifiedRegistrants)
+      .where(eq(qualifiedRegistrants.eventId, eventId))
+      .returning();
+    return result.length;
   }
 }
 
