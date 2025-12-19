@@ -451,7 +451,7 @@ export async function registerRoutes(
       if (event.status !== "published") {
         return res.status(404).json({ error: "Event not available" });
       }
-      // Return public-safe event data including registration settings
+      // Return public-safe event data including registration and qualification settings
       res.json({
         id: event.id,
         slug: event.slug,
@@ -466,6 +466,9 @@ export async function registerRoutes(
         buyInPrice: event.buyInPrice,
         formFields: event.formFields,
         registrationSettings: event.registrationSettings,
+        requiresQualification: event.requiresQualification,
+        qualificationStartDate: event.qualificationStartDate,
+        qualificationEndDate: event.qualificationEndDate,
       });
     } catch (error) {
       console.error("Get public event error:", error);
