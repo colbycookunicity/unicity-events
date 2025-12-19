@@ -96,6 +96,12 @@ export default function PublicLoginPage() {
         // Store the redirect token for passing to registration page
         const redirectToken = data.redirectToken;
         
+        // Check if this is an admin email - redirect to admin login instead
+        if (email.toLowerCase().endsWith("@unicity.com")) {
+          setLocation("/admin/login");
+          return;
+        }
+        
         // Now fetch qualifying events
         const eventsRes = await apiRequest("POST", "/api/register/qualifying-events", { email });
         const eventsData = await eventsRes.json();
