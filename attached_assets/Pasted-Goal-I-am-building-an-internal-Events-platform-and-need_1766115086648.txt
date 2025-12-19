@@ -1,0 +1,57 @@
+Goal
+I am building an internal Events platform and need to add a Swag feature that allows admins to manage swag items per event and track distribution to attendees.
+
+I want you to:
+	•	Research my existing codebase and database structure
+	•	Identify where event admin tabs, attendee records, and reporting logic live
+	•	Assess how swag should relate to events and attendees
+	•	Propose a clean, scalable data model
+	•	Design admin and check-in workflows
+	•	Develop a clear implementation plan
+	•	Write the plan to Instructions.md
+
+Functional Requirements
+
+1. Swag Setup (Admin)
+	•	Add a new “Swag” tab inside Event Admin
+	•	Admins can:
+	•	Create swag items (name, description, quantity, optional size/type)
+	•	Assign swag items to a specific event
+	•	Set how many swag items are available per event (1–5+ items per event)
+
+2. Swag Assignment to Attendees
+	•	Each attendee can have multiple swag items
+	•	Admins or staff can:
+	•	Assign swag items to an individual attendee
+	•	Mark each swag item as Received / Not Received
+	•	Update swag status during check-in or later from the attendee record
+
+3. Inventory Tracking
+	•	Track total quantity vs assigned vs remaining per swag item
+	•	Prevent over-assignment when inventory runs out (or flag it clearly)
+
+4. Reporting & Visibility
+	•	Create reports that show:
+	•	Swag items per event
+	•	Which attendees have received each swag item
+	•	Which attendees have not received swag
+	•	Remaining inventory per swag item
+	•	Enable CSV export for swag reports
+
+5. UX Considerations
+	•	Swag checkboxes should be fast and easy to update (check-in friendly)
+	•	Swag status should be visible on:
+	•	Attendee detail view
+	•	Event attendee list (icons or tags)
+
+Constraints / Notes
+	•	This is an internal admin-only feature (not visible to attendees)
+	•	Keep MVP simple and extensible
+	•	Avoid over-engineering sizes/variants unless necessary for reporting
+	•	Assume swag is tied to an event first, then to attendees
+
+Deliverables
+	•	Recommended database schema (tables + relationships)
+	•	Admin UI flow (Event → Swag → Attendee)
+	•	Reporting approach
+	•	Step-by-step implementation plan in Instructions.md
