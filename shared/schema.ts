@@ -105,7 +105,7 @@ export const registrations = pgTable("registrations", {
   pantSize: text("pant_size"),
   swagStatus: text("swag_status").default("pending"),
   // Dietary & accommodations
-  dietaryRestrictions: text("dietary_restrictions"),
+  dietaryRestrictions: text("dietary_restrictions").array(),
   adaAccommodations: boolean("ada_accommodations").default(false),
   roomType: text("room_type"),
   // Custom form data for event-specific fields
