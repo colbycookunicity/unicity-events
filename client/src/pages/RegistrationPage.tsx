@@ -20,8 +20,19 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { useTranslation } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import type { Event, RegistrationSettings } from "@shared/schema";
+
+// Helper to parse date strings as local time (prevents timezone shift)
+const parseLocalDate = (dateStr: string | Date | null | undefined) => {
+  if (!dateStr) return null;
+  if (dateStr instanceof Date) return dateStr;
+  // For ISO date strings like "2026-06-04", add time to prevent UTC interpretation
+  if (typeof dateStr === "string" && dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    return parseISO(dateStr + "T12:00:00");
+  }
+  return new Date(dateStr);
+};
 
 type VerificationStep = "email" | "otp" | "form";
 
@@ -463,7 +474,7 @@ export default function RegistrationPage() {
               <div className="text-sm text-muted-foreground">
                 <p className="font-medium">{getEventName()}</p>
                 {event.startDate && (
-                  <p>{format(new Date(event.startDate), "MMMM d, yyyy")}</p>
+                  <p>{format(parseLocalDate(event.startDate)!, "MMMM d, yyyy")}</p>
                 )}
               </div>
             </CardContent>
@@ -485,9 +496,9 @@ export default function RegistrationPage() {
       {event.startDate && (
         <span className="flex items-center gap-1.5">
           <Calendar className="h-4 w-4" />
-          {format(new Date(event.startDate), "MMM d, yyyy")}
+          {format(parseLocalDate(event.startDate)!, "MMM d, yyyy")}
           {event.endDate && event.endDate !== event.startDate && (
-            <> - {format(new Date(event.endDate), "MMM d, yyyy")}</>
+            <> - {format(parseLocalDate(event.endDate)!, "MMM d, yyyy")}</>
           )}
         </span>
       )}
@@ -1245,8 +1256,8 @@ export default function RegistrationPage() {
                   <div className="flex items-center gap-1">
                     <Calendar className="w-4 h-4" />
                     <span>
-                      {format(new Date(event.startDate), "MMM d, yyyy")}
-                      {event.endDate && ` - ${format(new Date(event.endDate), "MMM d, yyyy")}`}
+                      {format(parseLocalDate(event.startDate)!, "MMM d, yyyy")}
+                      {event.endDate && ` - ${format(parseLocalDate(event.endDate)!, "MMM d, yyyy")}`}
                     </span>
                   </div>
                 )}
