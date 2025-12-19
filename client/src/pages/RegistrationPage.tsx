@@ -874,44 +874,49 @@ export default function RegistrationPage() {
   if (layout === "split") {
     return (
       <div className="min-h-screen bg-background flex flex-col lg:flex-row">
-        {/* Left side - Hero image with title at bottom */}
-        <div className="lg:w-1/2 lg:fixed lg:left-0 lg:top-0 lg:h-screen relative">
+        {/* Left side - Hero image with title at bottom (40% width) */}
+        <div className="lg:w-[40%] lg:fixed lg:left-0 lg:top-0 lg:h-screen relative bg-[#0f2a42]">
           {heroImageUrl ? (
-            <div 
-              className="h-64 lg:h-full w-full bg-contain bg-no-repeat bg-center lg:bg-left"
-              style={{ backgroundImage: `url(${heroImageUrl})`, backgroundColor: '#1a3a5c' }}
-            >
-              {/* Gradient overlay for text readability */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-              {/* Event title positioned at bottom left */}
-              <div className="absolute bottom-0 left-0 p-8 lg:p-12">
-                <h1 className="text-2xl lg:text-4xl font-bold text-white leading-tight max-w-md">
-                  {getCustomHeading() || getEventName()}
-                </h1>
-                {getCustomSubheading() && (
-                  <p className="text-white/90 mt-2 text-lg">{getCustomSubheading()}</p>
-                )}
+            <div className="h-64 lg:h-full w-full p-4 lg:p-6 flex flex-col">
+              {/* Image container with padding */}
+              <div 
+                className="flex-1 rounded-lg bg-cover bg-center relative overflow-hidden"
+                style={{ backgroundImage: `url(${heroImageUrl})` }}
+              >
+                {/* Gradient overlay for text readability */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+                {/* Event title positioned at bottom left */}
+                <div className="absolute bottom-0 left-0 p-6 lg:p-8">
+                  <h1 className="text-xl lg:text-3xl font-bold text-white leading-tight max-w-sm">
+                    {getCustomHeading() || getEventName()}
+                  </h1>
+                  {getCustomSubheading() && (
+                    <p className="text-white/90 mt-2">{getCustomSubheading()}</p>
+                  )}
+                </div>
               </div>
             </div>
           ) : (
-            <div className="h-64 lg:h-full w-full bg-primary flex items-end p-8 lg:p-12">
-              <div className="text-primary-foreground">
-                <h1 className="text-2xl lg:text-4xl font-bold leading-tight max-w-md">
-                  {getCustomHeading() || getEventName()}
-                </h1>
-                {getCustomSubheading() && (
-                  <p className="opacity-90 mt-2 text-lg">{getCustomSubheading()}</p>
-                )}
+            <div className="h-64 lg:h-full w-full p-4 lg:p-6 flex flex-col">
+              <div className="flex-1 rounded-lg bg-primary/20 flex items-end p-6 lg:p-8">
+                <div className="text-white">
+                  <h1 className="text-xl lg:text-3xl font-bold leading-tight max-w-sm">
+                    {getCustomHeading() || getEventName()}
+                  </h1>
+                  {getCustomSubheading() && (
+                    <p className="opacity-90 mt-2">{getCustomSubheading()}</p>
+                  )}
+                </div>
               </div>
             </div>
           )}
         </div>
         
-        {/* Right side - Form with sticky header */}
-        <div className="lg:w-1/2 lg:ml-[50%] min-h-screen flex flex-col">
+        {/* Right side - Form with sticky header (60% width) */}
+        <div className="lg:w-[60%] lg:ml-[40%] min-h-screen flex flex-col">
           {/* Sticky header with date, location, and controls */}
           <div className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b px-6 py-4">
-            <div className="flex items-center justify-between gap-4 flex-wrap max-w-lg mx-auto">
+            <div className="flex items-center justify-between gap-4 flex-wrap max-w-xl mx-auto">
               <div className="flex items-center gap-4 text-sm text-muted-foreground">
                 {event?.startDate && (
                   <div className="flex items-center gap-1">
@@ -929,7 +934,7 @@ export default function RegistrationPage() {
               </div>
             </div>
             {event?.location && (
-              <div className="flex items-center gap-1 text-sm text-muted-foreground mt-2 max-w-lg mx-auto">
+              <div className="flex items-center gap-1 text-sm text-muted-foreground mt-2 max-w-xl mx-auto">
                 <MapPin className="w-4 h-4" />
                 <span>{event.location}</span>
               </div>
@@ -937,8 +942,8 @@ export default function RegistrationPage() {
           </div>
           
           {/* Form content */}
-          <div className="flex-1 p-6 lg:p-8 overflow-y-auto">
-            <div className="max-w-lg mx-auto">
+          <div className="flex-1 p-6 lg:p-10 overflow-y-auto">
+            <div className="max-w-xl mx-auto">
               {renderFormCard()}
               <footer className="mt-8 pb-8 text-center text-sm text-muted-foreground">
                 Unicity International
