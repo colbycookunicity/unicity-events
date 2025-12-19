@@ -21,6 +21,7 @@ import {
   SidebarMenuButton,
   SidebarHeader,
   SidebarFooter,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { useTranslation } from "@/lib/i18n";
 import { useAuth } from "@/lib/auth";
@@ -32,6 +33,12 @@ export function AppSidebar() {
   const [location] = useLocation();
   const { t } = useTranslation();
   const { user, logout } = useAuth();
+  const { setOpenMobile } = useSidebar();
+  
+  // Close sidebar on mobile when clicking a link
+  const handleLinkClick = () => {
+    setOpenMobile(false);
+  };
 
   const mainMenuItems = [
     {
@@ -125,7 +132,7 @@ export function AppSidebar() {
                     isActive={isActive(item.url)}
                     data-testid={`nav-${item.url.replace(/\//g, "-")}`}
                   >
-                    <Link href={item.url}>
+                    <Link href={item.url} onClick={handleLinkClick}>
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
                     </Link>
@@ -147,7 +154,7 @@ export function AppSidebar() {
                     isActive={isActive(item.url)}
                     data-testid={`nav-${item.url.replace(/\//g, "-")}`}
                   >
-                    <Link href={item.url}>
+                    <Link href={item.url} onClick={handleLinkClick}>
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
                     </Link>
