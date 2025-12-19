@@ -1259,83 +1259,87 @@ export default function RegistrationPage() {
   }
 
   // Split layout - image on left, form on right (matches Punta Cana design)
+  // Uses natural page scrolling - no nested scroll containers
   if (layout === "split") {
     return (
-      <div className="h-screen bg-background flex flex-col lg:flex-row overflow-hidden">
-        {/* Left side - Hero image with title at bottom (40% width) - fixed on desktop */}
-        <div className="shrink-0 lg:w-[40%] lg:fixed lg:left-0 lg:top-0 lg:h-screen relative bg-[#0f2a42]">
-          {heroImageUrl ? (
-            <div className="h-64 lg:h-full w-full p-4 lg:p-6 flex flex-col">
-              {/* Image container with padding and shadow */}
-              <div 
-                className="flex-1 rounded-lg bg-cover bg-center relative overflow-hidden shadow-xl"
-                style={{ backgroundImage: `url(${heroImageUrl})` }}
-              >
-                {/* Gradient overlay for text readability */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-                {/* Event title positioned at bottom left */}
-                <div className="absolute bottom-0 left-0 p-6 lg:p-8">
-                  <h1 className="text-3xl lg:text-5xl font-bold text-white leading-tight max-w-md">
-                    {getCustomHeading() || getEventName()}
-                  </h1>
-                  {getCustomSubheading() && (
-                    <p className="text-white/90 mt-2">{getCustomSubheading()}</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="h-64 lg:h-full w-full p-4 lg:p-6 flex flex-col">
-              <div className="flex-1 rounded-lg bg-primary/20 flex items-end p-6 lg:p-8">
-                <div className="text-white">
-                  <h1 className="text-xl lg:text-3xl font-bold leading-tight max-w-sm">
-                    {getCustomHeading() || getEventName()}
-                  </h1>
-                  {getCustomSubheading() && (
-                    <p className="opacity-90 mt-2">{getCustomSubheading()}</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-        
-        {/* Right side - Form with sticky header (60% width) */}
-        <div className="flex-1 lg:w-[60%] lg:ml-[40%] flex flex-col h-full lg:h-screen overflow-hidden">
-          {/* Sticky header with date, location, and controls - always at top */}
-          <div className="shrink-0 bg-background border-b px-6 py-4 z-50">
-            <div className="flex items-center justify-between gap-4 flex-wrap max-w-xl mx-auto">
-              <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                {event?.startDate && (
-                  <div className="flex items-center gap-1">
-                    <Calendar className="w-4 h-4" />
-                    <span>
-                      {format(parseLocalDate(event.startDate)!, "MMM d, yyyy")}
-                      {event.endDate && ` - ${format(parseLocalDate(event.endDate)!, "MMM d, yyyy")}`}
-                    </span>
+      <div className="min-h-screen bg-background">
+        {/* Mobile: stacked layout, Desktop: side-by-side */}
+        <div className="flex flex-col lg:flex-row lg:min-h-screen">
+          {/* Left side - Hero image (full width on mobile, 40% on desktop) */}
+          <div className="w-full lg:w-[40%] lg:min-h-screen bg-[#0f2a42]">
+            {heroImageUrl ? (
+              <div className="h-72 lg:h-full w-full p-4 lg:p-6 flex flex-col lg:sticky lg:top-0">
+                {/* Image container with padding and shadow */}
+                <div 
+                  className="flex-1 rounded-lg bg-cover bg-center relative overflow-hidden shadow-xl min-h-[16rem] lg:min-h-0"
+                  style={{ backgroundImage: `url(${heroImageUrl})` }}
+                >
+                  {/* Gradient overlay for text readability */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+                  {/* Event title positioned at bottom left */}
+                  <div className="absolute bottom-0 left-0 p-6 lg:p-8">
+                    <h1 className="text-3xl lg:text-5xl font-bold text-white leading-tight max-w-md">
+                      {getCustomHeading() || getEventName()}
+                    </h1>
+                    {getCustomSubheading() && (
+                      <p className="text-white/90 mt-2">{getCustomSubheading()}</p>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <LanguageToggle />
-                <ThemeToggle />
-              </div>
-            </div>
-            {event?.location && (
-              <div className="flex items-center gap-1 text-sm text-muted-foreground mt-2 max-w-xl mx-auto">
-                <MapPin className="w-4 h-4" />
-                <span>{event.location}</span>
+            ) : (
+              <div className="h-64 lg:h-full w-full p-4 lg:p-6 flex flex-col lg:sticky lg:top-0">
+                <div className="flex-1 rounded-lg bg-primary/20 flex items-end p-6 lg:p-8 min-h-[14rem] lg:min-h-0">
+                  <div className="text-white">
+                    <h1 className="text-xl lg:text-3xl font-bold leading-tight max-w-sm">
+                      {getCustomHeading() || getEventName()}
+                    </h1>
+                    {getCustomSubheading() && (
+                      <p className="opacity-90 mt-2">{getCustomSubheading()}</p>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </div>
           
-          {/* Scrollable form content */}
-          <div className="flex-1 overflow-y-auto p-6 lg:p-10">
-            <div className="max-w-xl mx-auto">
-              {renderMainContent()}
-              <footer className="mt-8 pb-8 text-center text-sm text-muted-foreground">
-                Unicity International
-              </footer>
+          {/* Right side - Form content (scrolls with page) */}
+          <div className="flex-1 lg:w-[60%]">
+            {/* Header with date, location, and controls */}
+            <div className="bg-background border-b px-6 py-4">
+              <div className="flex items-center justify-between gap-4 flex-wrap max-w-xl mx-auto">
+                <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
+                  {event?.startDate && (
+                    <div className="flex items-center gap-1">
+                      <Calendar className="w-4 h-4" />
+                      <span>
+                        {format(parseLocalDate(event.startDate)!, "MMM d, yyyy")}
+                        {event.endDate && ` - ${format(parseLocalDate(event.endDate)!, "MMM d, yyyy")}`}
+                      </span>
+                    </div>
+                  )}
+                  {event?.location && (
+                    <div className="flex items-center gap-1">
+                      <MapPin className="w-4 h-4" />
+                      <span>{event.location}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <LanguageToggle />
+                  <ThemeToggle />
+                </div>
+              </div>
+            </div>
+            
+            {/* Form content - scrolls naturally with page */}
+            <div className="p-6 lg:p-10">
+              <div className="max-w-xl mx-auto">
+                {renderMainContent()}
+                <footer className="mt-8 pb-8 text-center text-sm text-muted-foreground">
+                  Unicity International
+                </footer>
+              </div>
             </div>
           </div>
         </div>
