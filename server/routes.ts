@@ -407,6 +407,35 @@ export async function registerRoutes(
 
       console.log("Profile extracted:", profile);
 
+      // Check if this is an admin email - if so, create auth session
+      let authToken: string | undefined;
+      let adminUser: any | undefined;
+      
+      if (email.toLowerCase().endsWith("@unicity.com")) {
+        // Find or create admin user
+        let user = await storage.getUserByEmail(email);
+        if (!user) {
+          // Create new admin user
+          user = await storage.createUser({
+            email: email.toLowerCase(),
+            name: email.split("@")[0],
+            role: "admin",
+          });
+        }
+        
+        // Create auth session with full session data
+        const sessionToken = crypto.randomUUID();
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+        const session = await storage.createAuthSession({
+          token: sessionToken,
+          userId: user.id,
+          email: user.email,
+          expiresAt,
+        });
+        authToken = session.token;
+        adminUser = user;
+      }
+
       res.json({ 
         success: true, 
         verified: true,
@@ -414,6 +443,9 @@ export async function registerRoutes(
         isQualified,
         qualificationMessage,
         redirectToken,
+        // Include auth token for admin users
+        token: authToken,
+        user: adminUser,
       });
     } catch (error) {
       console.error("Registration OTP validate error:", error);

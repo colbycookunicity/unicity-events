@@ -13,6 +13,7 @@ import { Loader2, Mail, ShieldCheck, Calendar, MapPin, ChevronRight, ArrowLeft }
 import { apiRequest } from "@/lib/queryClient";
 import unicityIcon from "@/assets/unicity-logo.png";
 import { format } from "date-fns";
+import { useAuth, setAuthToken } from "@/lib/auth";
 
 type LoginStep = "email" | "otp" | "select-event";
 
@@ -34,6 +35,7 @@ export default function PublicLoginPage() {
   const { t, language } = useTranslation();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const { setUser } = useAuth();
 
   const [step, setStep] = useState<LoginStep>("email");
   const [email, setEmail] = useState("");
@@ -96,9 +98,11 @@ export default function PublicLoginPage() {
         // Store the redirect token for passing to registration page
         const redirectToken = data.redirectToken;
         
-        // Check if this is an admin email - redirect to admin login instead
-        if (email.toLowerCase().endsWith("@unicity.com")) {
-          setLocation("/admin/login");
+        // Check if this is an admin email - authenticate and go to admin dashboard
+        if (email.toLowerCase().endsWith("@unicity.com") && data.token && data.user) {
+          setAuthToken(data.token);
+          setUser(data.user);
+          setLocation("/admin");
           return;
         }
         
