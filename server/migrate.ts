@@ -1,27 +1,21 @@
-
-import { drizzle } from 'drizzle-orm/node-postgres';
-import { migrate } from 'drizzle-orm/node-postgres/migrator';
-import pg from 'pg';
-
-const { Pool } = pg;
+import { execSync } from 'child_process';
 
 async function runMigrations() {
   if (!process.env.DATABASE_URL) {
     throw new Error('DATABASE_URL must be set');
   }
 
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  const db = drizzle(pool);
-
-  console.log('Running migrations...');
+  console.log('Pushing schema to database...');
   
-  await migrate(db, { migrationsFolder: './migrations' });
+  execSync('npx drizzle-kit push', { 
+    stdio: 'inherit',
+    env: { ...process.env }
+  });
   
-  console.log('Migrations complete!');
-  await pool.end();
+  console.log('Schema push complete!');
 }
 
 runMigrations().catch((err) => {
-  console.error('Migration failed:', err);
+  console.error('Schema push failed:', err);
   process.exit(1);
 });
