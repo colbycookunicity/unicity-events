@@ -710,6 +710,32 @@ export async function registerRoutes(
     }
   });
 
+  // Presign endpoint for hero images with public-read access
+  app.post("/api/objects/presign", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { objectPath, permission } = req.body;
+      if (!objectPath) {
+        return res.status(400).json({ error: "objectPath is required" });
+      }
+
+      const objectStorageService = new ObjectStorageService();
+      
+      // For public files, store in the public directory
+      const isPublic = permission === 'public-read';
+      const basePath = isPublic 
+        ? objectStorageService.getPublicObjectSearchPaths()[0]
+        : objectStorageService.getPrivateObjectDir();
+      
+      const fullPath = `${basePath}/${objectPath}`;
+      const uploadUrl = await objectStorageService.getPresignedUploadUrl(fullPath);
+      
+      res.json({ uploadUrl, objectPath });
+    } catch (error) {
+      console.error("Presign error:", error);
+      res.status(500).json({ error: "Failed to generate presigned URL" });
+    }
+  });
+
   app.put("/api/reimbursements/:id/receipt", authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
       const { receiptURL } = req.body;

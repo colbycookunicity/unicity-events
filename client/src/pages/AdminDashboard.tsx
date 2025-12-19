@@ -7,7 +7,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useTranslation } from "@/lib/i18n";
 import { format } from "date-fns";
 import type { Event, Registration } from "@shared/schema";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 
 interface DashboardStats {
@@ -19,6 +19,7 @@ interface DashboardStats {
 
 export default function AdminDashboard() {
   const { t } = useTranslation();
+  const [, setLocation] = useLocation();
 
   const { data: stats, isLoading: statsLoading } = useQuery<DashboardStats>({
     queryKey: ["/api/admin/stats"],
@@ -137,6 +138,7 @@ export default function AdminDashboard() {
               isLoading={eventsLoading}
               getRowKey={(event) => event.id}
               emptyMessage="No events found"
+              onRowClick={(event) => setLocation(`/admin/events/${event.id}`)}
             />
           </CardContent>
         </Card>

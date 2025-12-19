@@ -133,6 +133,17 @@ export class ObjectStorageService {
     });
   }
 
+  async getPresignedUploadUrl(fullPath: string): Promise<string> {
+    const { bucketName, objectName } = parseObjectPath(fullPath);
+
+    return signObjectURL({
+      bucketName,
+      objectName,
+      method: "PUT",
+      ttlSec: 900,
+    });
+  }
+
   async getObjectEntityFile(objectPath: string): Promise<File> {
     if (!objectPath.startsWith("/objects/")) {
       throw new ObjectNotFoundError();
