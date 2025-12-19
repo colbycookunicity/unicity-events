@@ -412,6 +412,39 @@ export async function registerRoutes(
     }
   });
 
+  // Get qualifying events for email (called after OTP verification)
+  app.post("/api/register/qualifying-events", async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+
+      const qualifyingEvents = await storage.getQualifyingEventsForEmail(email);
+      
+      // Format the response
+      const events = qualifyingEvents.map(({ event, registration, qualifiedRegistrant }) => ({
+        id: event.id,
+        slug: event.slug,
+        name: event.name,
+        nameEs: event.nameEs,
+        startDate: event.startDate,
+        endDate: event.endDate,
+        location: event.location,
+        hasRegistration: !!registration,
+        registrationStatus: registration?.status || null,
+        registrationId: registration?.id || null,
+        isQualified: true,
+        qualifiedRegistrantId: qualifiedRegistrant?.id || null,
+      }));
+
+      res.json({ success: true, events });
+    } catch (error) {
+      console.error("Get qualifying events error:", error);
+      res.status(500).json({ error: "Failed to get qualifying events" });
+    }
+  });
+
   // Dashboard Stats
   app.get("/api/admin/stats", authenticateToken, async (req, res) => {
     try {

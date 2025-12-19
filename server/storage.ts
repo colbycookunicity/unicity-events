@@ -104,6 +104,7 @@ export interface IStorage {
   getQualifiedRegistrantsByEvent(eventId: string): Promise<QualifiedRegistrant[]>;
   getQualifiedRegistrant(id: string): Promise<QualifiedRegistrant | undefined>;
   getQualifiedRegistrantByEmail(eventId: string, email: string): Promise<QualifiedRegistrant | undefined>;
+  getQualifyingEventsForEmail(email: string): Promise<{ event: Event; registration: Registration | null; qualifiedRegistrant: QualifiedRegistrant | null }[]>;
   createQualifiedRegistrant(registrant: InsertQualifiedRegistrant): Promise<QualifiedRegistrant>;
   createQualifiedRegistrantsBulk(registrants: InsertQualifiedRegistrant[]): Promise<QualifiedRegistrant[]>;
   updateQualifiedRegistrant(id: string, data: Partial<InsertQualifiedRegistrant>): Promise<QualifiedRegistrant | undefined>;
@@ -585,6 +586,58 @@ export class DatabaseStorage implements IStorage {
       .where(eq(qualifiedRegistrants.eventId, eventId))
       .returning();
     return result.length;
+  }
+
+  async getQualifyingEventsForEmail(email: string): Promise<{ event: Event; registration: Registration | null; qualifiedRegistrant: QualifiedRegistrant | null }[]> {
+    // Get all published events
+    const publishedEvents = await db.select().from(events)
+      .where(eq(events.status, 'published'))
+      .orderBy(desc(events.startDate));
+
+    const results: { event: Event; registration: Registration | null; qualifiedRegistrant: QualifiedRegistrant | null }[] = [];
+
+    for (const event of publishedEvents) {
+      // Check if user has existing registration
+      const [existingReg] = await db.select().from(registrations)
+        .where(and(
+          eq(registrations.eventId, event.id),
+          sql`LOWER(${registrations.email}) = LOWER(${email})`
+        ));
+
+      if (existingReg) {
+        results.push({ event, registration: existingReg, qualifiedRegistrant: null });
+        continue;
+      }
+
+      // Check if event requires qualification
+      if (event.requiresQualification) {
+        // Check qualified registrants list
+        const [qualifiedReg] = await db.select().from(qualifiedRegistrants)
+          .where(and(
+            eq(qualifiedRegistrants.eventId, event.id),
+            sql`LOWER(${qualifiedRegistrants.email}) = LOWER(${email})`
+          ));
+
+        if (qualifiedReg) {
+          // Check if qualification period is active (if set)
+          if (event.qualificationStartDate && event.qualificationEndDate) {
+            const now = new Date();
+            const start = new Date(event.qualificationStartDate);
+            const end = new Date(event.qualificationEndDate);
+            if (now >= start && now <= end) {
+              results.push({ event, registration: null, qualifiedRegistrant: qualifiedReg });
+            }
+          } else {
+            results.push({ event, registration: null, qualifiedRegistrant: qualifiedReg });
+          }
+        }
+      } else {
+        // Open event - anyone can register
+        results.push({ event, registration: null, qualifiedRegistrant: null });
+      }
+    }
+
+    return results;
   }
 }
 

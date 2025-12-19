@@ -26,6 +26,7 @@ import SwagPage from "@/pages/SwagPage";
 import QualifiersPage from "@/pages/QualifiersPage";
 import RegistrationPage from "@/pages/RegistrationPage";
 import UserDashboard from "@/pages/UserDashboard";
+import PublicLoginPage from "@/pages/PublicLoginPage";
 
 function AdminLayout({ children }: { children: React.ReactNode }) {
   const { theme } = useTheme();
@@ -91,7 +92,7 @@ function PublicRouter() {
       <Route path="/login" component={LoginPage} />
       <Route path="/register/:eventId" component={RegistrationPage} />
       <Route path="/my-dashboard" component={UserDashboard} />
-      <Route path="/" component={LoginPage} />
+      <Route path="/" component={PublicLoginPage} />
       <Route component={NotFound} />
     </Switch>
   );
