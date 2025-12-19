@@ -301,6 +301,7 @@ export async function registerRoutes(
         };
       } else if (process.env.NODE_ENV === "production") {
         // Production: Validate with Hydra
+        console.log("Validating OTP with Hydra for email:", email, "code length:", code?.length);
         const response = await fetch(`${HYDRA_API_BASE}/otp/magic-link`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -308,6 +309,7 @@ export async function registerRoutes(
         });
 
         const data = await response.json();
+        console.log("Hydra OTP validation response status:", response.status);
         console.log("Hydra OTP validation response:", JSON.stringify(data, null, 2));
         
         if (response.ok && data.success) {
@@ -315,6 +317,8 @@ export async function registerRoutes(
           customerId = data.customer?.id;
           bearerToken = data.token;
           customerData = data.customer;
+        } else {
+          console.log("Hydra validation failed - response.ok:", response.ok, "data.success:", data.success);
         }
       }
 
