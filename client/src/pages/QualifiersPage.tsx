@@ -180,23 +180,38 @@ export default function QualifiersPage() {
       }
 
       const parsed: Array<{ firstName: string; lastName: string; email: string; unicityId: string }> = [];
+      let skippedRows = 0;
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       
       for (let i = 1; i < lines.length; i++) {
         const values = lines[i].split(",").map(v => v.trim().replace(/"/g, "").replace(/^ /, ""));
         
-        if (values.length >= 3 && values[emailIdx]) {
+        const email = values[emailIdx]?.trim() || "";
+        const firstName = values[firstNameIdx]?.trim() || "";
+        const lastName = values[lastNameIdx]?.trim() || "";
+        
+        if (email && emailRegex.test(email) && firstName && lastName) {
           parsed.push({
-            firstName: values[firstNameIdx] || "",
-            lastName: values[lastNameIdx] || "",
-            email: values[emailIdx] || "",
-            unicityId: idIdx !== -1 ? (values[idIdx] || "") : "",
+            firstName,
+            lastName,
+            email: email.toLowerCase(),
+            unicityId: idIdx !== -1 ? (values[idIdx]?.trim() || "") : "",
           });
+        } else {
+          skippedRows++;
         }
       }
 
       if (parsed.length === 0) {
-        toast({ title: t("error"), description: "No valid rows found in CSV", variant: "destructive" });
+        toast({ title: t("error"), description: "No valid rows found in CSV. Ensure each row has First Name, Last Name, and a valid Email.", variant: "destructive" });
         return;
+      }
+
+      if (skippedRows > 0) {
+        toast({ 
+          title: "Warning", 
+          description: `Skipped ${skippedRows} row(s) with missing or invalid data`, 
+        });
       }
 
       setCsvData(parsed);

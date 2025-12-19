@@ -342,19 +342,32 @@ export async function registerRoutes(
             isQualified = true;
             qualificationMessage = "You are pre-qualified for this event.";
           } else {
-            // In production, you would check qualification via Hydra API
-            // For now, check if qualification period is active
-            const now = new Date();
-            if (event.qualificationStartDate && event.qualificationEndDate) {
-              const start = new Date(event.qualificationStartDate);
-              const end = new Date(event.qualificationEndDate);
-              if (now < start) {
-                isQualified = false;
-                qualificationMessage = "Qualification period has not started yet.";
-              } else if (now > end) {
-                isQualified = false;
-                qualificationMessage = "Qualification period has ended.";
+            // Check if user is in the qualified registrants list
+            const qualifiedRegistrant = await storage.getQualifiedRegistrantByEmail(event.id, email);
+            if (qualifiedRegistrant) {
+              // User is on the list - check if qualification period applies
+              if (event.qualificationStartDate && event.qualificationEndDate) {
+                const now = new Date();
+                const start = new Date(event.qualificationStartDate);
+                const end = new Date(event.qualificationEndDate);
+                if (now < start) {
+                  isQualified = false;
+                  qualificationMessage = "Registration period has not started yet.";
+                } else if (now > end) {
+                  isQualified = false;
+                  qualificationMessage = "Registration period has ended.";
+                } else {
+                  isQualified = true;
+                  qualificationMessage = "You are on the qualified registrants list.";
+                }
+              } else {
+                isQualified = true;
+                qualificationMessage = "You are on the qualified registrants list.";
               }
+            } else {
+              // Not in qualified list
+              isQualified = false;
+              qualificationMessage = "You are not on the qualified registrants list for this event.";
             }
           }
         }
