@@ -66,8 +66,9 @@ export interface IStorage {
 
   // OTP Sessions
   getOtpSession(email: string): Promise<OtpSession | undefined>;
+  getOtpSessionByRedirectToken(token: string): Promise<OtpSession | undefined>;
   createOtpSession(session: InsertOtpSession): Promise<OtpSession>;
-  updateOtpSession(id: string, data: Partial<InsertOtpSession>): Promise<OtpSession | undefined>;
+  updateOtpSession(id: string, data: Partial<OtpSession>): Promise<OtpSession | undefined>;
   deleteOtpSession(id: string): Promise<boolean>;
 
   // Auth Sessions
@@ -350,6 +351,12 @@ export class DatabaseStorage implements IStorage {
   async updateOtpSession(id: string, data: Partial<InsertOtpSession>): Promise<OtpSession | undefined> {
     const [updated] = await db.update(otpSessions).set(data).where(eq(otpSessions.id, id)).returning();
     return updated || undefined;
+  }
+
+  async getOtpSessionByRedirectToken(token: string): Promise<OtpSession | undefined> {
+    const [session] = await db.select().from(otpSessions)
+      .where(eq(otpSessions.redirectToken, token));
+    return session || undefined;
   }
 
   async deleteOtpSession(id: string): Promise<boolean> {

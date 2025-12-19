@@ -326,12 +326,20 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Invalid verification code" });
       }
 
-      // Mark session as verified
+      // Generate a secure redirect token for single-use verification transfer
+      const redirectToken = crypto.randomUUID();
+      const redirectTokenExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+      // Mark session as verified and store redirect token + customer data
       await storage.updateOtpSession(session.id, {
         verified: true,
         verifiedAt: new Date(),
         customerId,
         bearerToken,
+        redirectToken,
+        redirectTokenExpiresAt,
+        redirectTokenConsumed: false,
+        customerData,
       });
 
       // Check qualification if event requires it
@@ -405,6 +413,7 @@ export async function registerRoutes(
         profile,
         isQualified,
         qualificationMessage,
+        redirectToken,
       });
     } catch (error) {
       console.error("Registration OTP validate error:", error);
@@ -442,6 +451,73 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Get qualifying events error:", error);
       res.status(500).json({ error: "Failed to get qualifying events" });
+    }
+  });
+
+  // Consume redirect token to get verified profile (single-use)
+  app.post("/api/register/otp/session/consume", async (req, res) => {
+    try {
+      const { token, email, eventId } = req.body;
+      if (!token || !email) {
+        return res.status(400).json({ error: "Token and email are required" });
+      }
+
+      // Find session by redirect token
+      const session = await storage.getOtpSessionByRedirectToken(token);
+      if (!session) {
+        return res.status(400).json({ error: "Invalid or expired token" });
+      }
+
+      // Validate email matches
+      if (session.email.toLowerCase() !== email.toLowerCase()) {
+        return res.status(400).json({ error: "Token does not match email" });
+      }
+
+      // Check if already consumed
+      if (session.redirectTokenConsumed) {
+        return res.status(400).json({ error: "Token already used" });
+      }
+
+      // Check if expired
+      if (session.redirectTokenExpiresAt && new Date() > new Date(session.redirectTokenExpiresAt)) {
+        return res.status(400).json({ error: "Token expired" });
+      }
+
+      // Mark token as consumed
+      await storage.updateOtpSession(session.id, {
+        redirectTokenConsumed: true,
+      });
+
+      // Get customer data
+      const customerData = session.customerData as any || {};
+
+      // Try to get qualifier data to supplement Hydra data
+      let qualifierData: any = null;
+      if (eventId) {
+        const event = await storage.getEventByIdOrSlug(eventId);
+        if (event) {
+          qualifierData = await storage.getQualifiedRegistrantByEmail(event.id, email);
+        }
+      }
+
+      // Extract profile data
+      const profile = {
+        unicityId: customerData?.id?.unicity || customerData?.unicity_id || qualifierData?.unicityId || "",
+        email: email,
+        firstName: customerData?.humanName?.firstName || customerData?.first_name || qualifierData?.firstName || "",
+        lastName: customerData?.humanName?.lastName || customerData?.last_name || qualifierData?.lastName || "",
+        phone: customerData?.phone || customerData?.mobilePhone || "",
+        customerId: session.customerId,
+      };
+
+      res.json({
+        success: true,
+        verified: true,
+        profile,
+      });
+    } catch (error) {
+      console.error("Consume token error:", error);
+      res.status(500).json({ error: "Failed to consume token" });
     }
   });
 

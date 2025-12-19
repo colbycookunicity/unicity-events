@@ -164,6 +164,11 @@ export default function RegistrationPage() {
   const prePopulatedFirstName = urlParams.get("firstName") || "";
   const prePopulatedLastName = urlParams.get("lastName") || "";
   const prePopulatedPhone = urlParams.get("phone") || "";
+  const prePopulatedToken = urlParams.get("token") || "";
+  
+  // Track if we're consuming a token
+  const [isConsumingToken, setIsConsumingToken] = useState(false);
+  const [tokenConsumed, setTokenConsumed] = useState(false);
   
   // Skip verification if URL params provide identity (pre-qualified link)
   const skipVerification = Boolean(prePopulatedUnicityId && prePopulatedEmail);
@@ -199,6 +204,44 @@ export default function RegistrationPage() {
       fetchHeroImage();
     }
   }, [event]);
+
+  // Consume redirect token if present (from homepage OTP verification)
+  useEffect(() => {
+    const consumeToken = async () => {
+      if (prePopulatedToken && prePopulatedEmail && !tokenConsumed && !isConsumingToken) {
+        setIsConsumingToken(true);
+        try {
+          const res = await apiRequest("POST", "/api/register/otp/session/consume", {
+            token: prePopulatedToken,
+            email: prePopulatedEmail,
+            eventId: params.eventId,
+          });
+          const data = await res.json();
+          
+          if (data.success && data.verified) {
+            setVerifiedProfile(data.profile);
+            setTokenConsumed(true);
+            setVerificationStep("form");
+            
+            // Pre-populate form with verified data
+            if (data.profile.unicityId) form.setValue("unicityId", data.profile.unicityId);
+            if (data.profile.email) form.setValue("email", data.profile.email);
+            if (data.profile.firstName) form.setValue("firstName", data.profile.firstName);
+            if (data.profile.lastName) form.setValue("lastName", data.profile.lastName);
+            if (data.profile.phone) form.setValue("phone", data.profile.phone);
+          }
+        } catch (error: any) {
+          console.error("Failed to consume token:", error);
+          // Token invalid/expired - show normal verification flow
+          setVerificationEmail(prePopulatedEmail);
+        } finally {
+          setIsConsumingToken(false);
+        }
+      }
+    };
+    
+    consumeToken();
+  }, [prePopulatedToken, prePopulatedEmail, params.eventId, tokenConsumed, isConsumingToken]);
 
   // Skip to form if pre-populated or verification not required
   useEffect(() => {

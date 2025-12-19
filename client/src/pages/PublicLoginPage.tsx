@@ -40,6 +40,7 @@ export default function PublicLoginPage() {
   const [otpCode, setOtpCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [qualifyingEvents, setQualifyingEvents] = useState<QualifyingEvent[]>([]);
+  const [redirectToken, setRedirectToken] = useState("");
 
   const handleSendCode = async () => {
     if (!email || !email.includes("@")) {
@@ -91,20 +92,24 @@ export default function PublicLoginPage() {
       });
       const data = await res.json();
       
-      if (data.success && data.verified) {
+      if (data.success && data.verified && data.redirectToken) {
+        // Store the redirect token for passing to registration page
+        const redirectToken = data.redirectToken;
+        
         // Now fetch qualifying events
         const eventsRes = await apiRequest("POST", "/api/register/qualifying-events", { email });
         const eventsData = await eventsRes.json();
         
         if (eventsData.events && eventsData.events.length > 0) {
           if (eventsData.events.length === 1) {
-            // Single event - redirect directly
+            // Single event - redirect directly with token
             const event = eventsData.events[0];
             const eventSlug = event.slug || event.id;
-            setLocation(`/register/${eventSlug}?email=${encodeURIComponent(email)}`);
+            setLocation(`/register/${eventSlug}?email=${encodeURIComponent(email)}&token=${encodeURIComponent(redirectToken)}`);
           } else {
-            // Multiple events - show selection
+            // Multiple events - show selection (pass token via state)
             setQualifyingEvents(eventsData.events);
+            setRedirectToken(redirectToken);
             setStep("select-event");
           }
         } else {
@@ -136,7 +141,7 @@ export default function PublicLoginPage() {
 
   const handleEventSelect = (event: QualifyingEvent) => {
     const eventSlug = event.slug || event.id;
-    setLocation(`/register/${eventSlug}?email=${encodeURIComponent(email)}`);
+    setLocation(`/register/${eventSlug}?email=${encodeURIComponent(email)}&token=${encodeURIComponent(redirectToken)}`);
   };
 
   useEffect(() => {

@@ -183,6 +183,10 @@ export const otpSessions = pgTable("otp_sessions", {
   verifiedAt: timestamp("verified_at"),
   customerId: integer("customer_id"),
   bearerToken: text("bearer_token"),
+  redirectToken: text("redirect_token"),
+  redirectTokenExpiresAt: timestamp("redirect_token_expires_at"),
+  redirectTokenConsumed: boolean("redirect_token_consumed").default(false),
+  customerData: jsonb("customer_data"),
   expiresAt: timestamp("expires_at").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
