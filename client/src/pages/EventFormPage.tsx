@@ -178,7 +178,7 @@ export default function EventFormPage() {
 
   if (isEditing && isLoading) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 px-4">
         <Skeleton className="h-10 w-48" />
         <Card>
           <CardHeader>
@@ -199,7 +199,7 @@ export default function EventFormPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 px-4">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => setLocation("/admin/events")} data-testid="button-back">
           <ArrowLeft className="h-4 w-4" />
