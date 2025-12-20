@@ -491,33 +491,91 @@ export default function EventFormPage() {
               />
 
               {form.watch("requiresQualification") && (
-                <div className="grid gap-4 md:grid-cols-2">
-                  <FormField
-                    control={form.control}
-                    name="qualificationStartDate"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Qualification Start</FormLabel>
-                        <FormControl>
-                          <Input type="datetime-local" {...field} data-testid="input-qual-start" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="qualificationEndDate"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Qualification End</FormLabel>
-                        <FormControl>
-                          <Input type="datetime-local" {...field} data-testid="input-qual-end" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                <div className="grid gap-6 md:grid-cols-2">
+                  <div className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="qualificationStartDate"
+                      render={({ field }) => {
+                        const dateValue = field.value ? field.value.split('T')[0] : '';
+                        const timeValue = field.value ? field.value.split('T')[1] || '00:00' : '00:00';
+                        return (
+                          <FormItem>
+                            <FormLabel className="text-base font-semibold">Qualification Start</FormLabel>
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <div className="space-y-1.5">
+                                <span className="text-xs text-muted-foreground">Date</span>
+                                <FormControl>
+                                  <Input 
+                                    type="date" 
+                                    value={dateValue}
+                                    onChange={(e) => field.onChange(`${e.target.value}T${timeValue}`)}
+                                    className="text-left"
+                                    data-testid="input-qual-start-date" 
+                                  />
+                                </FormControl>
+                              </div>
+                              <div className="space-y-1.5">
+                                <span className="text-xs text-muted-foreground">Time</span>
+                                <FormControl>
+                                  <Input 
+                                    type="time" 
+                                    value={timeValue}
+                                    onChange={(e) => field.onChange(`${dateValue}T${e.target.value}`)}
+                                    className="text-left"
+                                    data-testid="input-qual-start-time" 
+                                  />
+                                </FormControl>
+                              </div>
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        );
+                      }}
+                    />
+                  </div>
+                  <div className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="qualificationEndDate"
+                      render={({ field }) => {
+                        const dateValue = field.value ? field.value.split('T')[0] : '';
+                        const timeValue = field.value ? field.value.split('T')[1] || '23:59' : '23:59';
+                        return (
+                          <FormItem>
+                            <FormLabel className="text-base font-semibold">Qualification End</FormLabel>
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <div className="space-y-1.5">
+                                <span className="text-xs text-muted-foreground">Date</span>
+                                <FormControl>
+                                  <Input 
+                                    type="date" 
+                                    value={dateValue}
+                                    onChange={(e) => field.onChange(`${e.target.value}T${timeValue}`)}
+                                    className="text-left"
+                                    data-testid="input-qual-end-date" 
+                                  />
+                                </FormControl>
+                              </div>
+                              <div className="space-y-1.5">
+                                <span className="text-xs text-muted-foreground">Time</span>
+                                <FormControl>
+                                  <Input 
+                                    type="time" 
+                                    value={timeValue}
+                                    onChange={(e) => field.onChange(`${dateValue}T${e.target.value}`)}
+                                    className="text-left"
+                                    data-testid="input-qual-end-time" 
+                                  />
+                                </FormControl>
+                              </div>
+                            </div>
+                            <FormMessage />
+                          </FormItem>
+                        );
+                      }}
+                    />
+                  </div>
                 </div>
               )}
             </CardContent>
