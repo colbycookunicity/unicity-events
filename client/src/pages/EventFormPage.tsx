@@ -19,6 +19,22 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest, getAuthHeaders } from "@/lib/queryClient";
 import type { Event, RegistrationSettings } from "@shared/schema";
 
+// Format date to local datetime string for datetime-local input (avoids UTC conversion issues)
+function formatDateForInput(dateValue: string | Date | null | undefined): string {
+  if (!dateValue) return "";
+  const date = new Date(dateValue);
+  if (isNaN(date.getTime())) return "";
+  
+  // Format as local time YYYY-MM-DDTHH:mm
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
 const eventFormSchema = z.object({
   name: z.string().min(1, "Event name is required"),
   nameEs: z.string().optional(),
@@ -101,18 +117,14 @@ export default function EventFormPage() {
         description: event.description || "",
         descriptionEs: event.descriptionEs || "",
         location: event.location || "",
-        startDate: event.startDate ? new Date(event.startDate).toISOString().slice(0, 16) : "",
-        endDate: event.endDate ? new Date(event.endDate).toISOString().slice(0, 16) : "",
+        startDate: formatDateForInput(event.startDate),
+        endDate: formatDateForInput(event.endDate),
         status: event.status as EventFormData["status"],
         capacity: event.capacity || undefined,
         buyInPrice: event.buyInPrice || undefined,
         requiresQualification: event.requiresQualification || false,
-        qualificationStartDate: event.qualificationStartDate
-          ? new Date(event.qualificationStartDate).toISOString().slice(0, 16)
-          : "",
-        qualificationEndDate: event.qualificationEndDate
-          ? new Date(event.qualificationEndDate).toISOString().slice(0, 16)
-          : "",
+        qualificationStartDate: formatDateForInput(event.qualificationStartDate),
+        qualificationEndDate: formatDateForInput(event.qualificationEndDate),
         slug: event.slug || "",
         registrationSettings: {
           heroImagePath: settings?.heroImagePath || "",
