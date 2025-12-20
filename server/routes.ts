@@ -667,22 +667,37 @@ export async function registerRoutes(
         ? (req.body.slug?.trim() || null) 
         : undefined;
       
-      const updates = {
-        ...req.body,
-        slug: normalizedSlug,
-        startDate: req.body.startDate ? new Date(req.body.startDate) : undefined,
-        endDate: req.body.endDate ? new Date(req.body.endDate) : undefined,
-        qualificationStartDate: req.body.qualificationStartDate ? new Date(req.body.qualificationStartDate) : undefined,
-        qualificationEndDate: req.body.qualificationEndDate ? new Date(req.body.qualificationEndDate) : undefined,
-      };
+      // Build updates object carefully, excluding undefined values
+      const updates: Record<string, unknown> = {};
+      
+      if (req.body.name !== undefined) updates.name = req.body.name;
+      if (req.body.nameEs !== undefined) updates.nameEs = req.body.nameEs;
+      if (req.body.description !== undefined) updates.description = req.body.description;
+      if (req.body.descriptionEs !== undefined) updates.descriptionEs = req.body.descriptionEs;
+      if (req.body.location !== undefined) updates.location = req.body.location;
+      if (req.body.status !== undefined) updates.status = req.body.status;
+      if (req.body.capacity !== undefined) updates.capacity = req.body.capacity;
+      if (req.body.buyInPrice !== undefined) updates.buyInPrice = req.body.buyInPrice;
+      if (req.body.requiresQualification !== undefined) updates.requiresQualification = req.body.requiresQualification;
+      if (req.body.registrationSettings !== undefined) updates.registrationSettings = req.body.registrationSettings;
+      if (req.body.formFields !== undefined) updates.formFields = req.body.formFields;
+      if (normalizedSlug !== undefined) updates.slug = normalizedSlug;
+      
+      // Handle dates
+      if (req.body.startDate) updates.startDate = new Date(req.body.startDate);
+      if (req.body.endDate) updates.endDate = new Date(req.body.endDate);
+      if (req.body.qualificationStartDate) updates.qualificationStartDate = new Date(req.body.qualificationStartDate);
+      if (req.body.qualificationEndDate) updates.qualificationEndDate = new Date(req.body.qualificationEndDate);
+      
       const event = await storage.updateEvent(req.params.id, updates);
       if (!event) {
         return res.status(404).json({ error: "Event not found" });
       }
       res.json(event);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Update event error:", error);
-      res.status(500).json({ error: "Failed to update event" });
+      const message = error?.message || "Failed to update event";
+      res.status(500).json({ error: "Failed to update event", details: message });
     }
   });
 
