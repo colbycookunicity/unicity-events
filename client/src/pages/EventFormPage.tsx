@@ -323,34 +323,92 @@ export default function EventFormPage() {
               <CardTitle>Date & Time</CardTitle>
               <CardDescription>When does the event take place</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="startDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("startDate")}</FormLabel>
-                      <FormControl>
-                        <Input type="datetime-local" {...field} data-testid="input-start-date" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="endDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t("endDate")}</FormLabel>
-                      <FormControl>
-                        <Input type="datetime-local" {...field} data-testid="input-end-date" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+            <CardContent className="space-y-6">
+              <div className="grid gap-6 md:grid-cols-2">
+                <div className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="startDate"
+                    render={({ field }) => {
+                      const dateValue = field.value ? field.value.split('T')[0] : '';
+                      const timeValue = field.value ? field.value.split('T')[1] || '09:00' : '09:00';
+                      return (
+                        <FormItem>
+                          <FormLabel className="text-base font-semibold">{t("startDate")}</FormLabel>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="space-y-1.5">
+                              <span className="text-xs text-muted-foreground">Date</span>
+                              <FormControl>
+                                <Input 
+                                  type="date" 
+                                  value={dateValue}
+                                  onChange={(e) => field.onChange(`${e.target.value}T${timeValue}`)}
+                                  className="text-left"
+                                  data-testid="input-start-date" 
+                                />
+                              </FormControl>
+                            </div>
+                            <div className="space-y-1.5">
+                              <span className="text-xs text-muted-foreground">Time</span>
+                              <FormControl>
+                                <Input 
+                                  type="time" 
+                                  value={timeValue}
+                                  onChange={(e) => field.onChange(`${dateValue}T${e.target.value}`)}
+                                  className="text-left"
+                                  data-testid="input-start-time" 
+                                />
+                              </FormControl>
+                            </div>
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
+                  />
+                </div>
+                <div className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="endDate"
+                    render={({ field }) => {
+                      const dateValue = field.value ? field.value.split('T')[0] : '';
+                      const timeValue = field.value ? field.value.split('T')[1] || '17:00' : '17:00';
+                      return (
+                        <FormItem>
+                          <FormLabel className="text-base font-semibold">{t("endDate")}</FormLabel>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="space-y-1.5">
+                              <span className="text-xs text-muted-foreground">Date</span>
+                              <FormControl>
+                                <Input 
+                                  type="date" 
+                                  value={dateValue}
+                                  onChange={(e) => field.onChange(`${e.target.value}T${timeValue}`)}
+                                  className="text-left"
+                                  data-testid="input-end-date" 
+                                />
+                              </FormControl>
+                            </div>
+                            <div className="space-y-1.5">
+                              <span className="text-xs text-muted-foreground">Time</span>
+                              <FormControl>
+                                <Input 
+                                  type="time" 
+                                  value={timeValue}
+                                  onChange={(e) => field.onChange(`${dateValue}T${e.target.value}`)}
+                                  className="text-left"
+                                  data-testid="input-end-time" 
+                                />
+                              </FormControl>
+                            </div>
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
+                  />
+                </div>
               </div>
             </CardContent>
           </Card>
