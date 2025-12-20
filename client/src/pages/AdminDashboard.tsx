@@ -80,7 +80,7 @@ export default function AdminDashboard() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{t("dashboard")}</h1>
@@ -118,10 +118,10 @@ export default function AdminDashboard() {
         />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-4">
-            <div>
+      <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
+        <Card className="overflow-hidden min-w-0">
+          <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-4 flex-wrap">
+            <div className="min-w-0">
               <CardTitle className="text-lg font-medium">{t("upcomingEvents")}</CardTitle>
               <CardDescription>Recent and upcoming events</CardDescription>
             </div>
@@ -131,7 +131,7 @@ export default function AdminDashboard() {
               </Button>
             </Link>
           </CardHeader>
-          <CardContent className="p-0">
+          <CardContent className="p-0 overflow-x-auto">
             <DataTable
               columns={eventColumns}
               data={recentEvents ?? []}
@@ -143,9 +143,9 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-4">
-            <div>
+        <Card className="overflow-hidden min-w-0">
+          <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-4 flex-wrap">
+            <div className="min-w-0">
               <CardTitle className="text-lg font-medium">{t("recentActivity")}</CardTitle>
               <CardDescription>Latest registrations</CardDescription>
             </div>
@@ -155,7 +155,7 @@ export default function AdminDashboard() {
               </Button>
             </Link>
           </CardHeader>
-          <CardContent className="p-0">
+          <CardContent className="p-0 overflow-x-auto">
             <DataTable
               columns={registrationColumns}
               data={recentRegistrations ?? []}
