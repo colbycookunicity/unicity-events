@@ -595,14 +595,16 @@ export default function EventFormPage() {
                     <FormItem>
                       <FormLabel>Custom URL Slug</FormLabel>
                       <FormControl>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-muted-foreground">{window.location.origin}/register/</span>
+                        <div className="space-y-2">
                           <Input 
                             {...field} 
                             placeholder="rise-2026" 
                             className="max-w-xs"
                             data-testid="input-event-slug" 
                           />
+                          <p className="text-xs text-muted-foreground break-all">
+                            {window.location.origin}/register/{field.value || "[slug]"}
+                          </p>
                         </div>
                       </FormControl>
                       <FormDescription>
