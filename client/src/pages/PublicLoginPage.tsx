@@ -239,6 +239,7 @@ export default function PublicLoginPage() {
                     onChange={setOtpCode}
                     disabled={isLoading}
                     inputMode="numeric"
+                    autoComplete="one-time-code"
                     autoFocus
                     data-testid="input-otp"
                   >

@@ -174,6 +174,9 @@ export default function LoginPage() {
                       maxLength={6}
                       value={otpCode}
                       onChange={setOtpCode}
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      autoFocus
                       data-testid="input-otp"
                     >
                       <InputOTPGroup>

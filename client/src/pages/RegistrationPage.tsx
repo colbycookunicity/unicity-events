@@ -622,6 +622,9 @@ export default function RegistrationPage() {
                 value={otpCode}
                 onChange={(value) => setOtpCode(value)}
                 onComplete={handleVerifyOtp}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                autoFocus
                 data-testid="input-otp-code"
               >
                 <InputOTPGroup>
