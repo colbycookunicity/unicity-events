@@ -676,8 +676,8 @@ export async function registerRoutes(
       if (req.body.descriptionEs !== undefined) updates.descriptionEs = req.body.descriptionEs;
       if (req.body.location !== undefined) updates.location = req.body.location;
       if (req.body.status !== undefined) updates.status = req.body.status;
-      if (req.body.capacity !== undefined) updates.capacity = req.body.capacity;
-      if (req.body.buyInPrice !== undefined) updates.buyInPrice = req.body.buyInPrice;
+      if (req.body.capacity !== undefined) updates.capacity = req.body.capacity ? parseInt(String(req.body.capacity), 10) : null;
+      if (req.body.buyInPrice !== undefined) updates.buyInPrice = req.body.buyInPrice ? Math.round(parseFloat(String(req.body.buyInPrice))) : null;
       if (req.body.requiresQualification !== undefined) updates.requiresQualification = req.body.requiresQualification;
       if (req.body.registrationSettings !== undefined) updates.registrationSettings = req.body.registrationSettings;
       if (req.body.formFields !== undefined) updates.formFields = req.body.formFields;
