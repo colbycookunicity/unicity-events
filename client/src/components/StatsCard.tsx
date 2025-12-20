@@ -43,8 +43,8 @@ export function StatsCard({
     <Card data-testid={`stats-card-${title.toLowerCase().replace(/\s+/g, "-")}`}>
       <CardContent className="p-6">
         <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1">
-            <p className="text-sm font-medium text-muted-foreground">{title}</p>
+          <div className="space-y-1 min-w-0 flex-1">
+            <p className="text-sm font-medium text-muted-foreground truncate">{title}</p>
             <p className="text-3xl font-semibold tracking-tight">{value}</p>
             {description && (
               <p className="text-xs text-muted-foreground">{description}</p>
