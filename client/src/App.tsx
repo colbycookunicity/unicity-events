@@ -39,8 +39,8 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
-      <div className="flex h-dvh w-full">
-        <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+      <div className="flex min-h-screen w-full">
+        <div className="flex flex-col flex-1 min-w-0">
           <header className="flex items-center justify-between gap-4 p-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
             <div className="flex items-center gap-3 min-w-0">
               <img 
@@ -56,7 +56,7 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
               <SidebarTrigger data-testid="button-sidebar-toggle" />
             </div>
           </header>
-          <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-6 pb-6">
+          <main className="flex-1 p-4 md:p-6 pb-6">
             {children}
           </main>
         </div>
