@@ -211,7 +211,7 @@ export default function EventFormPage() {
   }
 
   return (
-    <div className="space-y-6 px-4">
+    <div className="space-y-6 px-4 pb-24">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => setLocation("/admin/events")} data-testid="button-back">
           <ArrowLeft className="h-4 w-4" />
