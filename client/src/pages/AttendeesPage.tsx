@@ -1,16 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Search, Download, Filter, MoreHorizontal, Mail, Edit, Trash2, X, User, Phone, MapPin, Plane, Shirt, UtensilsCrossed, Save, Pencil } from "lucide-react";
+import { Search, Download, MoreHorizontal, Mail, Edit, Trash2, User, Shirt, Save, Pencil, ChevronUp, ChevronDown, Settings2, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DataTable } from "@/components/DataTable";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Separator } from "@/components/ui/separator";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,16 +35,83 @@ const DIETARY_OPTIONS = [
   { value: "halal", label: "Halal" },
 ];
 
+type ColumnKey = 
+  | "name" | "unicityId" | "email" | "phone" | "gender" | "dateOfBirth"
+  | "status" | "swagStatus" | "shirtSize" | "pantSize" | "roomType"
+  | "passportNumber" | "passportCountry" | "passportExpiration"
+  | "emergencyContact" | "emergencyContactPhone" | "dietaryRestrictions" | "adaAccommodations"
+  | "registeredAt" | "checkedInAt" | "lastModified" | "actions";
+
+type SortConfig = {
+  key: string;
+  direction: "asc" | "desc";
+} | null;
+
+const ALL_COLUMNS: { key: ColumnKey; label: string; defaultVisible: boolean }[] = [
+  { key: "name", label: "Name", defaultVisible: true },
+  { key: "unicityId", label: "Unicity ID", defaultVisible: false },
+  { key: "email", label: "Email", defaultVisible: true },
+  { key: "phone", label: "Phone", defaultVisible: true },
+  { key: "gender", label: "Gender", defaultVisible: false },
+  { key: "dateOfBirth", label: "Date of Birth", defaultVisible: false },
+  { key: "status", label: "Status", defaultVisible: true },
+  { key: "swagStatus", label: "Swag Status", defaultVisible: true },
+  { key: "shirtSize", label: "Shirt Size", defaultVisible: false },
+  { key: "pantSize", label: "Pant Size", defaultVisible: false },
+  { key: "roomType", label: "Room Type", defaultVisible: false },
+  { key: "passportNumber", label: "Passport Number", defaultVisible: false },
+  { key: "passportCountry", label: "Passport Country", defaultVisible: false },
+  { key: "passportExpiration", label: "Passport Expiration", defaultVisible: false },
+  { key: "emergencyContact", label: "Emergency Contact", defaultVisible: false },
+  { key: "emergencyContactPhone", label: "Emergency Phone", defaultVisible: false },
+  { key: "dietaryRestrictions", label: "Dietary Restrictions", defaultVisible: false },
+  { key: "adaAccommodations", label: "ADA Accommodations", defaultVisible: false },
+  { key: "registeredAt", label: "Registered", defaultVisible: true },
+  { key: "checkedInAt", label: "Checked In At", defaultVisible: false },
+  { key: "lastModified", label: "Last Modified", defaultVisible: false },
+  { key: "actions", label: "Actions", defaultVisible: true },
+];
+
+const STORAGE_KEY = "attendees-visible-columns";
+
 export default function AttendeesPage() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [eventFilter, setEventFilter] = useState<string>("all");
+  const [swagFilter, setSwagFilter] = useState<string>("all");
+  const [sortConfig, setSortConfig] = useState<SortConfig>(null);
   const [selectedAttendee, setSelectedAttendee] = useState<Registration | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<Partial<Registration>>({});
+  
+  const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        return new Set(JSON.parse(saved) as ColumnKey[]);
+      }
+    } catch {}
+    return new Set(ALL_COLUMNS.filter(c => c.defaultVisible).map(c => c.key));
+  });
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(visibleColumns)));
+  }, [visibleColumns]);
+
+  const toggleColumn = (key: ColumnKey) => {
+    setVisibleColumns(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
 
   const handleRowClick = (reg: Registration) => {
     setSelectedAttendee(reg);
@@ -156,40 +223,172 @@ export default function AttendeesPage() {
     updateAttendeeMutation.mutate(updateData);
   };
 
-  const filteredRegistrations = registrations?.filter((reg) => {
-    const searchLower = searchQuery.toLowerCase();
-    const matchesSearch =
-      reg.firstName.toLowerCase().includes(searchLower) ||
-      reg.lastName.toLowerCase().includes(searchLower) ||
-      reg.email.toLowerCase().includes(searchLower) ||
-      reg.unicityId?.toLowerCase().includes(searchLower);
+  const filteredRegistrations = useMemo(() => {
+    let result = registrations?.filter((reg) => {
+      const searchLower = searchQuery.toLowerCase();
+      const matchesSearch =
+        reg.firstName.toLowerCase().includes(searchLower) ||
+        reg.lastName.toLowerCase().includes(searchLower) ||
+        reg.email.toLowerCase().includes(searchLower) ||
+        reg.unicityId?.toLowerCase().includes(searchLower) ||
+        reg.phone?.toLowerCase().includes(searchLower);
 
-    const matchesStatus = statusFilter === "all" || reg.status === statusFilter;
-    const matchesEvent = eventFilter === "all" || reg.eventId === eventFilter;
+      const matchesStatus = statusFilter === "all" || reg.status === statusFilter;
+      const matchesEvent = eventFilter === "all" || reg.eventId === eventFilter;
+      const matchesSwag = swagFilter === "all" || (reg.swagStatus || "pending") === swagFilter;
 
-    return matchesSearch && matchesStatus && matchesEvent;
-  });
+      return matchesSearch && matchesStatus && matchesEvent && matchesSwag;
+    }) ?? [];
+
+    if (sortConfig) {
+      result = [...result].sort((a, b) => {
+        let aVal: any = "";
+        let bVal: any = "";
+
+        switch (sortConfig.key) {
+          case "name":
+            aVal = `${a.firstName} ${a.lastName}`.toLowerCase();
+            bVal = `${b.firstName} ${b.lastName}`.toLowerCase();
+            break;
+          case "email":
+            aVal = a.email.toLowerCase();
+            bVal = b.email.toLowerCase();
+            break;
+          case "phone":
+            aVal = a.phone || "";
+            bVal = b.phone || "";
+            break;
+          case "status":
+            aVal = a.status;
+            bVal = b.status;
+            break;
+          case "swagStatus":
+            aVal = a.swagStatus || "pending";
+            bVal = b.swagStatus || "pending";
+            break;
+          case "shirtSize":
+            aVal = a.shirtSize || "";
+            bVal = b.shirtSize || "";
+            break;
+          case "registeredAt":
+            aVal = a.registeredAt ? new Date(a.registeredAt).getTime() : 0;
+            bVal = b.registeredAt ? new Date(b.registeredAt).getTime() : 0;
+            break;
+          case "lastModified":
+            aVal = a.lastModified ? new Date(a.lastModified).getTime() : 0;
+            bVal = b.lastModified ? new Date(b.lastModified).getTime() : 0;
+            break;
+          case "checkedInAt":
+            aVal = a.checkedInAt ? new Date(a.checkedInAt).getTime() : 0;
+            bVal = b.checkedInAt ? new Date(b.checkedInAt).getTime() : 0;
+            break;
+          case "unicityId":
+            aVal = a.unicityId || "";
+            bVal = b.unicityId || "";
+            break;
+          default:
+            aVal = (a as any)[sortConfig.key] || "";
+            bVal = (b as any)[sortConfig.key] || "";
+        }
+
+        if (aVal < bVal) return sortConfig.direction === "asc" ? -1 : 1;
+        if (aVal > bVal) return sortConfig.direction === "asc" ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [registrations, searchQuery, statusFilter, eventFilter, swagFilter, sortConfig]);
+
+  const handleSort = (key: string) => {
+    setSortConfig(prev => {
+      if (prev?.key === key) {
+        if (prev.direction === "asc") return { key, direction: "desc" };
+        return null;
+      }
+      return { key, direction: "asc" };
+    });
+  };
 
   const handleExportCSV = () => {
     if (!filteredRegistrations?.length) return;
 
-    const headers = ["First Name", "Last Name", "Email", "Phone", "Unicity ID", "Status", "Shirt Size", "Registered At"];
+    const exportColumns = ALL_COLUMNS.filter(c => visibleColumns.has(c.key) && c.key !== "actions");
+    const headers = exportColumns.map(c => c.label);
+    
     const csvContent = [
       headers.join(","),
-      ...filteredRegistrations.map((reg) =>
-        [
-          reg.firstName,
-          reg.lastName,
-          reg.email,
-          reg.phone || "",
-          reg.unicityId || "",
-          reg.status,
-          reg.shirtSize || "",
-          reg.registeredAt ? format(new Date(reg.registeredAt), "yyyy-MM-dd HH:mm") : "",
-        ]
-          .map((field) => `"${field}"`)
-          .join(",")
-      ),
+      ...filteredRegistrations.map((reg) => {
+        return exportColumns.map(col => {
+          let value = "";
+          switch (col.key) {
+            case "name":
+              value = `${reg.firstName} ${reg.lastName}`;
+              break;
+            case "unicityId":
+              value = reg.unicityId || "";
+              break;
+            case "email":
+              value = reg.email;
+              break;
+            case "phone":
+              value = reg.phone || "";
+              break;
+            case "gender":
+              value = reg.gender || "";
+              break;
+            case "dateOfBirth":
+              value = reg.dateOfBirth ? format(new Date(reg.dateOfBirth), "yyyy-MM-dd") : "";
+              break;
+            case "status":
+              value = reg.status;
+              break;
+            case "swagStatus":
+              value = reg.swagStatus || "pending";
+              break;
+            case "shirtSize":
+              value = reg.shirtSize || "";
+              break;
+            case "pantSize":
+              value = reg.pantSize || "";
+              break;
+            case "roomType":
+              value = reg.roomType || "";
+              break;
+            case "passportNumber":
+              value = reg.passportNumber || "";
+              break;
+            case "passportCountry":
+              value = reg.passportCountry || "";
+              break;
+            case "passportExpiration":
+              value = reg.passportExpiration ? format(new Date(reg.passportExpiration), "yyyy-MM-dd") : "";
+              break;
+            case "emergencyContact":
+              value = reg.emergencyContact || "";
+              break;
+            case "emergencyContactPhone":
+              value = reg.emergencyContactPhone || "";
+              break;
+            case "dietaryRestrictions":
+              value = reg.dietaryRestrictions?.join("; ") || "";
+              break;
+            case "adaAccommodations":
+              value = reg.adaAccommodations ? "Yes" : "No";
+              break;
+            case "registeredAt":
+              value = reg.registeredAt ? format(new Date(reg.registeredAt), "yyyy-MM-dd HH:mm") : "";
+              break;
+            case "checkedInAt":
+              value = reg.checkedInAt ? format(new Date(reg.checkedInAt), "yyyy-MM-dd HH:mm") : "";
+              break;
+            case "lastModified":
+              value = reg.lastModified ? format(new Date(reg.lastModified), "yyyy-MM-dd HH:mm") : "";
+              break;
+          }
+          return `"${value.toString().replace(/"/g, '""')}"`;
+        }).join(",");
+      }),
     ].join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv" });
@@ -203,115 +402,129 @@ export default function AttendeesPage() {
     toast({ title: t("success"), description: "CSV exported successfully" });
   };
 
-  const columns = [
-    {
-      key: "name",
-      header: "Name",
-      render: (reg: Registration) => (
-        <div>
-          <div className="font-medium">{reg.firstName} {reg.lastName}</div>
-          {reg.unicityId && (
-            <div className="text-xs text-muted-foreground">ID: {reg.unicityId}</div>
-          )}
-        </div>
-      ),
-    },
-    {
-      key: "email",
-      header: t("email"),
-      render: (reg: Registration) => (
-        <span className="text-muted-foreground">{reg.email}</span>
-      ),
-    },
-    {
-      key: "phone",
-      header: t("phone"),
-      render: (reg: Registration) => (
-        <span className="text-muted-foreground">{reg.phone || "-"}</span>
-      ),
-    },
-    {
-      key: "status",
-      header: t("status"),
-      render: (reg: Registration) => <StatusBadge status={reg.status} />,
-    },
-    {
-      key: "swagStatus",
-      header: "Swag",
-      render: (reg: Registration) => (
-        <StatusBadge status={reg.swagStatus || "pending"} type="swag" />
-      ),
-    },
-    {
-      key: "registeredAt",
-      header: "Registered",
-      render: (reg: Registration) => (
-        <span className="text-muted-foreground text-sm">
-          {reg.registeredAt ? format(new Date(reg.registeredAt), "MMM d, yyyy") : "-"}
-        </span>
-      ),
-    },
-    {
-      key: "lastModified",
-      header: "Last Modified",
-      render: (reg: Registration) => (
-        <span className="text-muted-foreground text-sm">
-          {reg.lastModified ? format(new Date(reg.lastModified), "MMM d, yyyy h:mm a") : "-"}
-        </span>
-      ),
-    },
-    {
-      key: "actions",
-      header: "",
-      className: "w-[50px]",
-      render: (reg: Registration) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" data-testid={`button-actions-${reg.id}`}>
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem data-testid={`action-edit-${reg.id}`}>
-              <Edit className="h-4 w-4 mr-2" />
-              {t("edit")}
-            </DropdownMenuItem>
-            <DropdownMenuItem data-testid={`action-email-${reg.id}`}>
-              <Mail className="h-4 w-4 mr-2" />
-              Resend Confirmation
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => updateStatusMutation.mutate({ id: reg.id, status: "registered" })}
-              data-testid={`action-mark-registered-${reg.id}`}
-            >
-              Mark as Registered
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => updateStatusMutation.mutate({ id: reg.id, status: "checked_in" })}
-              data-testid={`action-mark-checked-in-${reg.id}`}
-            >
-              Mark as Checked In
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => updateStatusMutation.mutate({ id: reg.id, status: "not_coming" })}
-              data-testid={`action-mark-not-coming-${reg.id}`}
-            >
-              Mark as Not Coming
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive" data-testid={`action-delete-${reg.id}`}>
-              <Trash2 className="h-4 w-4 mr-2" />
-              {t("delete")}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ),
-    },
-  ];
+  const SortableHeader = ({ columnKey, children }: { columnKey: string; children: React.ReactNode }) => {
+    const isActive = sortConfig?.key === columnKey;
+    return (
+      <button
+        onClick={() => handleSort(columnKey)}
+        className="flex items-center gap-1 hover:text-foreground transition-colors text-left"
+        data-testid={`sort-${columnKey}`}
+      >
+        {children}
+        {isActive ? (
+          sortConfig.direction === "asc" ? (
+            <ChevronUp className="h-4 w-4" />
+          ) : (
+            <ChevronDown className="h-4 w-4" />
+          )
+        ) : (
+          <ArrowUpDown className="h-3 w-3 opacity-50" />
+        )}
+      </button>
+    );
+  };
+
+  const renderCell = (reg: Registration, key: ColumnKey) => {
+    switch (key) {
+      case "name":
+        return (
+          <div className="min-w-[150px]">
+            <div className="font-medium whitespace-nowrap">{reg.firstName} {reg.lastName}</div>
+          </div>
+        );
+      case "unicityId":
+        return <span className="text-muted-foreground whitespace-nowrap">{reg.unicityId || "-"}</span>;
+      case "email":
+        return <span className="text-muted-foreground whitespace-nowrap">{reg.email}</span>;
+      case "phone":
+        return <span className="text-muted-foreground whitespace-nowrap">{reg.phone || "-"}</span>;
+      case "gender":
+        return <span className="text-muted-foreground capitalize whitespace-nowrap">{reg.gender || "-"}</span>;
+      case "dateOfBirth":
+        return <span className="text-muted-foreground whitespace-nowrap">{reg.dateOfBirth ? format(new Date(reg.dateOfBirth), "MMM d, yyyy") : "-"}</span>;
+      case "status":
+        return <StatusBadge status={reg.status} />;
+      case "swagStatus":
+        return <StatusBadge status={reg.swagStatus || "pending"} type="swag" />;
+      case "shirtSize":
+        return <span className="text-muted-foreground whitespace-nowrap">{reg.shirtSize || "-"}</span>;
+      case "pantSize":
+        return <span className="text-muted-foreground whitespace-nowrap">{reg.pantSize || "-"}</span>;
+      case "roomType":
+        return <span className="text-muted-foreground capitalize whitespace-nowrap">{reg.roomType || "-"}</span>;
+      case "passportNumber":
+        return <span className="text-muted-foreground whitespace-nowrap">{reg.passportNumber || "-"}</span>;
+      case "passportCountry":
+        return <span className="text-muted-foreground whitespace-nowrap">{reg.passportCountry || "-"}</span>;
+      case "passportExpiration":
+        return <span className="text-muted-foreground whitespace-nowrap">{reg.passportExpiration ? format(new Date(reg.passportExpiration), "MMM d, yyyy") : "-"}</span>;
+      case "emergencyContact":
+        return <span className="text-muted-foreground whitespace-nowrap">{reg.emergencyContact || "-"}</span>;
+      case "emergencyContactPhone":
+        return <span className="text-muted-foreground whitespace-nowrap">{reg.emergencyContactPhone || "-"}</span>;
+      case "dietaryRestrictions":
+        return <span className="text-muted-foreground whitespace-nowrap">{reg.dietaryRestrictions?.join(", ") || "-"}</span>;
+      case "adaAccommodations":
+        return <span className="text-muted-foreground whitespace-nowrap">{reg.adaAccommodations ? "Yes" : "No"}</span>;
+      case "registeredAt":
+        return <span className="text-muted-foreground text-sm whitespace-nowrap">{reg.registeredAt ? format(new Date(reg.registeredAt), "MMM d, yyyy") : "-"}</span>;
+      case "checkedInAt":
+        return <span className="text-muted-foreground text-sm whitespace-nowrap">{reg.checkedInAt ? format(new Date(reg.checkedInAt), "MMM d, h:mm a") : "-"}</span>;
+      case "lastModified":
+        return <span className="text-muted-foreground text-sm whitespace-nowrap">{reg.lastModified ? format(new Date(reg.lastModified), "MMM d, h:mm a") : "-"}</span>;
+      case "actions":
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" data-testid={`button-actions-${reg.id}`} onClick={(e) => e.stopPropagation()}>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem data-testid={`action-edit-${reg.id}`}>
+                <Edit className="h-4 w-4 mr-2" />
+                {t("edit")}
+              </DropdownMenuItem>
+              <DropdownMenuItem data-testid={`action-email-${reg.id}`}>
+                <Mail className="h-4 w-4 mr-2" />
+                Resend Confirmation
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={(e) => { e.stopPropagation(); updateStatusMutation.mutate({ id: reg.id, status: "registered" }); }}
+                data-testid={`action-mark-registered-${reg.id}`}
+              >
+                Mark as Registered
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={(e) => { e.stopPropagation(); updateStatusMutation.mutate({ id: reg.id, status: "checked_in" }); }}
+                data-testid={`action-mark-checked-in-${reg.id}`}
+              >
+                Mark as Checked In
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={(e) => { e.stopPropagation(); updateStatusMutation.mutate({ id: reg.id, status: "not_coming" }); }}
+                data-testid={`action-mark-not-coming-${reg.id}`}
+              >
+                Mark as Not Coming
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="text-destructive" data-testid={`action-delete-${reg.id}`}>
+                <Trash2 className="h-4 w-4 mr-2" />
+                {t("delete")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
+      default:
+        return "-";
+    }
+  };
+
+  const visibleColumnList = ALL_COLUMNS.filter(c => visibleColumns.has(c.key));
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6 p-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{t("attendees")}</h1>
@@ -319,17 +532,51 @@ export default function AttendeesPage() {
             {filteredRegistrations?.length ?? 0} attendees
           </p>
         </div>
-        <Button onClick={handleExportCSV} variant="outline" data-testid="button-export-csv">
-          <Download className="h-4 w-4 mr-2" />
-          {t("export")}
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" data-testid="button-column-settings">
+                <Settings2 className="h-4 w-4 mr-2" />
+                Columns
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64" align="end">
+              <div className="space-y-2">
+                <h4 className="font-medium text-sm">Visible Columns</h4>
+                <p className="text-xs text-muted-foreground">Select which columns to display</p>
+                <Separator />
+                <ScrollArea className="h-[300px] pr-3">
+                  <div className="space-y-2">
+                    {ALL_COLUMNS.filter(c => c.key !== "actions").map((col) => (
+                      <div key={col.key} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`col-${col.key}`}
+                          checked={visibleColumns.has(col.key)}
+                          onCheckedChange={() => toggleColumn(col.key)}
+                          data-testid={`checkbox-column-${col.key}`}
+                        />
+                        <Label htmlFor={`col-${col.key}`} className="text-sm font-normal cursor-pointer">
+                          {col.label}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            </PopoverContent>
+          </Popover>
+          <Button onClick={handleExportCSV} variant="outline" data-testid="button-export-csv">
+            <Download className="h-4 w-4 mr-2" />
+            {t("export")}
+          </Button>
+        </div>
       </div>
 
-      <div className="flex items-center gap-4 flex-wrap">
+      <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search by name, email, or ID..."
+            placeholder="Search by name, email, phone, or ID..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
@@ -337,7 +584,7 @@ export default function AttendeesPage() {
           />
         </div>
         <Select value={eventFilter} onValueChange={setEventFilter}>
-          <SelectTrigger className="w-[200px]" data-testid="select-event-filter">
+          <SelectTrigger className="w-[180px]" data-testid="select-event-filter">
             <SelectValue placeholder="All Events" />
           </SelectTrigger>
           <SelectContent>
@@ -350,7 +597,7 @@ export default function AttendeesPage() {
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[180px]" data-testid="select-status-filter">
+          <SelectTrigger className="w-[150px]" data-testid="select-status-filter">
             <SelectValue placeholder="All Statuses" />
           </SelectTrigger>
           <SelectContent>
@@ -361,18 +608,77 @@ export default function AttendeesPage() {
             <SelectItem value="not_coming">{t("notComing")}</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={swagFilter} onValueChange={setSwagFilter}>
+          <SelectTrigger className="w-[150px]" data-testid="select-swag-filter">
+            <SelectValue placeholder="All Swag" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Swag</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="assigned">Assigned</SelectItem>
+            <SelectItem value="received">Received</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
-      <DataTable
-        columns={columns}
-        data={filteredRegistrations ?? []}
-        isLoading={isLoading}
-        getRowKey={(reg) => reg.id}
-        emptyMessage="No attendees found"
-        onRowClick={handleRowClick}
-      />
+      <div className="border rounded-lg overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 border-b">
+              <tr>
+                {visibleColumnList.map((col) => (
+                  <th 
+                    key={col.key} 
+                    className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap"
+                  >
+                    {col.key !== "actions" ? (
+                      <SortableHeader columnKey={col.key}>{col.label}</SortableHeader>
+                    ) : (
+                      ""
+                    )}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {isLoading ? (
+                [...Array(5)].map((_, i) => (
+                  <tr key={i} className="animate-pulse">
+                    {visibleColumnList.map((col) => (
+                      <td key={col.key} className="px-4 py-3">
+                        <div className="h-4 bg-muted rounded w-3/4" />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : filteredRegistrations.length === 0 ? (
+                <tr>
+                  <td colSpan={visibleColumnList.length} className="px-4 py-12 text-center text-muted-foreground">
+                    <User className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No attendees found</p>
+                  </td>
+                </tr>
+              ) : (
+                filteredRegistrations.map((reg) => (
+                  <tr
+                    key={reg.id}
+                    onClick={() => handleRowClick(reg)}
+                    className="hover-elevate cursor-pointer"
+                    data-testid={`row-attendee-${reg.id}`}
+                  >
+                    {visibleColumnList.map((col) => (
+                      <td key={col.key} className="px-4 py-3">
+                        {renderCell(reg, col.key)}
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-      {/* Attendee Detail Drawer */}
       <Sheet open={drawerOpen} onOpenChange={(open) => {
         setDrawerOpen(open);
         if (!open) setIsEditing(false);
@@ -398,7 +704,6 @@ export default function AttendeesPage() {
           
           {selectedAttendee && !isEditing && (
             <div className="mt-6 space-y-6">
-              {/* Status Section */}
               <div className="flex flex-wrap items-center gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Status</p>
@@ -428,7 +733,6 @@ export default function AttendeesPage() {
 
               <Separator />
 
-              {/* Contact Info */}
               <div className="space-y-3">
                 <h4 className="font-medium">Contact Information</h4>
                 <div className="grid gap-2 text-sm">
@@ -457,7 +761,6 @@ export default function AttendeesPage() {
 
               <Separator />
 
-              {/* Passport Info */}
               <div className="space-y-3">
                 <h4 className="font-medium">Passport Information</h4>
                 <div className="grid gap-2 text-sm">
@@ -482,7 +785,6 @@ export default function AttendeesPage() {
 
               <Separator />
 
-              {/* Emergency Contact */}
               <div className="space-y-3">
                 <h4 className="font-medium">Emergency Contact</h4>
                 <div className="grid gap-2 text-sm">
@@ -499,7 +801,6 @@ export default function AttendeesPage() {
 
               <Separator />
 
-              {/* Apparel & Preferences */}
               <div className="space-y-3">
                 <h4 className="font-medium">Apparel & Preferences</h4>
                 <div className="grid gap-2 text-sm">
@@ -532,7 +833,6 @@ export default function AttendeesPage() {
 
               <Separator />
 
-              {/* Swag Assignments */}
               <div className="space-y-3">
                 <h4 className="font-medium flex items-center gap-2">
                   <Shirt className="h-4 w-4" />
@@ -567,7 +867,6 @@ export default function AttendeesPage() {
                 )}
               </div>
 
-              {/* Quick Actions */}
               <div className="flex gap-2 pt-4">
                 <Select 
                   value={selectedAttendee.status} 
@@ -593,10 +892,8 @@ export default function AttendeesPage() {
             </div>
           )}
 
-          {/* Edit Mode Form */}
           {selectedAttendee && isEditing && (
             <div className="mt-6 space-y-6">
-              {/* Status */}
               <div className="space-y-2">
                 <Label>Status</Label>
                 <Select value={editForm.status || ""} onValueChange={(v) => handleFormChange("status", v)}>
@@ -614,7 +911,6 @@ export default function AttendeesPage() {
 
               <Separator />
 
-              {/* Personal Information */}
               <div className="space-y-4">
                 <h4 className="font-medium">Personal Information</h4>
                 <div className="grid grid-cols-2 gap-4">
@@ -677,7 +973,6 @@ export default function AttendeesPage() {
 
               <Separator />
 
-              {/* Passport Information */}
               <div className="space-y-4">
                 <h4 className="font-medium">Passport Information</h4>
                 <div className="space-y-2">
@@ -709,7 +1004,6 @@ export default function AttendeesPage() {
 
               <Separator />
 
-              {/* Emergency Contact */}
               <div className="space-y-4">
                 <h4 className="font-medium">Emergency Contact</h4>
                 <div className="space-y-2">
@@ -732,7 +1026,6 @@ export default function AttendeesPage() {
 
               <Separator />
 
-              {/* Apparel & Preferences */}
               <div className="space-y-4">
                 <h4 className="font-medium">Apparel & Preferences</h4>
                 <div className="grid grid-cols-2 gap-4">
@@ -806,7 +1099,6 @@ export default function AttendeesPage() {
                 </div>
               </div>
 
-              {/* Action Buttons */}
               <div className="flex gap-2 pt-4 sticky bottom-0 bg-background py-4 border-t">
                 <Button 
                   onClick={handleSave} 
