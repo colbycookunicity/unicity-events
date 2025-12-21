@@ -4,7 +4,7 @@ import { Calendar, MapPin, ArrowRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTranslation } from "@/lib/i18n";
-import unicityIcon from "@/assets/unicity-logo.png";
+import unicityLogoDark from "@/assets/unicity-logo-dark.png";
 import { format, parseISO } from "date-fns";
 import type { Event } from "@shared/schema";
 
@@ -65,22 +65,32 @@ export default function EventListPage({ showNotFoundMessage = false, notFoundSlu
       <header className="bg-white border-b border-slate-200 sticky top-0 z-20">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
           <img 
-            src={unicityIcon} 
+            src={unicityLogoDark} 
             alt="Unicity" 
-            className="h-8 w-auto"
+            className="h-6 w-auto"
             data-testid="img-header-logo"
           />
-          <div className="flex items-center gap-2 text-sm font-medium">
+          <div className="flex items-center gap-1 text-sm font-medium">
             <button
               onClick={() => {
-                const newLang = language === "en" ? "es" : "en";
-                localStorage.setItem("unicity-language", newLang);
+                localStorage.setItem("unicity-language", "en");
                 window.location.reload();
               }}
-              className="text-slate-600 hover:text-slate-900"
-              data-testid="button-language-toggle"
+              className={language === "en" ? "text-slate-900 font-semibold" : "text-slate-400 hover:text-slate-600"}
+              data-testid="button-language-en"
             >
-              {language === "en" ? "ES" : "EN"}
+              EN
+            </button>
+            <span className="text-slate-300">/</span>
+            <button
+              onClick={() => {
+                localStorage.setItem("unicity-language", "es");
+                window.location.reload();
+              }}
+              className={language === "es" ? "text-slate-900 font-semibold" : "text-slate-400 hover:text-slate-600"}
+              data-testid="button-language-es"
+            >
+              ES
             </button>
           </div>
         </div>
