@@ -167,7 +167,7 @@ export default function EventListPage({ showNotFoundMessage = false, notFoundSlu
                   </div>
                   <div className="flex-shrink-0">
                     <Link href={`/register/${event.id}`}>
-                      <Button variant="outline" data-testid={`button-register-${event.id}`}>
+                      <Button className="bg-slate-800 text-white hover:bg-slate-700" data-testid={`button-register-${event.id}`}>
                         {language === "es" ? "Registrarse" : "Register"}
                         <ArrowRight className="ml-2 h-4 w-4" />
                       </Button>
@@ -194,8 +194,8 @@ export default function EventListPage({ showNotFoundMessage = false, notFoundSlu
         )}
       </main>
 
-      <footer className="border-t bg-white py-6">
-        <div className="max-w-4xl mx-auto px-4 text-center text-sm text-slate-500">
+      <footer className="py-8 mt-auto">
+        <div className="max-w-4xl mx-auto px-4 text-center text-sm text-slate-400">
           <p>&copy; {new Date().getFullYear()} Unicity International. {language === "es" ? "Todos los derechos reservados." : "All rights reserved."}</p>
         </div>
       </footer>
