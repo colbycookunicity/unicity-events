@@ -14,8 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { LanguageToggle } from "@/components/LanguageToggle";
+import unicityIcon from "@/assets/unicity-logo.png";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useTranslation } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
@@ -528,8 +528,15 @@ export default function RegistrationPage() {
   }
 
   const renderHeader = () => (
-    <header className="flex items-center justify-end gap-2 p-4 absolute top-0 right-0 z-10">
-      <LanguageToggle />
+    <header className="bg-white border-b sticky top-0 z-20">
+      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+        <img 
+          src={unicityIcon} 
+          alt="Unicity" 
+          className="h-8 w-auto"
+        />
+        <LanguageToggle />
+      </div>
     </header>
   );
 
@@ -1346,50 +1353,64 @@ export default function RegistrationPage() {
     );
   }
 
-  // Hero-background layout - full width hero with form overlay
+  // Hero-background layout - bright hero image with event info below
   return (
-    <div className="min-h-screen bg-background relative">
+    <div className="min-h-screen bg-white">
       {renderHeader()}
+      
+      {/* Hero Image - bright and prominent */}
       {heroImageUrl && (
         <div 
-          className="h-72 bg-cover bg-center relative"
+          className="h-80 md:h-96 bg-cover bg-center relative"
           style={{ backgroundImage: `url(${heroImageUrl})` }}
         >
-          <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/60 to-black/70 flex items-center justify-center">
-            <div className="text-center text-white p-8">
-              <h1 className="text-4xl font-bold mb-4">
-                {getCustomHeading() || getEventName()}
-              </h1>
-              {getCustomSubheading() && (
-                <p className="text-xl opacity-90">{getCustomSubheading()}</p>
-              )}
-              <div className="mt-4">
-                {renderEventInfo(true)}
+          {/* Subtle gradient at bottom for smooth transition */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
+        </div>
+      )}
+      
+      {/* Event Info Section - clean white background */}
+      <div className="bg-white py-10 text-center border-b">
+        <div className="max-w-2xl mx-auto px-4">
+          <h1 className="text-3xl md:text-4xl font-bold text-[#1a365d] mb-2">
+            {getCustomHeading() || getEventName()}
+          </h1>
+          {getCustomSubheading() && (
+            <p className="text-xl text-[#1a365d]/80 mb-4">{getCustomSubheading()}</p>
+          )}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 text-[#1a365d]/70 mt-4">
+            {event.startDate && (
+              <div className="flex items-center gap-2">
+                <span className="font-semibold">Date:</span>
+                <span>
+                  {format(parseLocalDate(event.startDate)!, "MMMM d")}
+                  {event.endDate && event.endDate !== event.startDate && (
+                    <> - {format(parseLocalDate(event.endDate)!, "d, yyyy")}</>
+                  )}
+                  {(!event.endDate || event.endDate === event.startDate) && (
+                    <>, {format(parseLocalDate(event.startDate)!, "yyyy")}</>
+                  )}
+                </span>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-      {!heroImageUrl && (
-        <div className="bg-primary py-16 text-center">
-          <div className="text-primary-foreground p-8">
-            <h1 className="text-4xl font-bold mb-4">
-              {getCustomHeading() || getEventName()}
-            </h1>
-            {getCustomSubheading() && (
-              <p className="text-xl opacity-90">{getCustomSubheading()}</p>
             )}
-            <div className="mt-4">
-              {renderEventInfo(true)}
-            </div>
+            {event.location && (
+              <div className="flex items-center gap-2">
+                <span className="font-semibold">Location:</span>
+                <span>{event.location}</span>
+              </div>
+            )}
           </div>
         </div>
-      )}
-      <div className="max-w-2xl mx-auto p-4 pb-12 -mt-8 relative z-10">
-        {renderMainContent()}
-        <footer className="mt-8 text-center text-sm text-muted-foreground">
-          Unicity International
-        </footer>
+      </div>
+      
+      {/* Form Section */}
+      <div className="bg-gray-50 py-8">
+        <div className="max-w-2xl mx-auto px-4">
+          {renderMainContent()}
+          <footer className="mt-8 pb-8 text-center text-sm text-gray-500">
+            Unicity International
+          </footer>
+        </div>
       </div>
     </div>
   );
