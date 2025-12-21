@@ -4,6 +4,7 @@ import { Calendar, MapPin, ArrowRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTranslation } from "@/lib/i18n";
+import { useForceLightTheme } from "@/hooks/use-force-light-theme";
 import unicityLogoDark from "@/assets/unicity-logo-dark.png";
 import { format, parseISO } from "date-fns";
 import type { Event } from "@shared/schema";
@@ -23,6 +24,7 @@ export interface EventListPageProps {
 }
 
 export default function EventListPage({ showNotFoundMessage = false, notFoundSlug }: EventListPageProps = {}) {
+  useForceLightTheme();
   const { language } = useTranslation();
 
   const { data: events, isLoading } = useQuery<Event[]>({
