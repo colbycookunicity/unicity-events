@@ -18,7 +18,17 @@ const ADMIN_EMAILS = [
   "biani.gonzalez@unicity.com",
   "ashley.milliken@unicity.com",
   "william.hall@unicity.com",
-].map(e => e.toLowerCase());
+];
+
+// Check if email is in admin whitelist (exact match only, no plus aliases)
+function isAdminEmail(email: string): boolean {
+  const normalized = email.toLowerCase().trim();
+  // Reject any email with a plus sign - these are aliases
+  if (normalized.includes('+')) {
+    return false;
+  }
+  return ADMIN_EMAILS.includes(normalized);
+}
 
 interface AuthenticatedRequest extends Request {
   user?: { id: string; email: string; role: string };
@@ -72,8 +82,8 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Email is required" });
       }
 
-      // Only allow whitelisted admin emails to log in
-      if (!ADMIN_EMAILS.includes(email.toLowerCase())) {
+      // Only allow whitelisted admin emails to log in (exact match, no plus aliases)
+      if (!isAdminEmail(email)) {
         return res.status(403).json({ error: "Access denied. This login is for authorized administrators only." });
       }
 
@@ -171,14 +181,23 @@ export async function registerRoutes(
       let user = await storage.getUserByEmail(email);
       
       if (!user) {
-        // Only whitelisted emails get admin role
-        const role = ADMIN_EMAILS.includes(email.toLowerCase()) ? "admin" : "readonly";
+        // Only whitelisted emails get admin role (exact match, no plus aliases)
+        const role = isAdminEmail(email) ? "admin" : "readonly";
         user = await storage.createUser({
           email,
           name: email.split("@")[0],
           role,
           customerId,
         });
+      } else {
+        // Verify and correct role on each login to prevent unauthorized admin access
+        const expectedRole = isAdminEmail(email) ? "admin" : "readonly";
+        if (user.role === "admin" && expectedRole !== "admin") {
+          // Demote user who shouldn't be admin
+          await storage.updateUser(user.id, { role: "readonly" });
+          user = { ...user, role: "readonly" };
+          console.log(`Security: Demoted user ${email} from admin to readonly`);
+        }
       }
 
       const token = generateToken();
