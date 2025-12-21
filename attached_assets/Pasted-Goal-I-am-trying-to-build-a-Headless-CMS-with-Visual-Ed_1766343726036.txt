@@ -1,0 +1,92 @@
+Goal
+I am trying to build a Headless CMS with Visual Editing for our Events app so admins can edit event landing pages inline (no code, drag-and-drop layout) while keeping registration, qualification, and logic inside our React app.
+
+I want you to:
+	•	Research my codebase
+	•	Find relevant files and routing for event landing pages
+	•	Assess how to integrate a visual, no-code page builder
+	•	Design a Builder.io-style headless CMS integration
+	•	Develop a clear implementation plan
+	•	Write the plan to Instructions.md
+
+⸻
+
+What I need the system to support
+
+Admin capabilities
+	•	Inline editing of text, images, buttons
+	•	Drag-and-drop section layout
+	•	Reorder sections
+	•	Toggle sections on/off
+	•	Edit without deploying code
+	•	One landing page per event (ex: /events/rise-2026)
+
+Developer constraints
+	•	React-based frontend
+	•	Events app owns:
+	•	Authentication
+	•	Registration
+	•	Qualification logic
+	•	Payments
+	•	CMS controls content + layout only
+	•	Safe, composable components (admins cannot break logic)
+
+⸻
+
+Technical requirements
+
+Please design this using:
+	•	A Headless CMS with Visual Editing (Builder.io-style)
+	•	CMS content fetched as JSON
+	•	React components mapped to CMS blocks
+	•	A single CMS model for MVP: eventLandingPage
+
+The CMS model should support:
+	•	Event ID or slug
+	•	Page title
+	•	Sections array (hero, agenda, speakers, CTA, FAQ, etc.)
+	•	CTA button text (registration handled by app)
+	•	Optional language field (en / es)
+
+⸻
+
+What the Agent should produce
+
+In Instructions.md, include:
+	1.	Recommended CMS solution
+	•	Why it fits MVP + scale
+	2.	Architecture diagram (described in text)
+	•	CMS → Events App → Registration flow
+	3.	Data model for the landing page
+	4.	List of React components to expose to CMS
+	5.	Step-by-step implementation plan
+	•	SDK install
+	•	API key setup
+	•	Component registration
+	•	Page rendering
+	•	Admin editing workflow
+	6.	What is MVP vs Phase 2
+	7.	Any risks or guardrails
+
+⸻
+
+Out of scope (do not implement)
+	•	Payments
+	•	Check-in logic
+	•	Qualification rules
+	•	Email logic
+	•	Styling overhaul
+
+This is content + layout only.
+
+⸻
+
+Success criteria
+	•	An admin can visually edit an event landing page
+	•	Changes appear instantly without redeploy
+	•	The Events app remains the source of truth for logic
+	•	The system is extensible for future events
+
+⸻
+
+If anything blocks progress or assumptions are unclear, stop and ask before proceeding.
