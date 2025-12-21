@@ -481,7 +481,16 @@ export default function AttendeesPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem data-testid={`action-edit-${reg.id}`}>
+              <DropdownMenuItem 
+                onClick={(e) => { 
+                  e.stopPropagation(); 
+                  setSelectedAttendee(reg);
+                  setEditForm(reg);
+                  setIsEditing(true);
+                  setDrawerOpen(true);
+                }}
+                data-testid={`action-edit-${reg.id}`}
+              >
                 <Edit className="h-4 w-4 mr-2" />
                 {t("edit")}
               </DropdownMenuItem>
