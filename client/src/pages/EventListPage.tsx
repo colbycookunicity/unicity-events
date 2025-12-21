@@ -1,10 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Calendar, MapPin, ArrowRight, Sparkles } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { LanguageToggle } from "@/components/LanguageToggle";
 import { useTranslation } from "@/lib/i18n";
 import unicityIcon from "@/assets/unicity-logo.png";
 import { format, parseISO } from "date-fns";
@@ -64,35 +62,45 @@ export default function EventListPage({ showNotFoundMessage = false, notFoundSlu
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
-      <header className="bg-white border-b sticky top-0 z-20">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-20">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
           <img 
             src={unicityIcon} 
             alt="Unicity" 
             className="h-8 w-auto"
             data-testid="img-header-logo"
           />
-          <LanguageToggle />
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <button
+              onClick={() => {
+                const newLang = language === "en" ? "es" : "en";
+                localStorage.setItem("unicity-language", newLang);
+                window.location.reload();
+              }}
+              className="text-slate-600 hover:text-slate-900"
+              data-testid="button-language-toggle"
+            >
+              {language === "en" ? "ES" : "EN"}
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-12">
         {showNotFoundMessage && (
-          <Card className="mb-8 border-amber-200 bg-amber-50" data-testid="card-event-not-found">
-            <CardContent className="p-6 text-center">
-              <div className="mx-auto w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mb-4">
-                <Sparkles className="h-6 w-6 text-amber-600" />
-              </div>
-              <h2 className="text-xl font-semibold text-amber-900 mb-2" data-testid="text-event-not-available">
-                {language === "es" ? "Evento no disponible" : "Event Not Available"}
-              </h2>
-              <p className="text-amber-700">
-                {language === "es" 
-                  ? "Este evento ya no esta disponible o el enlace no es valido. Explore nuestros eventos activos a continuacion."
-                  : "This event is no longer available or the link is invalid. Explore our active events below."}
-              </p>
-            </CardContent>
-          </Card>
+          <div className="mb-8 border border-amber-200 bg-amber-50 rounded-lg p-6 text-center" data-testid="card-event-not-found">
+            <div className="mx-auto w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mb-4">
+              <Sparkles className="h-6 w-6 text-amber-600" />
+            </div>
+            <h2 className="text-xl font-semibold text-amber-900 mb-2" data-testid="text-event-not-available">
+              {language === "es" ? "Evento no disponible" : "Event Not Available"}
+            </h2>
+            <p className="text-amber-700">
+              {language === "es" 
+                ? "Este evento ya no esta disponible o el enlace no es valido. Explore nuestros eventos activos a continuacion."
+                : "This event is no longer available or the link is invalid. Explore our active events below."}
+            </p>
+          </div>
         )}
 
         <div className="text-center mb-10">
@@ -109,86 +117,80 @@ export default function EventListPage({ showNotFoundMessage = false, notFoundSlu
         {isLoading ? (
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (
-              <Card key={i} className="overflow-hidden">
-                <CardContent className="p-6">
-                  <div className="flex flex-col md:flex-row md:items-center gap-4">
-                    <div className="flex-1 space-y-3">
-                      <Skeleton className="h-7 w-3/4" />
-                      <Skeleton className="h-4 w-full" />
-                      <div className="flex gap-4">
-                        <Skeleton className="h-4 w-32" />
-                        <Skeleton className="h-4 w-40" />
-                      </div>
+              <div key={i} className="bg-white border border-slate-200 rounded-lg p-6">
+                <div className="flex flex-col md:flex-row md:items-center gap-4">
+                  <div className="flex-1 space-y-3">
+                    <Skeleton className="h-7 w-3/4 bg-slate-200" />
+                    <Skeleton className="h-4 w-full bg-slate-200" />
+                    <div className="flex gap-4">
+                      <Skeleton className="h-4 w-32 bg-slate-200" />
+                      <Skeleton className="h-4 w-40 bg-slate-200" />
                     </div>
-                    <Skeleton className="h-10 w-32" />
                   </div>
-                </CardContent>
-              </Card>
+                  <Skeleton className="h-10 w-32 bg-slate-200" />
+                </div>
+              </div>
             ))}
           </div>
         ) : events && events.length > 0 ? (
           <div className="space-y-4">
             {events.map((event) => (
-              <Card 
+              <div 
                 key={event.id} 
-                className="overflow-hidden hover-elevate transition-shadow"
+                className="bg-white border border-slate-200 rounded-lg shadow-sm hover:shadow-md transition-shadow p-6"
                 data-testid={`card-event-${event.id}`}
               >
-                <CardContent className="p-6">
-                  <div className="flex flex-col md:flex-row md:items-center gap-4">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-xl font-semibold text-slate-900 mb-2" data-testid={`text-event-name-${event.id}`}>
-                        {getEventName(event)}
-                      </h3>
-                      {getEventDescription(event) && (
-                        <p className="text-slate-600 mb-3 line-clamp-2">
-                          {getEventDescription(event)}
-                        </p>
+                <div className="flex flex-col md:flex-row md:items-center gap-4">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-xl font-semibold text-slate-900 mb-2" data-testid={`text-event-name-${event.id}`}>
+                      {getEventName(event)}
+                    </h3>
+                    {getEventDescription(event) && (
+                      <p className="text-slate-600 mb-3 line-clamp-2">
+                        {getEventDescription(event)}
+                      </p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-4 text-sm text-slate-500">
+                      {event.startDate && (
+                        <span className="flex items-center gap-1.5">
+                          <Calendar className="h-4 w-4" />
+                          {formatDateRange(event)}
+                        </span>
                       )}
-                      <div className="flex flex-wrap items-center gap-4 text-sm text-slate-500">
-                        {event.startDate && (
-                          <span className="flex items-center gap-1.5">
-                            <Calendar className="h-4 w-4" />
-                            {formatDateRange(event)}
-                          </span>
-                        )}
-                        {event.location && (
-                          <span className="flex items-center gap-1.5">
-                            <MapPin className="h-4 w-4" />
-                            {event.location}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex-shrink-0">
-                      <Link href={`/register/${event.id}`}>
-                        <Button data-testid={`button-register-${event.id}`}>
-                          {language === "es" ? "Registrarse" : "Register"}
-                          <ArrowRight className="ml-2 h-4 w-4" />
-                        </Button>
-                      </Link>
+                      {event.location && (
+                        <span className="flex items-center gap-1.5">
+                          <MapPin className="h-4 w-4" />
+                          {event.location}
+                        </span>
+                      )}
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+                  <div className="flex-shrink-0">
+                    <Link href={`/register/${event.id}`}>
+                      <Button variant="outline" data-testid={`button-register-${event.id}`}>
+                        {language === "es" ? "Registrarse" : "Register"}
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
         ) : (
-          <Card>
-            <CardContent className="p-12 text-center">
-              <div className="mx-auto w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
-                <Calendar className="h-8 w-8 text-slate-400" />
-              </div>
-              <h3 className="text-xl font-semibold text-slate-700 mb-2">
-                {language === "es" ? "No hay eventos disponibles" : "No Events Available"}
-              </h3>
-              <p className="text-slate-500">
-                {language === "es" 
-                  ? "No hay eventos activos en este momento. Vuelva pronto."
-                  : "There are no active events at this time. Check back soon."}
-              </p>
-            </CardContent>
-          </Card>
+          <div className="bg-white border border-slate-200 rounded-lg p-12 text-center">
+            <div className="mx-auto w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+              <Calendar className="h-8 w-8 text-slate-400" />
+            </div>
+            <h3 className="text-xl font-semibold text-slate-700 mb-2">
+              {language === "es" ? "No hay eventos disponibles" : "No Events Available"}
+            </h3>
+            <p className="text-slate-500">
+              {language === "es" 
+                ? "No hay eventos activos en este momento. Vuelva pronto."
+                : "There are no active events at this time. Check back soon."}
+            </p>
+          </div>
         )}
       </main>
 
