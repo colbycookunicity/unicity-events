@@ -15,7 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LanguageToggle } from "@/components/LanguageToggle";
-import unicityIcon from "@/assets/unicity-logo.png";
+import unicityLogoDark from "@/assets/unicity-logo-dark.png";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useTranslation } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
@@ -460,7 +460,7 @@ export default function RegistrationPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-slate-50">
         <header className="flex items-center justify-end gap-2 p-4">
           <LanguageToggle />
         </header>
@@ -490,7 +490,7 @@ export default function RegistrationPage() {
 
   if (isSuccess) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-slate-50">
         <header className="flex items-center justify-end gap-2 p-4">
           <LanguageToggle />
         </header>
@@ -520,14 +520,37 @@ export default function RegistrationPage() {
   }
 
   const renderHeader = () => (
-    <header className="bg-white border-b sticky top-0 z-20">
-      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+    <header className="bg-white border-b border-slate-200 sticky top-0 z-20">
+      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
         <img 
-          src={unicityIcon} 
+          src={unicityLogoDark} 
           alt="Unicity" 
-          className="h-8 w-auto"
+          className="h-6 w-auto"
+          data-testid="img-header-logo"
         />
-        <LanguageToggle />
+        <div className="flex items-center gap-1 text-sm font-medium">
+          <button
+            onClick={() => {
+              localStorage.setItem("unicity-language", "en");
+              window.location.reload();
+            }}
+            className={language === "en" ? "text-slate-900 font-semibold" : "text-slate-400 hover:text-slate-600"}
+            data-testid="button-language-en"
+          >
+            EN
+          </button>
+          <span className="text-slate-300">/</span>
+          <button
+            onClick={() => {
+              localStorage.setItem("unicity-language", "es");
+              window.location.reload();
+            }}
+            className={language === "es" ? "text-slate-900 font-semibold" : "text-slate-400 hover:text-slate-600"}
+            data-testid="button-language-es"
+          >
+            ES
+          </button>
+        </div>
       </div>
     </header>
   );
@@ -556,15 +579,15 @@ export default function RegistrationPage() {
   const renderVerificationStep = () => {
     if (verificationStep === "email") {
       return (
-        <Card>
+        <Card className="bg-white border-slate-200">
           <CardHeader className="text-center">
-            <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-              <Mail className="w-6 h-6 text-primary" />
+            <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
+              <Mail className="w-6 h-6 text-slate-700" />
             </div>
-            <CardTitle>
+            <CardTitle className="text-slate-900">
               {language === "es" ? "Verifique su identidad" : "Verify Your Identity"}
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-slate-600">
               {language === "es" 
                 ? "Ingrese su correo electronico para recibir un codigo de verificacion"
                 : "Enter your email to receive a verification code"}
@@ -597,15 +620,15 @@ export default function RegistrationPage() {
 
     if (verificationStep === "otp") {
       return (
-        <Card>
+        <Card className="bg-white border-slate-200">
           <CardHeader className="text-center">
-            <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-              <ShieldCheck className="w-6 h-6 text-primary" />
+            <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
+              <ShieldCheck className="w-6 h-6 text-slate-700" />
             </div>
-            <CardTitle>
+            <CardTitle className="text-slate-900">
               {language === "es" ? "Ingrese el codigo" : "Enter Verification Code"}
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-slate-600">
               {language === "es" 
                 ? `Enviamos un codigo de 6 digitos a ${verificationEmail}`
                 : `We sent a 6-digit code to ${verificationEmail}`}
@@ -1216,7 +1239,7 @@ export default function RegistrationPage() {
   // Standard layout - default, form centered on page
   if (layout === "standard") {
     return (
-      <div className="min-h-screen bg-background relative">
+      <div className="min-h-screen bg-slate-50 relative">
         {renderHeader()}
         <div className="max-w-2xl mx-auto p-4 pb-12 pt-16">
           <div className="mb-8 text-center">
@@ -1261,7 +1284,7 @@ export default function RegistrationPage() {
   // Uses natural page scrolling - no nested scroll containers
   if (layout === "split") {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-slate-50">
         {/* Mobile: stacked layout, Desktop: side-by-side */}
         <div className="flex flex-col lg:flex-row lg:min-h-screen">
           {/* Left side - Hero image (full width on mobile, 40% on desktop) */}
