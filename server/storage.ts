@@ -1,6 +1,6 @@
 import {
   users, events, registrations, guests, flights, reimbursements, otpSessions, authSessions,
-  swagItems, swagAssignments, qualifiedRegistrants,
+  swagItems, swagAssignments, qualifiedRegistrants, eventPages, eventPageSections,
   type User, type InsertUser,
   type Event, type InsertEvent,
   type Registration, type InsertRegistration,
@@ -12,6 +12,8 @@ import {
   type SwagItem, type InsertSwagItem,
   type SwagAssignment, type InsertSwagAssignment,
   type QualifiedRegistrant, type InsertQualifiedRegistrant,
+  type EventPage, type InsertEventPage,
+  type EventPageSection, type InsertEventPageSection,
   type EventWithStats, type RegistrationWithDetails,
   type SwagItemWithStats, type SwagAssignmentWithDetails,
 } from "@shared/schema";
@@ -111,6 +113,21 @@ export interface IStorage {
   updateQualifiedRegistrant(id: string, data: Partial<InsertQualifiedRegistrant>): Promise<QualifiedRegistrant | undefined>;
   deleteQualifiedRegistrant(id: string): Promise<boolean>;
   deleteQualifiedRegistrantsByEvent(eventId: string): Promise<number>;
+
+  // Event Pages
+  getEventPageByEventId(eventId: string): Promise<EventPage | undefined>;
+  getEventPageWithSections(eventId: string): Promise<{ page: EventPage; sections: EventPageSection[] } | undefined>;
+  createEventPage(page: InsertEventPage): Promise<EventPage>;
+  updateEventPage(id: string, data: Partial<InsertEventPage>): Promise<EventPage | undefined>;
+  deleteEventPage(id: string): Promise<boolean>;
+
+  // Event Page Sections
+  getEventPageSections(pageId: string): Promise<EventPageSection[]>;
+  getEventPageSection(id: string): Promise<EventPageSection | undefined>;
+  createEventPageSection(section: InsertEventPageSection): Promise<EventPageSection>;
+  updateEventPageSection(id: string, data: Partial<InsertEventPageSection>): Promise<EventPageSection | undefined>;
+  deleteEventPageSection(id: string): Promise<boolean>;
+  reorderEventPageSections(pageId: string, sectionIds: string[]): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -655,6 +672,84 @@ export class DatabaseStorage implements IStorage {
     }
 
     return results;
+  }
+
+  // Event Pages
+  async getEventPageByEventId(eventId: string): Promise<EventPage | undefined> {
+    const [page] = await db.select().from(eventPages).where(eq(eventPages.eventId, eventId));
+    return page || undefined;
+  }
+
+  async getEventPageWithSections(eventId: string): Promise<{ page: EventPage; sections: EventPageSection[] } | undefined> {
+    const page = await this.getEventPageByEventId(eventId);
+    if (!page) return undefined;
+
+    const sections = await db.select().from(eventPageSections)
+      .where(eq(eventPageSections.pageId, page.id))
+      .orderBy(eventPageSections.position);
+    
+    return { page, sections };
+  }
+
+  async createEventPage(page: InsertEventPage): Promise<EventPage> {
+    const [created] = await db.insert(eventPages).values(page).returning();
+    return created;
+  }
+
+  async updateEventPage(id: string, data: Partial<InsertEventPage>): Promise<EventPage | undefined> {
+    const [updated] = await db.update(eventPages)
+      .set({ ...data, lastModified: new Date() })
+      .where(eq(eventPages.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteEventPage(id: string): Promise<boolean> {
+    // Delete sections first
+    await db.delete(eventPageSections).where(eq(eventPageSections.pageId, id));
+    await db.delete(eventPages).where(eq(eventPages.id, id));
+    return true;
+  }
+
+  // Event Page Sections
+  async getEventPageSections(pageId: string): Promise<EventPageSection[]> {
+    return db.select().from(eventPageSections)
+      .where(eq(eventPageSections.pageId, pageId))
+      .orderBy(eventPageSections.position);
+  }
+
+  async getEventPageSection(id: string): Promise<EventPageSection | undefined> {
+    const [section] = await db.select().from(eventPageSections).where(eq(eventPageSections.id, id));
+    return section || undefined;
+  }
+
+  async createEventPageSection(section: InsertEventPageSection): Promise<EventPageSection> {
+    const [created] = await db.insert(eventPageSections).values(section).returning();
+    return created;
+  }
+
+  async updateEventPageSection(id: string, data: Partial<InsertEventPageSection>): Promise<EventPageSection | undefined> {
+    const [updated] = await db.update(eventPageSections)
+      .set({ ...data, lastModified: new Date() })
+      .where(eq(eventPageSections.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteEventPageSection(id: string): Promise<boolean> {
+    await db.delete(eventPageSections).where(eq(eventPageSections.id, id));
+    return true;
+  }
+
+  async reorderEventPageSections(pageId: string, sectionIds: string[]): Promise<void> {
+    for (let i = 0; i < sectionIds.length; i++) {
+      await db.update(eventPageSections)
+        .set({ position: i, lastModified: new Date() })
+        .where(and(
+          eq(eventPageSections.id, sectionIds[i]),
+          eq(eventPageSections.pageId, pageId)
+        ));
+    }
   }
 }
 

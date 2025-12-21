@@ -238,6 +238,145 @@ export const swagAssignments = pgTable("swag_assignments", {
   lastModified: timestamp("last_modified").defaultNow().notNull(),
 });
 
+// Page section types enum
+export const pageSectionTypeEnum = ["hero", "agenda", "speakers", "stats", "cta", "faq", "richtext", "gallery"] as const;
+export type PageSectionType = typeof pageSectionTypeEnum[number];
+
+// Page status enum
+export const pageStatusEnum = ["draft", "published"] as const;
+export type PageStatus = typeof pageStatusEnum[number];
+
+// Hero section content type
+export type HeroSectionContent = {
+  headline?: string;
+  headlineEs?: string;
+  subheadline?: string;
+  subheadlineEs?: string;
+  backgroundImage?: string;
+  primaryCtaLabel?: string;
+  primaryCtaLabelEs?: string;
+  secondaryCtaLabel?: string;
+  secondaryCtaLabelEs?: string;
+  secondaryCtaUrl?: string;
+};
+
+// Agenda section content type
+export type AgendaSectionContent = {
+  title?: string;
+  titleEs?: string;
+  items: Array<{
+    time: string;
+    label: string;
+    labelEs?: string;
+    description?: string;
+    descriptionEs?: string;
+  }>;
+};
+
+// Speakers section content type
+export type SpeakersSectionContent = {
+  title?: string;
+  titleEs?: string;
+  layout?: "grid" | "carousel";
+  speakers: Array<{
+    name: string;
+    title?: string;
+    titleEs?: string;
+    headshot?: string;
+    bio?: string;
+    bioEs?: string;
+  }>;
+};
+
+// Stats section content type
+export type StatsSectionContent = {
+  title?: string;
+  titleEs?: string;
+  stats: Array<{
+    value: string;
+    label: string;
+    labelEs?: string;
+  }>;
+};
+
+// CTA section content type
+export type CTASectionContent = {
+  headline?: string;
+  headlineEs?: string;
+  subheadline?: string;
+  subheadlineEs?: string;
+  buttonLabel?: string;
+  buttonLabelEs?: string;
+  backgroundColor?: string;
+};
+
+// FAQ section content type
+export type FAQSectionContent = {
+  title?: string;
+  titleEs?: string;
+  items: Array<{
+    question: string;
+    questionEs?: string;
+    answer: string;
+    answerEs?: string;
+  }>;
+};
+
+// Rich text section content type
+export type RichTextSectionContent = {
+  title?: string;
+  titleEs?: string;
+  content: string;
+  contentEs?: string;
+};
+
+// Gallery section content type
+export type GallerySectionContent = {
+  title?: string;
+  titleEs?: string;
+  images: Array<{
+    url: string;
+    caption?: string;
+    captionEs?: string;
+  }>;
+};
+
+// Union type for all section content
+export type PageSectionContent = 
+  | HeroSectionContent 
+  | AgendaSectionContent 
+  | SpeakersSectionContent 
+  | StatsSectionContent 
+  | CTASectionContent 
+  | FAQSectionContent 
+  | RichTextSectionContent 
+  | GallerySectionContent;
+
+// Event Pages table - Landing page configuration per event
+export const eventPages = pgTable("event_pages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  eventId: varchar("event_id").references(() => events.id).notNull().unique(),
+  status: text("status").notNull().default("draft"),
+  language: text("language").notNull().default("en"),
+  seoTitle: text("seo_title"),
+  seoDescription: text("seo_description"),
+  publishedAt: timestamp("published_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  lastModified: timestamp("last_modified").defaultNow().notNull(),
+});
+
+// Event Page Sections table - Individual sections within a landing page
+export const eventPageSections = pgTable("event_page_sections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  pageId: varchar("page_id").references(() => eventPages.id).notNull(),
+  type: text("type").notNull(),
+  position: integer("position").notNull().default(0),
+  isEnabled: boolean("is_enabled").notNull().default(true),
+  content: jsonb("content").$type<PageSectionContent>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  lastModified: timestamp("last_modified").defaultNow().notNull(),
+});
+
 // Qualified Registrants table - Pre-approved users allowed to register for an event
 export const qualifiedRegistrants = pgTable("qualified_registrants", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -335,6 +474,21 @@ export const swagAssignmentsRelations = relations(swagAssignments, ({ one }) => 
   }),
 }));
 
+export const eventPagesRelations = relations(eventPages, ({ one, many }) => ({
+  event: one(events, {
+    fields: [eventPages.eventId],
+    references: [events.id],
+  }),
+  sections: many(eventPageSections),
+}));
+
+export const eventPageSectionsRelations = relations(eventPageSections, ({ one }) => ({
+  page: one(eventPages, {
+    fields: [eventPageSections.pageId],
+    references: [eventPages.id],
+  }),
+}));
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -401,6 +555,18 @@ export const insertQualifiedRegistrantSchema = createInsertSchema(qualifiedRegis
   lastModified: true,
 });
 
+export const insertEventPageSchema = createInsertSchema(eventPages).omit({
+  id: true,
+  createdAt: true,
+  lastModified: true,
+});
+
+export const insertEventPageSectionSchema = createInsertSchema(eventPageSections).omit({
+  id: true,
+  createdAt: true,
+  lastModified: true,
+});
+
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -434,6 +600,12 @@ export type SwagAssignment = typeof swagAssignments.$inferSelect;
 
 export type InsertQualifiedRegistrant = z.infer<typeof insertQualifiedRegistrantSchema>;
 export type QualifiedRegistrant = typeof qualifiedRegistrants.$inferSelect;
+
+export type InsertEventPage = z.infer<typeof insertEventPageSchema>;
+export type EventPage = typeof eventPages.$inferSelect;
+
+export type InsertEventPageSection = z.infer<typeof insertEventPageSectionSchema>;
+export type EventPageSection = typeof eventPageSections.$inferSelect;
 
 // Extended types for API responses
 export type RegistrationWithDetails = Registration & {
