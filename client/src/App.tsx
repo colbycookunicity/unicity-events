@@ -97,7 +97,7 @@ function PublicRouter() {
     <Switch>
       <Route path="/login" component={LoginPage} />
       <Route path="/register/:eventId" component={RegistrationPage} />
-      <Route path="/register" component={EventListPage} />
+      <Route path="/register">{() => <EventListPage />}</Route>
       <Route path="/events/:slug" component={EventLandingPage} />
       <Route path="/my-dashboard" component={UserDashboard} />
       <Route path="/" component={PublicLoginPage} />

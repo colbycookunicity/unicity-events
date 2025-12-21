@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { format, parseISO } from "date-fns";
 import type { Event, RegistrationSettings } from "@shared/schema";
+import EventListPage from "./EventListPage";
 
 // Helper to parse date strings as local time (prevents timezone shift)
 const parseLocalDate = (dateStr: string | Date | null | undefined) => {
@@ -484,16 +485,7 @@ export default function RegistrationPage() {
   }
 
   if (!event) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Card className="max-w-md">
-          <CardContent className="p-6 text-center">
-            <h2 className="text-xl font-semibold mb-2">Event Not Found</h2>
-            <p className="text-muted-foreground">This event does not exist or registration is not available.</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
+    return <EventListPage showNotFoundMessage={true} notFoundSlug={params.eventId} />;
   }
 
   if (isSuccess) {

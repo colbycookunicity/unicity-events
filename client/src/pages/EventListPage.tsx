@@ -19,12 +19,12 @@ const parseLocalDate = (dateStr: string | Date | null | undefined) => {
   return new Date(dateStr);
 };
 
-interface EventListPageProps {
+export interface EventListPageProps {
   showNotFoundMessage?: boolean;
   notFoundSlug?: string;
 }
 
-export default function EventListPage({ showNotFoundMessage = false, notFoundSlug }: EventListPageProps) {
+export default function EventListPage({ showNotFoundMessage = false, notFoundSlug }: EventListPageProps = {}) {
   const { language } = useTranslation();
 
   const { data: events, isLoading } = useQuery<Event[]>({
@@ -70,6 +70,7 @@ export default function EventListPage({ showNotFoundMessage = false, notFoundSlu
             src={unicityIcon} 
             alt="Unicity" 
             className="h-8 w-auto"
+            data-testid="img-header-logo"
           />
           <LanguageToggle />
         </div>
@@ -77,12 +78,12 @@ export default function EventListPage({ showNotFoundMessage = false, notFoundSlu
 
       <main className="max-w-4xl mx-auto px-4 py-12">
         {showNotFoundMessage && (
-          <Card className="mb-8 border-amber-200 bg-amber-50">
+          <Card className="mb-8 border-amber-200 bg-amber-50" data-testid="card-event-not-found">
             <CardContent className="p-6 text-center">
               <div className="mx-auto w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mb-4">
                 <Sparkles className="h-6 w-6 text-amber-600" />
               </div>
-              <h2 className="text-xl font-semibold text-amber-900 mb-2">
+              <h2 className="text-xl font-semibold text-amber-900 mb-2" data-testid="text-event-not-available">
                 {language === "es" ? "Evento no disponible" : "Event Not Available"}
               </h2>
               <p className="text-amber-700">
@@ -95,7 +96,7 @@ export default function EventListPage({ showNotFoundMessage = false, notFoundSlu
         )}
 
         <div className="text-center mb-10">
-          <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-3">
+          <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-3" data-testid="text-page-title">
             {language === "es" ? "Proximos Eventos" : "Upcoming Events"}
           </h1>
           <p className="text-lg text-slate-600 max-w-2xl mx-auto">
