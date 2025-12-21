@@ -48,6 +48,7 @@ export default function SwagPage() {
   const [itemToAssign, setItemToAssign] = useState<SwagItemWithStats | null>(null);
   const [selectedRegistrations, setSelectedRegistrations] = useState<string[]>([]);
   const [assignSize, setAssignSize] = useState("");
+  const [assignSearch, setAssignSearch] = useState("");
   const [formData, setFormData] = useState({
     name: "",
     nameEs: "",
@@ -182,8 +183,21 @@ export default function SwagPage() {
     setItemToAssign(item);
     setSelectedRegistrations([]);
     setAssignSize("");
+    setAssignSearch("");
     setAssignDialogOpen(true);
   };
+
+  // Filter registrations based on search
+  const filteredRegistrations = registrations?.filter(reg => {
+    if (!assignSearch.trim()) return true;
+    const query = assignSearch.toLowerCase();
+    return (
+      reg.firstName.toLowerCase().includes(query) ||
+      reg.lastName.toLowerCase().includes(query) ||
+      reg.email.toLowerCase().includes(query) ||
+      (reg.unicityId && reg.unicityId.toLowerCase().includes(query))
+    );
+  });
 
   const handleSubmit = () => {
     if (editingItem) {
@@ -559,6 +573,17 @@ export default function SwagPage() {
               </div>
             )}
             
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search attendees..."
+                value={assignSearch}
+                onChange={(e) => setAssignSearch(e.target.value)}
+                className="pl-9"
+                data-testid="input-assign-search"
+              />
+            </div>
+
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground">
                 {selectedRegistrations.length} selected
@@ -569,7 +594,11 @@ export default function SwagPage() {
             </div>
             
             <div className="border rounded-md overflow-auto flex-1 max-h-[300px]">
-              {registrations?.map(reg => (
+              {filteredRegistrations?.length === 0 ? (
+                <div className="p-4 text-center text-muted-foreground">
+                  {assignSearch ? "No attendees match your search" : "No attendees found"}
+                </div>
+              ) : filteredRegistrations?.map(reg => (
                 <div
                   key={reg.id}
                   className={`flex items-center gap-3 p-3 border-b last:border-b-0 cursor-pointer hover-elevate ${
