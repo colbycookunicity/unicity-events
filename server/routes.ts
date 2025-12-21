@@ -7,6 +7,7 @@ import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
+import { iterableService } from "./iterable";
 
 const HYDRA_API_BASE = process.env.NODE_ENV === "production" 
   ? "https://hydra.unicity.net/v6"
@@ -118,6 +119,15 @@ export async function registerRoutes(
         verified: false,
         expiresAt: new Date(data.data.expires_at),
       });
+
+      // Send OTP via Iterable (optional - Hydra already sends it, but you can customize)
+      // if (process.env.ITERABLE_API_KEY) {
+      //   try {
+      //     await iterableService.sendOTPEmail(email, data.data.metadata?.otp_code, 'en');
+      //   } catch (err) {
+      //     console.error('Failed to send Iterable email:', err);
+      //   }
+      // }
 
       res.json({ success: true, message: "OTP sent successfully" });
     } catch (error) {
@@ -776,6 +786,20 @@ export async function registerRoutes(
         registeredAt: new Date(),
       });
 
+      // Send confirmation email via Iterable
+      if (process.env.ITERABLE_API_KEY) {
+        try {
+          await iterableService.sendRegistrationConfirmation(
+            registration.email,
+            registration,
+            event,
+            registration.language
+          );
+        } catch (err) {
+          console.error('Failed to send confirmation email:', err);
+        }
+      }
+
       res.status(201).json(registration);
     } catch (error) {
       console.error("Registration error:", error);
@@ -827,6 +851,24 @@ export async function registerRoutes(
       if (!registration) {
         return res.status(404).json({ error: "Registration not found" });
       }
+      
+      // Send update notification if important fields changed
+      if (process.env.ITERABLE_API_KEY && (req.body.status || req.body.roomType || req.body.shirtSize)) {
+        try {
+          const event = await storage.getEvent(registration.eventId);
+          if (event) {
+            await iterableService.sendRegistrationUpdate(
+              registration.email,
+              registration,
+              event,
+              registration.language
+            );
+          }
+        } catch (err) {
+          console.error('Failed to send update email:', err);
+        }
+      }
+      
       res.json(registration);
     } catch (error) {
       console.error("Update registration error:", error);
