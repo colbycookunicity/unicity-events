@@ -25,7 +25,6 @@ export default function QualifiersPage() {
   const [editingQualifier, setEditingQualifier] = useState<QualifiedRegistrant | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [qualifierToDelete, setQualifierToDelete] = useState<QualifiedRegistrant | null>(null);
-  const [clearAllDialogOpen, setClearAllDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [csvData, setCsvData] = useState<Array<{ firstName: string; lastName: string; email: string; unicityId: string }>>([]);
   const [replaceExisting, setReplaceExisting] = useState(false);
@@ -91,20 +90,6 @@ export default function QualifiersPage() {
     },
     onError: () => {
       toast({ title: t("error"), description: "Failed to remove qualifier", variant: "destructive" });
-    },
-  });
-
-  const clearAllMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("DELETE", `/api/events/${eventFilter}/qualifiers`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/events/${eventFilter}/qualifiers`] });
-      setClearAllDialogOpen(false);
-      toast({ title: t("success"), description: "All qualifiers cleared" });
-    },
-    onError: () => {
-      toast({ title: t("error"), description: "Failed to clear qualifiers", variant: "destructive" });
     },
   });
 
@@ -326,14 +311,6 @@ export default function QualifiersPage() {
                   <Button variant="outline" onClick={exportCSV} data-testid="button-export-csv">
                     <Download className="h-4 w-4 mr-2" />
                     Export
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setClearAllDialogOpen(true)}
-                    data-testid="button-clear-all"
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Clear All
                   </Button>
                 </>
               )}
@@ -581,25 +558,6 @@ export default function QualifiersPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={clearAllDialogOpen} onOpenChange={setClearAllDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Clear All Qualifiers</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to remove all {qualifiers?.length} qualifiers for this event? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => clearAllMutation.mutate()}
-              data-testid="button-confirm-clear-all"
-            >
-              Clear All
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
