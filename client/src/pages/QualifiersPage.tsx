@@ -12,7 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Plus, Upload, Trash2, Search, Download, Edit2 } from "lucide-react";
-import type { Event, QualifiedRegistrant } from "@shared/schema";
+import type { Event, QualifiedRegistrant, Registration } from "@shared/schema";
 
 export default function QualifiersPage() {
   const { t } = useTranslation();
@@ -44,6 +44,26 @@ export default function QualifiersPage() {
     queryKey: [`/api/events/${eventFilter}/qualifiers`],
     enabled: !!eventFilter,
   });
+
+  const { data: registrations } = useQuery<Registration[]>({
+    queryKey: ["/api/events", eventFilter, "registrations"],
+    enabled: !!eventFilter,
+  });
+
+  // Create a set of registered emails/unicityIds for quick lookup
+  const registeredEmails = new Set(
+    registrations?.map(r => r.email.toLowerCase()) ?? []
+  );
+  const registeredUnicityIds = new Set(
+    registrations?.filter(r => r.unicityId).map(r => r.unicityId!) ?? []
+  );
+
+  const isQualifierRegistered = (qualifier: QualifiedRegistrant): boolean => {
+    if (qualifier.unicityId && registeredUnicityIds.has(qualifier.unicityId)) {
+      return true;
+    }
+    return registeredEmails.has(qualifier.email.toLowerCase());
+  };
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
@@ -355,6 +375,7 @@ export default function QualifiersPage() {
                         <th className="text-left py-3 px-2 font-medium">Name</th>
                         <th className="text-left py-3 px-2 font-medium">Email</th>
                         <th className="text-left py-3 px-2 font-medium">Unicity ID</th>
+                        <th className="text-left py-3 px-2 font-medium">Status</th>
                         <th className="text-right py-3 px-2 font-medium">Actions</th>
                       </tr>
                     </thead>
@@ -369,6 +390,17 @@ export default function QualifiersPage() {
                           </td>
                           <td className="py-3 px-2">
                             {qualifier.unicityId || "-"}
+                          </td>
+                          <td className="py-3 px-2">
+                            {isQualifierRegistered(qualifier) ? (
+                              <Badge variant="default" className="bg-green-600" data-testid={`status-registered-${qualifier.id}`}>
+                                Registered
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground" data-testid={`status-pending-${qualifier.id}`}>
+                                Not Registered
+                              </span>
+                            )}
                           </td>
                           <td className="py-3 px-2 text-right">
                             <div className="flex items-center justify-end gap-1">
