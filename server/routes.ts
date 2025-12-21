@@ -616,6 +616,28 @@ export async function registerRoutes(
     }
   });
 
+  // Public events list for registration discovery (no auth required)
+  app.get("/api/events/public", async (req, res) => {
+    try {
+      const publicEvents = await storage.getPublicEvents();
+      // Return limited public-safe event data
+      res.json(publicEvents.map(event => ({
+        id: event.id,
+        slug: event.slug,
+        name: event.name,
+        nameEs: event.nameEs,
+        description: event.description,
+        descriptionEs: event.descriptionEs,
+        location: event.location,
+        startDate: event.startDate,
+        endDate: event.endDate,
+      })));
+    } catch (error) {
+      console.error("Get public events error:", error);
+      res.status(500).json({ error: "Failed to get events" });
+    }
+  });
+
   app.get("/api/events/:id", async (req, res) => {
     try {
       const event = await storage.getEvent(req.params.id);

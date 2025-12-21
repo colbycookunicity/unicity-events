@@ -33,6 +33,7 @@ export interface IStorage {
   getEventBySlug(slug: string): Promise<Event | undefined>;
   getEventByIdOrSlug(idOrSlug: string): Promise<Event | undefined>;
   getRecentEvents(limit?: number): Promise<Event[]>;
+  getPublicEvents(): Promise<Event[]>;
   createEvent(event: InsertEvent): Promise<Event>;
   updateEvent(id: string, data: Partial<InsertEvent>): Promise<Event | undefined>;
   deleteEvent(id: string): Promise<boolean>;
@@ -197,6 +198,12 @@ export class DatabaseStorage implements IStorage {
 
   async getRecentEvents(limit = 5): Promise<Event[]> {
     return db.select().from(events).orderBy(desc(events.startDate)).limit(limit);
+  }
+
+  async getPublicEvents(): Promise<Event[]> {
+    return db.select().from(events)
+      .where(eq(events.status, "published"))
+      .orderBy(desc(events.startDate));
   }
 
   async createEvent(event: InsertEvent): Promise<Event> {

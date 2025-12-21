@@ -29,6 +29,7 @@ import UserDashboard from "@/pages/UserDashboard";
 import PublicLoginPage from "@/pages/PublicLoginPage";
 import EventLandingPage from "@/pages/EventLandingPage";
 import LandingEditorPage from "@/pages/LandingEditorPage";
+import EventListPage from "@/pages/EventListPage";
 
 function AdminLayout({ children }: { children: React.ReactNode }) {
   const { theme } = useTheme();
@@ -96,6 +97,7 @@ function PublicRouter() {
     <Switch>
       <Route path="/login" component={LoginPage} />
       <Route path="/register/:eventId" component={RegistrationPage} />
+      <Route path="/register" component={EventListPage} />
       <Route path="/events/:slug" component={EventLandingPage} />
       <Route path="/my-dashboard" component={UserDashboard} />
       <Route path="/" component={PublicLoginPage} />
