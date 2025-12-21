@@ -4,7 +4,8 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowLeft, Loader2, Copy, ExternalLink, Check, Upload, Image } from "lucide-react";
+import { ArrowLeft, Loader2, Copy, ExternalLink, Check, Upload, Image, FileEdit } from "lucide-react";
+import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -227,15 +228,32 @@ export default function EventFormPage() {
       </div>
 
       {isEditing && event && (
-        <Card className="bg-muted/50">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Registration Link</CardTitle>
-            <CardDescription>Share this link with qualified distributors to register</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <RegistrationLinkCopy eventId={event.id} slug={event.slug || undefined} />
-          </CardContent>
-        </Card>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card className="bg-muted/50">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Registration Link</CardTitle>
+              <CardDescription>Share this link with qualified distributors to register</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <RegistrationLinkCopy eventId={event.id} slug={event.slug || undefined} />
+            </CardContent>
+          </Card>
+          
+          <Card className="bg-muted/50">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Landing Page</CardTitle>
+              <CardDescription>Create a custom landing page for your event</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button variant="outline" asChild data-testid="button-edit-landing">
+                <Link href={`/admin/events/${event.id}/landing`}>
+                  <FileEdit className="h-4 w-4 mr-2" />
+                  Edit Landing Page
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       <Form {...form}>
