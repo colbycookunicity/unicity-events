@@ -14,7 +14,8 @@ import {
   Eye, 
   Save,
   Globe,
-  Loader2
+  Loader2,
+  Pencil
 } from "lucide-react";
 import { Link } from "wouter";
 import type { Event, EventPage, EventPageSection } from "@shared/schema";
@@ -53,6 +54,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useState } from "react";
+import { SectionEditor } from "@/components/landing-sections/SectionEditor";
+import type { PageSectionContent } from "@shared/schema";
 
 interface PageData {
   page: EventPage;
@@ -64,9 +67,10 @@ interface SortableSectionItemProps {
   eventId: string;
   onToggle: (id: string, isEnabled: boolean) => void;
   onDelete: (id: string) => void;
+  onEdit: (section: EventPageSection) => void;
 }
 
-function SortableSectionItem({ section, eventId, onToggle, onDelete }: SortableSectionItemProps) {
+function SortableSectionItem({ section, eventId, onToggle, onDelete, onEdit }: SortableSectionItemProps) {
   const {
     attributes,
     listeners,
@@ -108,6 +112,14 @@ function SortableSectionItem({ section, eventId, onToggle, onDelete }: SortableS
             </div>
             
             <div className="flex items-center gap-2">
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => onEdit(section)}
+                data-testid={`edit-section-${section.id}`}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
               <Switch
                 checked={section.isEnabled}
                 onCheckedChange={(checked) => onToggle(section.id, checked)}
@@ -135,6 +147,7 @@ export default function LandingEditorPage() {
   const { toast } = useToast();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [sectionToDelete, setSectionToDelete] = useState<string | null>(null);
+  const [editingSection, setEditingSection] = useState<EventPageSection | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -174,6 +187,8 @@ export default function LandingEditorPage() {
       apiRequest('PATCH', `/api/events/${eventId}/page/sections/${sectionId}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/events', eventId, 'page'] });
+      setEditingSection(null);
+      toast({ title: "Section updated" });
     },
   });
 
@@ -225,6 +240,16 @@ export default function LandingEditorPage() {
 
   const handleToggleSection = (sectionId: string, isEnabled: boolean) => {
     updateSectionMutation.mutate({ sectionId, data: { isEnabled } });
+  };
+
+  const handleEditSection = (section: EventPageSection) => {
+    setEditingSection(section);
+  };
+
+  const handleSaveSection = (content: PageSectionContent) => {
+    if (editingSection) {
+      updateSectionMutation.mutate({ sectionId: editingSection.id, data: { content } });
+    }
   };
 
   const handleDeleteSection = (sectionId: string) => {
@@ -389,6 +414,7 @@ export default function LandingEditorPage() {
                             eventId={eventId!}
                             onToggle={handleToggleSection}
                             onDelete={handleDeleteSection}
+                            onEdit={handleEditSection}
                           />
                         ))}
                     </SortableContext>
@@ -396,6 +422,15 @@ export default function LandingEditorPage() {
                 )}
               </CardContent>
             </Card>
+            
+            {editingSection && (
+              <SectionEditor
+                section={editingSection}
+                onSave={handleSaveSection}
+                onCancel={() => setEditingSection(null)}
+                isSaving={updateSectionMutation.isPending}
+              />
+            )}
           </div>
 
           <div className="space-y-4">
