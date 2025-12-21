@@ -182,7 +182,11 @@ export default function RegistrationPage() {
   });
 
   // Check if this event requires verification (default true if not set)
-  const requiresVerification = (event?.registrationSettings?.requiresVerification !== false) && !skipVerification;
+  // IMPORTANT: If event requires qualification, we MUST require verification to check the qualified list
+  const requiresVerification = (
+    (event?.registrationSettings?.requiresVerification !== false) || 
+    event?.requiresQualification === true
+  ) && !skipVerification;
 
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
   
@@ -1328,9 +1332,9 @@ export default function RegistrationPage() {
           {/* Right side - Form content (scrolls with page) */}
           <div className="flex-1 lg:w-[60%]">
             {/* Header with date, location, and controls */}
-            <div className="bg-background border-b px-6 py-4">
+            <div className="bg-white border-b border-slate-200 px-6 py-4">
               <div className="flex items-center justify-between gap-4 flex-wrap max-w-xl mx-auto">
-                <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
+                <div className="flex items-center gap-4 text-sm text-slate-600 flex-wrap">
                   {event?.startDate && (
                     <div className="flex items-center gap-1">
                       <Calendar className="w-4 h-4" />
@@ -1347,17 +1351,37 @@ export default function RegistrationPage() {
                     </div>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
-                  <LanguageToggle />
+                <div className="flex items-center gap-1 text-sm font-medium">
+                  <button
+                    onClick={() => {
+                      localStorage.setItem("unicity-language", "en");
+                      window.location.reload();
+                    }}
+                    className={language === "en" ? "text-slate-900 font-semibold" : "text-slate-400 hover:text-slate-600"}
+                    data-testid="button-language-en"
+                  >
+                    EN
+                  </button>
+                  <span className="text-slate-300">/</span>
+                  <button
+                    onClick={() => {
+                      localStorage.setItem("unicity-language", "es");
+                      window.location.reload();
+                    }}
+                    className={language === "es" ? "text-slate-900 font-semibold" : "text-slate-400 hover:text-slate-600"}
+                    data-testid="button-language-es"
+                  >
+                    ES
+                  </button>
                 </div>
               </div>
             </div>
             
             {/* Form content - scrolls naturally with page */}
-            <div className="p-6 lg:p-10">
+            <div className="p-6 lg:p-10 bg-white">
               <div className="max-w-xl mx-auto">
                 {renderMainContent()}
-                <footer className="mt-8 pb-8 text-center text-sm text-muted-foreground">
+                <footer className="mt-8 pb-8 text-center text-sm text-slate-500">
                   Unicity International
                 </footer>
               </div>
