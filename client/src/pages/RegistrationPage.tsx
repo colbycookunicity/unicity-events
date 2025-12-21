@@ -462,7 +462,6 @@ export default function RegistrationPage() {
       <div className="min-h-screen bg-background">
         <header className="flex items-center justify-end gap-2 p-4">
           <LanguageToggle />
-          <ThemeToggle />
         </header>
         <div className="max-w-2xl mx-auto p-4">
           <Card>
@@ -502,7 +501,6 @@ export default function RegistrationPage() {
       <div className="min-h-screen bg-background">
         <header className="flex items-center justify-end gap-2 p-4">
           <LanguageToggle />
-          <ThemeToggle />
         </header>
         <div className="flex items-center justify-center min-h-[80vh] p-4">
           <Card className="max-w-md w-full">
@@ -532,12 +530,11 @@ export default function RegistrationPage() {
   const renderHeader = () => (
     <header className="flex items-center justify-end gap-2 p-4 absolute top-0 right-0 z-10">
       <LanguageToggle />
-      <ThemeToggle />
     </header>
   );
 
-  const renderEventInfo = () => (
-    <div className="flex items-center justify-center gap-4 text-muted-foreground flex-wrap">
+  const renderEventInfo = (forHero = false) => (
+    <div className={`flex items-center justify-center gap-4 flex-wrap ${forHero ? "text-white/80" : "text-muted-foreground"}`}>
       {event.startDate && (
         <span className="flex items-center gap-1.5">
           <Calendar className="h-4 w-4" />
@@ -1330,7 +1327,6 @@ export default function RegistrationPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <LanguageToggle />
-                  <ThemeToggle />
                 </div>
               </div>
             </div>
@@ -1359,7 +1355,7 @@ export default function RegistrationPage() {
           className="h-72 bg-cover bg-center relative"
           style={{ backgroundImage: `url(${heroImageUrl})` }}
         >
-          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/60 to-black/70 flex items-center justify-center">
             <div className="text-center text-white p-8">
               <h1 className="text-4xl font-bold mb-4">
                 {getCustomHeading() || getEventName()}
@@ -1367,8 +1363,8 @@ export default function RegistrationPage() {
               {getCustomSubheading() && (
                 <p className="text-xl opacity-90">{getCustomSubheading()}</p>
               )}
-              <div className="mt-4 text-white/80">
-                {renderEventInfo()}
+              <div className="mt-4">
+                {renderEventInfo(true)}
               </div>
             </div>
           </div>
@@ -1383,8 +1379,8 @@ export default function RegistrationPage() {
             {getCustomSubheading() && (
               <p className="text-xl opacity-90">{getCustomSubheading()}</p>
             )}
-            <div className="mt-4 opacity-80">
-              {renderEventInfo()}
+            <div className="mt-4">
+              {renderEventInfo(true)}
             </div>
           </div>
         </div>

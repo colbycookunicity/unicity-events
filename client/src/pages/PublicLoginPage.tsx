@@ -164,7 +164,6 @@ export default function PublicLoginPage() {
     <div className="min-h-screen flex flex-col bg-background">
       <header className="flex items-center justify-end gap-2 p-4">
         <LanguageToggle />
-        <ThemeToggle />
       </header>
 
       <div className="flex-1 flex items-center justify-center p-4">
