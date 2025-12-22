@@ -22,7 +22,7 @@ import { useTranslation } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { format, parseISO } from "date-fns";
-import type { Event, RegistrationSettings, EventPage, EventPageSection, IntroSectionContent, ThankYouSectionContent } from "@shared/schema";
+import type { Event, RegistrationSettings, EventPage, EventPageSection, IntroSectionContent, ThankYouSectionContent, HeroSectionContent } from "@shared/schema";
 import EventListPage from "./EventListPage";
 import { IntroSection, ThankYouSection } from "@/components/landing-sections";
 
@@ -195,6 +195,22 @@ export default function RegistrationPage() {
     enabled: !!params.eventId,
     retry: 2, // Retry twice on failure before giving up
   });
+
+  // Fetch LOGIN page CMS data for verification screens
+  const { data: loginPageData } = useQuery<PageData | null>({
+    queryKey: ["/api/public/event-pages", params.eventId, "login"],
+    queryFn: async () => {
+      const res = await fetch(`/api/public/event-pages/${params.eventId}?pageType=login`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: !!params.eventId,
+    retry: 1,
+  });
+
+  // Extract login hero content from CMS
+  const loginHeroSection = loginPageData?.sections?.find(s => s.type === "hero" && s.isEnabled);
+  const loginHeroContent = loginHeroSection?.content as HeroSectionContent | undefined;
 
   // Log CMS fetch errors for debugging (silent to users, falls back to default content)
   if (isPageDataError && pageDataError) {
@@ -654,12 +670,14 @@ export default function RegistrationPage() {
               <Mail className="w-6 h-6 text-slate-700" />
             </div>
             <CardTitle className="text-slate-900">
-              {language === "es" ? "Verifique su identidad" : "Verify Your Identity"}
+              {language === "es" 
+                ? (loginHeroContent?.headlineEs || "Verifique su identidad")
+                : (loginHeroContent?.headline || "Verify Your Identity")}
             </CardTitle>
             <CardDescription className="text-slate-600">
               {language === "es" 
-                ? "Ingrese su correo electronico para recibir un codigo de verificacion"
-                : "Enter your email to receive a verification code"}
+                ? (loginHeroContent?.subheadlineEs || "Ingrese su correo electronico para recibir un codigo de verificacion")
+                : (loginHeroContent?.subheadline || "Enter your email to receive a verification code")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
