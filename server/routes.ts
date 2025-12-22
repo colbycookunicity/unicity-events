@@ -375,7 +375,7 @@ export async function registerRoutes(
       let bearerToken: string | undefined;
       let customerData: any = null;
 
-      // For development, accept test code
+      // For development only, accept test code "123456"
       if (process.env.NODE_ENV !== "production" && code === "123456") {
         isValid = true;
         // Mock customer data for development
@@ -384,8 +384,8 @@ export async function registerRoutes(
           humanName: { firstName: "Test", lastName: "User" },
           email: email,
         };
-      } else if (process.env.NODE_ENV === "production") {
-        // Production: Validate with Hydra
+      } else {
+        // Validate with Hydra (works in all environments)
         console.log("Validating OTP with Hydra for email:", email, "code length:", code?.length);
         const response = await fetch(`${HYDRA_API_BASE}/otp/magic-link`, {
           method: "POST",
