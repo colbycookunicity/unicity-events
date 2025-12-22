@@ -1688,7 +1688,9 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Page not found" });
       }
       
-      res.json({ ...pageData, event });
+      // Strip deprecated registrationSettings from event response
+      const { registrationSettings, ...eventWithoutLegacy } = event;
+      res.json({ ...pageData, event: eventWithoutLegacy });
     } catch (error) {
       console.error("Error fetching event page:", error);
       res.status(500).json({ error: "Failed to fetch event page" });
