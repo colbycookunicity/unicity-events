@@ -232,13 +232,15 @@ This ensures:
 1. ✅ Removed all `registrationSettings` fallback logic from RegistrationPage.tsx
 2. ✅ Removed `[CMS Fallback]` logging - no longer needed
 3. ✅ Removed `registrationSettings` from public API response (`/api/events/:idOrSlug/public`)
-4. ✅ Replaced `registrationSettings` in event update handler with `registrationLayout` and `requiresVerification`
-5. ✅ Marked `RegistrationSettings` type as @deprecated in schema
-6. ✅ Marked legacy routes (`/api/events/:eventId/page`) as @deprecated
-7. ✅ Kept `registrationSettings` column in database (for rollback safety, not used)
+4. ✅ Stripped `registrationSettings` from event object in `/api/public/event-pages/:eventId`
+5. ✅ Replaced `registrationSettings` in event update handler with `registrationLayout` and `requiresVerification`
+6. ✅ Marked `RegistrationSettings` type as @deprecated in schema
+7. ✅ Marked legacy routes (`/api/events/:eventId/page`) as @deprecated
+8. ✅ Kept `registrationSettings` column in database (for rollback safety, not used)
 
 **API Changes:**
-- Public event API now returns `registrationLayout` and `requiresVerification` instead of `registrationSettings`
+- `/api/events/:idOrSlug/public` now returns `registrationLayout` and `requiresVerification` (explicit field list, no registrationSettings)
+- `/api/public/event-pages/:eventId` now strips `registrationSettings` from the event object before responding
 - Event update handler now accepts `registrationLayout` and `requiresVerification` instead of `registrationSettings`
 
 **Code Cleanup:**
