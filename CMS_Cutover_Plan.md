@@ -173,21 +173,31 @@ registrationLayout: text("registration_layout").notNull().default("standard"),
 requiresVerification: boolean("requires_verification").notNull().default(true),
 ```
 
-### Phase 2: Data Migration Script
+### Phase 2: Data Migration Script - COMPLETED
+
+**Status: COMPLETE** (December 22, 2025)
+
+**Migration Results:**
+- Events migrated: 1 (Punta Cana 2026)
+- Events skipped: 0
+- Hero sections updated: 1 (no legacy content to migrate - used defaults)
+- Form sections created: 1
+- Registration pages auto-published: 1
 
 For each event that has `registrationSettings`:
 
-1. **Copy layout** → Set `events.registration_layout` from `registrationSettings.layout`
-2. **Copy requiresVerification** → Set `events.requires_verification` from `registrationSettings.requiresVerification`
-3. **Copy hero content** → Update `registration` page's `hero` section content:
-   - `headline` ← `heading`
-   - `headlineEs` ← `headingEs`
-   - `subheadline` ← `subheading`
-   - `subheadlineEs` ← `subheadingEs`
-   - `backgroundImage` ← `heroImagePath`
-4. **Create form section** → With:
-   - `submitButtonLabel` ← `ctaLabel`
-   - `submitButtonLabelEs` ← `ctaLabelEs`
+1. ✅ **Copy layout** → Set `events.registration_layout` from `registrationSettings.layout`
+2. ✅ **Copy requiresVerification** → Set `events.requires_verification` from `registrationSettings.requiresVerification`
+3. ✅ **Copy hero content** → Update `registration` page's `hero` section content:
+   - `headline` ← `heading` (skipped if null in registrationSettings)
+   - `headlineEs` ← `headingEs` (skipped if null)
+   - `subheadline` ← `subheading` (skipped if null)
+   - `subheadlineEs` ← `subheadingEs` (skipped if null)
+   - `backgroundImage` ← `heroImagePath` (skipped if null)
+4. ✅ **Create form section** → With:
+   - `submitButtonLabel` ← `ctaLabel` (or "Register" if null)
+   - `submitButtonLabelEs` ← `ctaLabelEs` (or "Registrar" if null)
+5. ✅ **Auto-publish** → Registration pages for published events
 
 ### Phase 3: Update RegistrationPage.tsx
 
