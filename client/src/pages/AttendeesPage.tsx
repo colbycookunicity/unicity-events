@@ -3,6 +3,8 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Search, Download, MoreHorizontal, Mail, Edit, Trash2, User, Shirt, Save, Pencil, ChevronUp, ChevronDown, Settings2, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import PhoneInput from "react-phone-number-input";
+import "react-phone-number-input/style.css";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -951,9 +953,12 @@ export default function AttendeesPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Phone</Label>
-                  <Input 
-                    value={editForm.phone || ""} 
-                    onChange={(e) => handleFormChange("phone", e.target.value)}
+                  <PhoneInput
+                    international
+                    defaultCountry="US"
+                    value={editForm.phone || ""}
+                    onChange={(value) => handleFormChange("phone", value || "")}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-within:ring-1 focus-within:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
                     data-testid="edit-phone"
                   />
                 </div>
@@ -1025,9 +1030,12 @@ export default function AttendeesPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Contact Phone</Label>
-                  <Input 
-                    value={editForm.emergencyContactPhone || ""} 
-                    onChange={(e) => handleFormChange("emergencyContactPhone", e.target.value)}
+                  <PhoneInput
+                    international
+                    defaultCountry="US"
+                    value={editForm.emergencyContactPhone || ""}
+                    onChange={(value) => handleFormChange("emergencyContactPhone", value || "")}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-within:ring-1 focus-within:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
                     data-testid="edit-emergencyContactPhone"
                   />
                 </div>
