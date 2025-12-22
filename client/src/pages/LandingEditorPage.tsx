@@ -141,8 +141,15 @@ function SortableSectionItem({ section, eventId, onToggle, onDelete, onEdit }: S
   );
 }
 
+const PAGE_TYPE_LABELS: Record<string, string> = {
+  login: "Login / Verification Page",
+  registration: "Registration Form Page", 
+  thank_you: "Thank You / Confirmation Page",
+};
+
 export default function LandingEditorPage() {
-  const { id: eventId } = useParams<{ id: string }>();
+  const { id: eventId, pageType: rawPageType } = useParams<{ id: string; pageType?: string }>();
+  const pageType = rawPageType || "registration";
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -162,31 +169,31 @@ export default function LandingEditorPage() {
   });
 
   const { data: pageData, isLoading: pageLoading } = useQuery<PageData | null>({
-    queryKey: ['/api/events', eventId, 'page'],
+    queryKey: ['/api/events', eventId, 'pages', pageType],
     enabled: !!eventId,
   });
 
   const createPageMutation = useMutation({
-    mutationFn: () => apiRequest('POST', `/api/events/${eventId}/page`, {}),
+    mutationFn: () => apiRequest('POST', `/api/events/${eventId}/pages/${pageType}`, {}),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/events', eventId, 'page'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/events', eventId, 'pages', pageType] });
     },
   });
 
   const addSectionMutation = useMutation({
     mutationFn: (type: string) => 
-      apiRequest('POST', `/api/events/${eventId}/page/sections`, { type, content: {} }),
+      apiRequest('POST', `/api/events/${eventId}/pages/${pageType}/sections`, { type, content: {} }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/events', eventId, 'page'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/events', eventId, 'pages', pageType] });
       toast({ title: "Section added" });
     },
   });
 
   const updateSectionMutation = useMutation({
     mutationFn: ({ sectionId, data }: { sectionId: string; data: Partial<EventPageSection> }) =>
-      apiRequest('PATCH', `/api/events/${eventId}/page/sections/${sectionId}`, data),
+      apiRequest('PATCH', `/api/events/${eventId}/pages/${pageType}/sections/${sectionId}`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/events', eventId, 'page'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/events', eventId, 'pages', pageType] });
       setEditingSection(null);
       toast({ title: "Section updated" });
     },
@@ -194,36 +201,36 @@ export default function LandingEditorPage() {
 
   const deleteSectionMutation = useMutation({
     mutationFn: (sectionId: string) =>
-      apiRequest('DELETE', `/api/events/${eventId}/page/sections/${sectionId}`),
+      apiRequest('DELETE', `/api/events/${eventId}/pages/${pageType}/sections/${sectionId}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/events', eventId, 'page'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/events', eventId, 'pages', pageType] });
       toast({ title: "Section deleted" });
     },
   });
 
   const reorderSectionsMutation = useMutation({
     mutationFn: (sectionIds: string[]) =>
-      apiRequest('POST', `/api/events/${eventId}/page/sections/reorder`, { sectionIds }),
+      apiRequest('POST', `/api/events/${eventId}/pages/${pageType}/sections/reorder`, { sectionIds }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/events', eventId, 'page'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/events', eventId, 'pages', pageType] });
     },
   });
 
   const publishMutation = useMutation({
     mutationFn: () =>
-      apiRequest('POST', `/api/events/${eventId}/page/publish`),
+      apiRequest('POST', `/api/events/${eventId}/pages/${pageType}/publish`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/events', eventId, 'page'] });
-      toast({ title: "Page published", description: "Your registration page is now live." });
+      queryClient.invalidateQueries({ queryKey: ['/api/events', eventId, 'pages', pageType] });
+      toast({ title: "Page published", description: "Your page is now live." });
     },
   });
 
   const unpublishMutation = useMutation({
     mutationFn: () =>
-      apiRequest('POST', `/api/events/${eventId}/page/unpublish`),
+      apiRequest('POST', `/api/events/${eventId}/pages/${pageType}/unpublish`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/events', eventId, 'page'] });
-      toast({ title: "Page unpublished", description: "Your registration page is now in draft mode." });
+      queryClient.invalidateQueries({ queryKey: ['/api/events', eventId, 'pages', pageType] });
+      toast({ title: "Page unpublished", description: "Your page is now in draft mode." });
     },
   });
 
@@ -301,7 +308,7 @@ export default function LandingEditorPage() {
           </Button>
           <div>
             <h1 className="text-2xl font-bold" data-testid="page-title">
-              Registration Page Editor
+              {PAGE_TYPE_LABELS[pageType] || "Page Editor"}
             </h1>
             <p className="text-sm text-muted-foreground">{event.name}</p>
           </div>

@@ -241,14 +241,26 @@ export default function EventFormPage() {
           
           <Card className="bg-muted/50">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Landing Page</CardTitle>
-              <CardDescription>Create a custom landing page for your event</CardDescription>
+              <CardTitle className="text-base">Registration Pages</CardTitle>
+              <CardDescription>Customize the 3 pages of your registration flow</CardDescription>
             </CardHeader>
-            <CardContent>
-              <Button variant="outline" asChild data-testid="button-edit-landing">
-                <Link href={`/admin/events/${event.id}/landing`}>
+            <CardContent className="space-y-2">
+              <Button variant="outline" className="w-full justify-start" asChild data-testid="button-edit-login-page">
+                <Link href={`/admin/events/${event.id}/pages/login`}>
                   <FileEdit className="h-4 w-4 mr-2" />
-                  Edit Landing Page
+                  Login / Verification Page
+                </Link>
+              </Button>
+              <Button variant="outline" className="w-full justify-start" asChild data-testid="button-edit-registration-page">
+                <Link href={`/admin/events/${event.id}/pages/registration`}>
+                  <FileEdit className="h-4 w-4 mr-2" />
+                  Registration Form Page
+                </Link>
+              </Button>
+              <Button variant="outline" className="w-full justify-start" asChild data-testid="button-edit-thankyou-page">
+                <Link href={`/admin/events/${event.id}/pages/thank_you`}>
+                  <FileEdit className="h-4 w-4 mr-2" />
+                  Thank You / Confirmation Page
                 </Link>
               </Button>
             </CardContent>

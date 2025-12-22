@@ -1612,6 +1612,7 @@ export async function registerRoutes(
   // ========================================
 
   // Get event page with sections (public - for rendering landing pages)
+  // Accepts optional ?pageType=login|registration|thank_you query param (defaults to registration)
   app.get("/api/public/event-pages/:eventId", async (req, res) => {
     try {
       const event = await storage.getEventByIdOrSlug(req.params.eventId);
@@ -1619,7 +1620,8 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Event not found" });
       }
       
-      const pageData = await storage.getEventPageWithSections(event.id);
+      const pageType = (req.query.pageType as string) || "registration";
+      const pageData = await storage.getEventPageWithSections(event.id, pageType);
       if (!pageData) {
         return res.status(404).json({ error: "Page not found" });
       }
@@ -1636,7 +1638,7 @@ export async function registerRoutes(
     }
   });
 
-  // Get event page for admin (includes draft)
+  // Get event page for admin (includes draft) - legacy route (defaults to registration page type)
   app.get("/api/events/:eventId/page", authenticateToken, requireRole("admin", "event_manager", "marketing"), async (req: AuthenticatedRequest, res) => {
     try {
       const event = await storage.getEventByIdOrSlug(req.params.eventId);
@@ -1644,7 +1646,7 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Event not found" });
       }
       
-      const pageData = await storage.getEventPageWithSections(event.id);
+      const pageData = await storage.getEventPageWithSections(event.id, "registration");
       res.json(pageData || null);
     } catch (error) {
       console.error("Error fetching event page:", error);
@@ -1652,7 +1654,24 @@ export async function registerRoutes(
     }
   });
 
-  // Create or update event page
+  // Get event page by type for admin (includes draft)
+  app.get("/api/events/:eventId/pages/:pageType", authenticateToken, requireRole("admin", "event_manager", "marketing"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const event = await storage.getEventByIdOrSlug(req.params.eventId);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+      
+      const pageType = req.params.pageType || "registration";
+      const pageData = await storage.getEventPageWithSections(event.id, pageType);
+      res.json(pageData || null);
+    } catch (error) {
+      console.error("Error fetching event page:", error);
+      res.status(500).json({ error: "Failed to fetch event page" });
+    }
+  });
+
+  // Create or update event page - legacy route (defaults to registration)
   app.post("/api/events/:eventId/page", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
     try {
       const event = await storage.getEvent(req.params.eventId);
@@ -1660,15 +1679,14 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Event not found" });
       }
       
-      let page = await storage.getEventPageByEventId(event.id);
+      let page = await storage.getEventPageByEventId(event.id, "registration");
       
       if (page) {
-        // Update existing page
         page = await storage.updateEventPage(page.id, req.body);
       } else {
-        // Create new page
         page = await storage.createEventPage({
           eventId: event.id,
+          pageType: "registration",
           ...req.body
         });
       }
@@ -1680,7 +1698,35 @@ export async function registerRoutes(
     }
   });
 
-  // Publish event page
+  // Create or update event page by type
+  app.post("/api/events/:eventId/pages/:pageType", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const event = await storage.getEvent(req.params.eventId);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+      
+      const pageType = req.params.pageType || "registration";
+      let page = await storage.getEventPageByEventId(event.id, pageType);
+      
+      if (page) {
+        page = await storage.updateEventPage(page.id, req.body);
+      } else {
+        page = await storage.createEventPage({
+          eventId: event.id,
+          pageType,
+          ...req.body
+        });
+      }
+      
+      res.json(page);
+    } catch (error) {
+      console.error("Error saving event page:", error);
+      res.status(500).json({ error: "Failed to save event page" });
+    }
+  });
+
+  // Publish event page - legacy route
   app.post("/api/events/:eventId/page/publish", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
     try {
       const event = await storage.getEvent(req.params.eventId);
@@ -1688,7 +1734,7 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Event not found" });
       }
       
-      const page = await storage.getEventPageByEventId(event.id);
+      const page = await storage.getEventPageByEventId(event.id, "registration");
       if (!page) {
         return res.status(404).json({ error: "Page not found" });
       }
@@ -1705,7 +1751,33 @@ export async function registerRoutes(
     }
   });
 
-  // Unpublish event page (set to draft)
+  // Publish event page by type
+  app.post("/api/events/:eventId/pages/:pageType/publish", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const event = await storage.getEvent(req.params.eventId);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+      
+      const pageType = req.params.pageType || "registration";
+      const page = await storage.getEventPageByEventId(event.id, pageType);
+      if (!page) {
+        return res.status(404).json({ error: "Page not found" });
+      }
+      
+      const updated = await storage.updateEventPage(page.id, {
+        status: 'published',
+        publishedAt: new Date()
+      });
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error publishing event page:", error);
+      res.status(500).json({ error: "Failed to publish event page" });
+    }
+  });
+
+  // Unpublish event page (set to draft) - legacy route
   app.post("/api/events/:eventId/page/unpublish", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
     try {
       const event = await storage.getEvent(req.params.eventId);
@@ -1713,7 +1785,7 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Event not found" });
       }
       
-      const page = await storage.getEventPageByEventId(event.id);
+      const page = await storage.getEventPageByEventId(event.id, "registration");
       if (!page) {
         return res.status(404).json({ error: "Page not found" });
       }
@@ -1726,7 +1798,29 @@ export async function registerRoutes(
     }
   });
 
-  // Delete event page
+  // Unpublish event page by type
+  app.post("/api/events/:eventId/pages/:pageType/unpublish", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const event = await storage.getEvent(req.params.eventId);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+      
+      const pageType = req.params.pageType || "registration";
+      const page = await storage.getEventPageByEventId(event.id, pageType);
+      if (!page) {
+        return res.status(404).json({ error: "Page not found" });
+      }
+      
+      const updated = await storage.updateEventPage(page.id, { status: 'draft' });
+      res.json(updated);
+    } catch (error) {
+      console.error("Error unpublishing event page:", error);
+      res.status(500).json({ error: "Failed to unpublish event page" });
+    }
+  });
+
+  // Delete event page - legacy route
   app.delete("/api/events/:eventId/page", authenticateToken, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
     try {
       const event = await storage.getEvent(req.params.eventId);
@@ -1734,7 +1828,7 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Event not found" });
       }
       
-      const page = await storage.getEventPageByEventId(event.id);
+      const page = await storage.getEventPageByEventId(event.id, "registration");
       if (!page) {
         return res.status(404).json({ error: "Page not found" });
       }
@@ -1751,7 +1845,7 @@ export async function registerRoutes(
   // Event Page Section Routes
   // ========================================
 
-  // Add a section to event page
+  // Add a section to event page - legacy route
   app.post("/api/events/:eventId/page/sections", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
     try {
       const event = await storage.getEvent(req.params.eventId);
@@ -1759,13 +1853,11 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Event not found" });
       }
       
-      let page = await storage.getEventPageByEventId(event.id);
+      let page = await storage.getEventPageByEventId(event.id, "registration");
       if (!page) {
-        // Auto-create page if it doesn't exist
-        page = await storage.createEventPage({ eventId: event.id });
+        page = await storage.createEventPage({ eventId: event.id, pageType: "registration" });
       }
       
-      // Get current sections to determine position
       const existingSections = await storage.getEventPageSections(page.id);
       const maxPosition = existingSections.length > 0 
         ? Math.max(...existingSections.map(s => s.position)) + 1 
@@ -1786,7 +1878,41 @@ export async function registerRoutes(
     }
   });
 
-  // Update a section
+  // Add a section to event page by type
+  app.post("/api/events/:eventId/pages/:pageType/sections", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const event = await storage.getEvent(req.params.eventId);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+      
+      const pageType = req.params.pageType || "registration";
+      let page = await storage.getEventPageByEventId(event.id, pageType);
+      if (!page) {
+        page = await storage.createEventPage({ eventId: event.id, pageType });
+      }
+      
+      const existingSections = await storage.getEventPageSections(page.id);
+      const maxPosition = existingSections.length > 0 
+        ? Math.max(...existingSections.map(s => s.position)) + 1 
+        : 0;
+      
+      const section = await storage.createEventPageSection({
+        pageId: page.id,
+        type: req.body.type,
+        position: req.body.position ?? maxPosition,
+        isEnabled: req.body.isEnabled ?? true,
+        content: req.body.content || {}
+      });
+      
+      res.status(201).json(section);
+    } catch (error) {
+      console.error("Error adding section:", error);
+      res.status(500).json({ error: "Failed to add section" });
+    }
+  });
+
+  // Update a section - works for both legacy and new routes
   app.patch("/api/events/:eventId/page/sections/:sectionId", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
     try {
       const section = await storage.updateEventPageSection(req.params.sectionId, req.body);
@@ -1800,7 +1926,21 @@ export async function registerRoutes(
     }
   });
 
-  // Delete a section
+  // Update a section by page type
+  app.patch("/api/events/:eventId/pages/:pageType/sections/:sectionId", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const section = await storage.updateEventPageSection(req.params.sectionId, req.body);
+      if (!section) {
+        return res.status(404).json({ error: "Section not found" });
+      }
+      res.json(section);
+    } catch (error) {
+      console.error("Error updating section:", error);
+      res.status(500).json({ error: "Failed to update section" });
+    }
+  });
+
+  // Delete a section - legacy route
   app.delete("/api/events/:eventId/page/sections/:sectionId", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
     try {
       await storage.deleteEventPageSection(req.params.sectionId);
@@ -1811,7 +1951,18 @@ export async function registerRoutes(
     }
   });
 
-  // Reorder sections
+  // Delete a section by page type
+  app.delete("/api/events/:eventId/pages/:pageType/sections/:sectionId", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      await storage.deleteEventPageSection(req.params.sectionId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting section:", error);
+      res.status(500).json({ error: "Failed to delete section" });
+    }
+  });
+
+  // Reorder sections - legacy route
   app.post("/api/events/:eventId/page/sections/reorder", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
     try {
       const event = await storage.getEvent(req.params.eventId);
@@ -1819,7 +1970,36 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Event not found" });
       }
       
-      const page = await storage.getEventPageByEventId(event.id);
+      const page = await storage.getEventPageByEventId(event.id, "registration");
+      if (!page) {
+        return res.status(404).json({ error: "Page not found" });
+      }
+      
+      const { sectionIds } = req.body;
+      if (!Array.isArray(sectionIds)) {
+        return res.status(400).json({ error: "sectionIds must be an array" });
+      }
+      
+      await storage.reorderEventPageSections(page.id, sectionIds);
+      
+      const sections = await storage.getEventPageSections(page.id);
+      res.json(sections);
+    } catch (error) {
+      console.error("Error reordering sections:", error);
+      res.status(500).json({ error: "Failed to reorder sections" });
+    }
+  });
+
+  // Reorder sections by page type
+  app.post("/api/events/:eventId/pages/:pageType/sections/reorder", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const event = await storage.getEvent(req.params.eventId);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+      
+      const pageType = req.params.pageType || "registration";
+      const page = await storage.getEventPageByEventId(event.id, pageType);
       if (!page) {
         return res.status(404).json({ error: "Page not found" });
       }

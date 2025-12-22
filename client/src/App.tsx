@@ -77,6 +77,7 @@ function AdminRouter() {
         <Route path="/admin" component={AdminDashboard} />
         <Route path="/admin/events" component={EventsPage} />
         <Route path="/admin/events/new" component={EventFormPage} />
+        <Route path="/admin/events/:id/pages/:pageType" component={LandingEditorPage} />
         <Route path="/admin/events/:id/landing" component={LandingEditorPage} />
         <Route path="/admin/events/:id" component={EventFormPage} />
         <Route path="/admin/attendees" component={AttendeesPage} />

@@ -116,8 +116,8 @@ export interface IStorage {
   deleteQualifiedRegistrantsByEvent(eventId: string): Promise<number>;
 
   // Event Pages
-  getEventPageByEventId(eventId: string): Promise<EventPage | undefined>;
-  getEventPageWithSections(eventId: string): Promise<{ page: EventPage; sections: EventPageSection[] } | undefined>;
+  getEventPageByEventId(eventId: string, pageType?: string): Promise<EventPage | undefined>;
+  getEventPageWithSections(eventId: string, pageType?: string): Promise<{ page: EventPage; sections: EventPageSection[] } | undefined>;
   createEventPage(page: InsertEventPage): Promise<EventPage>;
   updateEventPage(id: string, data: Partial<InsertEventPage>): Promise<EventPage | undefined>;
   deleteEventPage(id: string): Promise<boolean>;
@@ -682,13 +682,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Event Pages
-  async getEventPageByEventId(eventId: string): Promise<EventPage | undefined> {
-    const [page] = await db.select().from(eventPages).where(eq(eventPages.eventId, eventId));
+  async getEventPageByEventId(eventId: string, pageType: string = "registration"): Promise<EventPage | undefined> {
+    const [page] = await db.select().from(eventPages)
+      .where(and(eq(eventPages.eventId, eventId), eq(eventPages.pageType, pageType)));
     return page || undefined;
   }
 
-  async getEventPageWithSections(eventId: string): Promise<{ page: EventPage; sections: EventPageSection[] } | undefined> {
-    const page = await this.getEventPageByEventId(eventId);
+  async getEventPageWithSections(eventId: string, pageType: string = "registration"): Promise<{ page: EventPage; sections: EventPageSection[] } | undefined> {
+    const page = await this.getEventPageByEventId(eventId, pageType);
     if (!page) return undefined;
 
     const sections = await db.select().from(eventPageSections)
