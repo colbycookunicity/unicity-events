@@ -57,8 +57,10 @@ From `shared/schema.ts` (lines 49-60):
 
 | Field | Why Not CMS | Target Location |
 |-------|-------------|-----------------|
-| `requiresVerification` | Behavioral setting, not visual content | Keep in `events` table as separate column |
-| `layout` | Affects entire page structure, not section content | New `layout` column on `event_pages` table |
+| `requiresVerification` | Behavioral setting, not visual content | `events.requires_verification` column |
+| `layout` | Affects ENTIRE registration flow (login, form, thank you), not individual pages | `events.registration_layout` column |
+
+> **CONFIRMED:** Layout is read once in `RegistrationPage.tsx` (line 494) and applies to the entire component, which renders ALL steps: login/verification, OTP entry, registration form, and thank you. This is definitively an **event-level** setting, not a page-level setting.
 
 ### Drop Entirely
 
@@ -92,24 +94,22 @@ interface FormSectionContent {
 }
 ```
 
-### New Column on `event_pages` Table
+### New Columns on `events` Table
 
-```typescript
-// Add to eventPages table definition
-layout: text("layout").notNull().default("standard"),  // "standard" | "split"
-```
-
-**Rationale:** Layout affects the entire page rendering, not a single section. It's a page-level property.
-
-### New Column on `events` Table (or keep existing)
-
-The `requiresVerification` field should move from inside the JSONB to a proper column:
+Both behavioral settings move from JSONB to proper columns on the `events` table:
 
 ```typescript
 // Already exists: requiresQualification
-// Add new:
+// Add new columns:
+registrationLayout: text("registration_layout").notNull().default("standard"),  // "standard" | "split"
 requiresVerification: boolean("requires_verification").notNull().default(true),
 ```
+
+**Rationale for `registration_layout` on events table:**
+- Layout affects the ENTIRE registration flow (login → form → thank you), not individual CMS pages
+- The `RegistrationPage.tsx` component is a single React component that renders all steps
+- Layout is read once and applied uniformly to all steps
+- Storing on `event_pages` would create confusion (which page's layout wins?)
 
 ---
 
@@ -134,13 +134,16 @@ Admin edits CMS "Registration Form Page"
          ↓
 CMS saves to event_pages + event_page_sections
          ↓
-Public API returns published page + sections
+Public API returns event + published page + sections
          ↓
-RegistrationPage.tsx reads from CMS data
+RegistrationPage.tsx reads from appropriate sources:
          ↓
-Layout from event_pages.layout
-Hero content from hero section
-Form config from form section
+┌─────────────────────────────────────────────┐
+│ Layout           ← events.registration_layout │
+│ requiresVerify   ← events.requires_verification│
+│ Hero content     ← hero section               │
+│ Form config      ← form section               │
+└─────────────────────────────────────────────┘
 ```
 
 ---
@@ -149,22 +152,29 @@ Form config from form section
 
 ### Phase 1: Add New Infrastructure (No Breaking Changes)
 
-1. Add `layout` column to `event_pages` table
-2. Add `requiresVerification` column to `events` table
+1. Add `registration_layout` column to `events` table
+2. Add `requires_verification` column to `events` table
 3. Add `form` section type to schema
 4. Update auto-creation logic to include `form` section with defaults
 
 **Database changes:**
 ```sql
-ALTER TABLE event_pages ADD COLUMN layout TEXT NOT NULL DEFAULT 'standard';
+ALTER TABLE events ADD COLUMN registration_layout TEXT NOT NULL DEFAULT 'standard';
 ALTER TABLE events ADD COLUMN requires_verification BOOLEAN NOT NULL DEFAULT true;
+```
+
+**Schema changes (shared/schema.ts):**
+```typescript
+// In events table definition, add:
+registrationLayout: text("registration_layout").notNull().default("standard"),
+requiresVerification: boolean("requires_verification").notNull().default(true),
 ```
 
 ### Phase 2: Data Migration Script
 
 For each event that has `registrationSettings`:
 
-1. **Copy layout** → Set `event_pages.layout` from `registrationSettings.layout`
+1. **Copy layout** → Set `events.registration_layout` from `registrationSettings.layout`
 2. **Copy requiresVerification** → Set `events.requires_verification` from `registrationSettings.requiresVerification`
 3. **Copy hero content** → Update `registration` page's `hero` section content:
    - `headline` ← `heading`
@@ -178,15 +188,31 @@ For each event that has `registrationSettings`:
 
 ### Phase 3: Update RegistrationPage.tsx
 
-Replace all `registrationSettings` reads with CMS reads:
+Replace all `registrationSettings` reads with new sources:
 
-| Current Code | New Code |
-|--------------|----------|
-| `event.registrationSettings?.layout` | `pageData.page.layout` |
-| `event.registrationSettings?.requiresVerification` | `event.requiresVerification` |
-| `settings.heading` | `heroSection.content.headline` |
-| `settings.heroImagePath` | `heroSection.content.backgroundImage` |
-| `settings.ctaLabel` | `formSection.content.submitButtonLabel` |
+| Current Code | New Code | Source |
+|--------------|----------|--------|
+| `event.registrationSettings?.layout` | `event.registrationLayout` | events table |
+| `event.registrationSettings?.requiresVerification` | `event.requiresVerification` | events table |
+| `settings.heading` | `heroSection.content.headline` | CMS section |
+| `settings.heroImagePath` | `heroSection.content.backgroundImage` | CMS section |
+| `settings.ctaLabel` | `formSection.content.submitButtonLabel` | CMS section |
+
+**Code paths to update:**
+
+```typescript
+// Line 232-234: Verification check
+// BEFORE:
+(event?.registrationSettings?.requiresVerification !== false)
+// AFTER:
+(event?.requiresVerification !== false)
+
+// Line 494: Layout selection
+// BEFORE:
+const layout = event?.registrationSettings?.layout || "standard";
+// AFTER:
+const layout = event?.registrationLayout || "standard";
+```
 
 ### Phase 4: Clean Up
 
@@ -229,14 +255,15 @@ Replace all `registrationSettings` reads with CMS reads:
 
 ### Risk 4: Layout Stored in Wrong Place
 
-**Problem:** Layout is per-event but we're putting it on event_pages. If someone changes layout for registration, does login page also change?
+**RESOLVED:** Layout is now stored on `events.registration_layout` (not `event_pages`).
 
-**Consideration:** 
-- Current behavior: One layout applies to all steps (login, form, success)
-- This is probably correct - the "registration flow" has one layout
-- Could put layout on `events` table instead if truly event-wide
+**Rationale:**
+- Layout applies to the entire registration flow (login → form → thank you)
+- The `RegistrationPage.tsx` component is monolithic - one component renders all steps
+- Layout is read once at line 494 and used for the entire page
+- Storing on `event_pages` would have created confusion (which page's layout wins?)
 
-**Decision:** Put layout on `event_pages` table with `registration` page type. Login and thank_you pages don't currently use layout.
+**Decision:** Store layout as `events.registration_layout` - single source of truth at the event level.
 
 ### Risk 5: Admin Confusion During Transition
 
@@ -262,7 +289,7 @@ Replace all `registrationSettings` reads with CMS reads:
 | `registrationSettings.heroImagePath` | `event_page_sections` (registration page, hero) | `content.backgroundImage` | Copy in script |
 | `registrationSettings.ctaLabel` | `event_page_sections` (registration page, form) | `content.submitButtonLabel` | Copy in script |
 | `registrationSettings.ctaLabelEs` | `event_page_sections` (registration page, form) | `content.submitButtonLabelEs` | Copy in script |
-| `registrationSettings.layout` | `event_pages` | `layout` | Copy in script |
+| `registrationSettings.layout` | `events` | `registration_layout` | Copy in script |
 | `registrationSettings.requiresVerification` | `events` | `requires_verification` | Copy in script |
 | `registrationSettings.accentColor` | (dropped) | — | Do nothing |
 
@@ -271,14 +298,14 @@ Replace all `registrationSettings` reads with CMS reads:
 ## 8. IMPLEMENTATION SEQUENCE
 
 1. **Schema Changes**
-   - [ ] Add `layout` column to `event_pages`
-   - [ ] Add `requires_verification` column to `events`
+   - [ ] Add `registration_layout` column to `events` table
+   - [ ] Add `requires_verification` column to `events` table
    - [ ] Add `form` to section type enum
    - [ ] Run db:push
 
 2. **Auto-Creation Updates**
    - [ ] Update `getDefaultSectionsForPageType` to include `form` section for registration page
-   - [ ] Set default layout to "standard" in page creation
+   - [ ] (No layout default needed - layout is event-level with "standard" default)
 
 3. **Data Migration**
    - [ ] Write migration script
@@ -286,15 +313,15 @@ Replace all `registrationSettings` reads with CMS reads:
    - [ ] Verify Punta Cana 2025 event data migrated correctly
 
 4. **Code Changes**
-   - [ ] Update RegistrationPage.tsx to read layout from CMS
-   - [ ] Update RegistrationPage.tsx to read requiresVerification from event
+   - [ ] Update RegistrationPage.tsx to read layout from `event.registrationLayout`
+   - [ ] Update RegistrationPage.tsx to read requiresVerification from `event.requiresVerification`
    - [ ] Update RegistrationPage.tsx to read hero content from CMS
    - [ ] Update RegistrationPage.tsx to read form config from CMS
    - [ ] Keep fallback to registrationSettings temporarily
 
 5. **Admin UI Updates**
-   - [ ] Add layout selector to registration page in LandingEditorPage
-   - [ ] Ensure form section editor shows button label fields
+   - [ ] Add layout selector to EventFormPage.tsx (event-level setting, not CMS page)
+   - [ ] Ensure form section editor in LandingEditorPage shows button label fields
 
 6. **Testing**
    - [ ] Test registration flow with CMS-only data
@@ -315,7 +342,38 @@ After cutover is complete:
 
 1. Admin edits in CMS → public page reflects changes (when published)
 2. No code references `event.registrationSettings`
-3. Layout is controlled via CMS page settings
-4. All existing events have migrated data
-5. New events get proper defaults from CMS
-6. Zero public-facing regressions during cutover
+3. Layout is controlled via `events.registration_layout` (event-level setting)
+4. Verification controlled via `events.requires_verification` (event-level setting)
+5. All existing events have migrated data
+6. New events get proper defaults
+7. Zero public-facing regressions during cutover
+
+---
+
+## 10. LAYOUT PLACEMENT CONFIRMATION
+
+**Q: Does registration layout apply to the entire flow or individual steps?**
+
+**A: ENTIRE FLOW.** Confirmed by code analysis:
+
+- `RegistrationPage.tsx` is a **single React component** that renders all steps
+- Layout is read **once** at line 494: `const layout = event?.registrationSettings?.layout || "standard"`
+- The `if (layout === "standard")` and `if (layout === "split")` conditionals wrap the ENTIRE page output
+- All steps (login, OTP, form, success) render inside the same layout wrapper
+
+**Q: Where should layout be stored?**
+
+**A: `events.registration_layout`** - because:
+
+1. It's a property of the event, not of any individual CMS page
+2. The public registration flow is a single-page app with steps, not separate pages
+3. Storing on `event_pages` would require picking one page arbitrarily (which one?)
+4. Event-level storage matches the mental model: "this event uses split layout"
+
+**Q: What code paths read layout?**
+
+| Location | Line | Current Read | Future Read |
+|----------|------|--------------|-------------|
+| RegistrationPage.tsx | 494 | `event?.registrationSettings?.layout` | `event?.registrationLayout` |
+
+**Single read location = clean cutover.**
