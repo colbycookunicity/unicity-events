@@ -1,0 +1,203 @@
+content.min.js:2 Uncaught (in promise) TypeError: e.className.includes is not a function
+    at content.min.js:2:441645
+    at Array.some (<anonymous>)
+    at content.min.js:2:441594
+    at Array.filter (<anonymous>)
+    at Object.<anonymous> (content.min.js:2:441281)
+    at f (content.min.js:2:169418)
+    at Generator.<anonymous> (content.min.js:2:170773)
+    at Generator.next (content.min.js:2:169781)
+    at y (content.min.js:2:327508)
+    at i (content.min.js:2:327711)
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+f @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+y @ content.min.js:2
+i @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+f @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+y @ content.min.js:2
+i @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+Promise.then
+yr @ content.min.js:2
+param @ content.min.js:2
+(anonymous) @ content.min.js:2
+childList
+Su @ index-CFUVqRsQ.js:37
+Us @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+j7 @ index-CFUVqRsQ.js:40
+va @ index-CFUVqRsQ.js:40
+pN @ index-CFUVqRsQ.js:40
+aa @ index-CFUVqRsQ.js:38
+(anonymous) @ index-CFUVqRsQ.js:40Understand this error
+content.min.js:2 Uncaught (in promise) TypeError: e.className.includes is not a function
+    at content.min.js:2:441466
+    at Array.some (<anonymous>)
+    at content.min.js:2:441415
+    at Array.filter (<anonymous>)
+    at Object.<anonymous> (content.min.js:2:441281)
+    at f (content.min.js:2:169418)
+    at Generator.<anonymous> (content.min.js:2:170773)
+    at Generator.next (content.min.js:2:169781)
+    at y (content.min.js:2:327508)
+    at i (content.min.js:2:327711)
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+f @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+y @ content.min.js:2
+i @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+f @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+y @ content.min.js:2
+i @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+Promise.then
+yr @ content.min.js:2
+param @ content.min.js:2
+(anonymous) @ content.min.js:2
+childList
+V1 @ index-CFUVqRsQ.js:40
+V1 @ index-CFUVqRsQ.js:40
+V1 @ index-CFUVqRsQ.js:40
+V1 @ index-CFUVqRsQ.js:40
+V1 @ index-CFUVqRsQ.js:40
+V1 @ index-CFUVqRsQ.js:40
+V1 @ index-CFUVqRsQ.js:40
+V1 @ index-CFUVqRsQ.js:40
+V1 @ index-CFUVqRsQ.js:40
+Us @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+ms @ index-CFUVqRsQ.js:40
+Zj @ index-CFUVqRsQ.js:40
+j7 @ index-CFUVqRsQ.js:40
+va @ index-CFUVqRsQ.js:40
+Jj @ index-CFUVqRsQ.js:40
+C @ index-CFUVqRsQ.js:25
+I @ index-CFUVqRsQ.js:25Understand this error
+content.min.js:2 Uncaught (in promise) TypeError: e.className.includes is not a function
+    at content.min.js:2:441645
+    at Array.some (<anonymous>)
+    at content.min.js:2:441594
+    at Array.filter (<anonymous>)
+    at Object.<anonymous> (content.min.js:2:441281)
+    at f (content.min.js:2:169418)
+    at Generator.<anonymous> (content.min.js:2:170773)
+    at Generator.next (content.min.js:2:169781)
+    at y (content.min.js:2:327508)
+    at i (content.min.js:2:327711)

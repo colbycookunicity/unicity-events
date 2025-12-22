@@ -1767,22 +1767,28 @@ export async function registerRoutes(
         });
         
         // Auto-create default sections based on page type
-        const defaultSections = getDefaultSectionsForPageType(pageType, event);
-        for (let i = 0; i < defaultSections.length; i++) {
-          await storage.createEventPageSection({
-            pageId: page.id,
-            type: defaultSections[i].type,
-            position: i,
-            isEnabled: true,
-            content: defaultSections[i].content
-          });
+        try {
+          const defaultSections = getDefaultSectionsForPageType(pageType, event);
+          for (let i = 0; i < defaultSections.length; i++) {
+            await storage.createEventPageSection({
+              pageId: page.id,
+              type: defaultSections[i].type,
+              position: i,
+              isEnabled: true,
+              content: defaultSections[i].content
+            });
+          }
+        } catch (sectionError) {
+          console.error("Error creating default sections (non-fatal):", sectionError);
+          // Continue - page was created, sections can be added manually
         }
       }
       
       res.json(page);
     } catch (error) {
       console.error("Error saving event page:", error);
-      res.status(500).json({ error: "Failed to save event page" });
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({ error: "Failed to save event page", details: errorMessage });
     }
   });
 
