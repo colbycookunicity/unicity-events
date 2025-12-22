@@ -316,7 +316,7 @@ export default function LandingEditorPage() {
 
         <div className="flex items-center gap-2">
           <Button variant="outline" asChild>
-              <a href={`/register/${eventId}`} target="_blank" rel="noopener noreferrer">
+              <a href={`/register/${event.slug}${pageType === 'thank_you' ? '?preview=thankyou' : ''}`} target="_blank" rel="noopener noreferrer">
                 <Eye className="h-4 w-4 mr-2" />
                 Preview
               </a>
@@ -358,14 +358,14 @@ export default function LandingEditorPage() {
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground mb-4">
-              No registration page design created for this event yet.
+              No {PAGE_TYPE_LABELS[pageType]?.toLowerCase() || 'page'} design created for this event yet.
             </p>
             <Button 
               onClick={() => createPageMutation.mutate()}
               disabled={createPageMutation.isPending}
               data-testid="button-create-page"
             >
-              Create Registration Page
+              Create {PAGE_TYPE_LABELS[pageType] || 'Page'}
             </Button>
           </CardContent>
         </Card>
@@ -398,7 +398,7 @@ export default function LandingEditorPage() {
               <CardContent className="space-y-3">
                 {sections.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-8">
-                    No sections added yet. Click "Add Section" to start building your registration page.
+                    No sections added yet. Click "Add Section" to start building your page.
                   </p>
                 ) : (
                   <DndContext
