@@ -529,7 +529,8 @@ export default function AttendeesPage() {
 
       const matchesStatus = 
         statusFilter === "all" || 
-        (person.registration && person.registration.status === statusFilter);
+        (person.registration && person.registration.status === statusFilter) ||
+        (!person.isRegistered);
       
       const matchesEvent = eventFilter === "all" || 
         (person.registration && person.registration.eventId === eventFilter) ||
@@ -537,7 +538,8 @@ export default function AttendeesPage() {
       
       const matchesSwag = 
         swagFilter === "all" || 
-        (person.registration && (person.registration.swagStatus || "pending") === swagFilter);
+        (person.registration && (person.registration.swagStatus || "pending") === swagFilter) ||
+        (!person.isRegistered);
 
       return matchesSearch && matchesRegistrationStatus && matchesStatus && matchesEvent && matchesSwag;
     });
