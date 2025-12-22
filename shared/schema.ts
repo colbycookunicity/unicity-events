@@ -1,8 +1,12 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, boolean, integer, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, boolean, integer, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
+
+// Page type enum for event CMS pages
+export const pageTypeEnum = ["login", "registration", "thank_you"] as const;
+export type PageType = typeof pageTypeEnum[number];
 
 // User roles enum
 export const userRoleEnum = ["admin", "event_manager", "marketing", "readonly"] as const;
@@ -378,10 +382,11 @@ export type PageSectionContent =
   | IntroSectionContent
   | ThankYouSectionContent;
 
-// Event Pages table - Landing page configuration per event
+// Event Pages table - Landing page configuration per event (supports multiple page types per event)
 export const eventPages = pgTable("event_pages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  eventId: varchar("event_id").references(() => events.id).notNull().unique(),
+  eventId: varchar("event_id").references(() => events.id).notNull(),
+  pageType: text("page_type").notNull().default("registration"),
   status: text("status").notNull().default("draft"),
   language: text("language").notNull().default("en"),
   seoTitle: text("seo_title"),
@@ -389,7 +394,9 @@ export const eventPages = pgTable("event_pages", {
   publishedAt: timestamp("published_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   lastModified: timestamp("last_modified").defaultNow().notNull(),
-});
+}, (table) => ({
+  eventPageTypeUnique: uniqueIndex("event_page_type_unique").on(table.eventId, table.pageType),
+}));
 
 // Event Page Sections table - Individual sections within a landing page
 export const eventPageSections = pgTable("event_page_sections", {
