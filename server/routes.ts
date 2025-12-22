@@ -215,14 +215,22 @@ export async function registerRoutes(
 
       if (process.env.NODE_ENV !== "production" && code === "123456") {
         isValid = true;
-      } else if (process.env.NODE_ENV === "production") {
+      } else {
+        // Validate with Hydra (works in all environments)
+        // Include the validation_id from the OTP session
+        console.log("Admin Hydra OTP validation - email:", email, "validation_id:", session.validationId);
         const response = await fetch(`${HYDRA_API_BASE}/otp/magic-link`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, code }),
+          body: JSON.stringify({ 
+            email, 
+            code,
+            validation_id: session.validationId 
+          }),
         });
 
         const data = await response.json();
+        console.log("Admin Hydra OTP validation response:", response.status, JSON.stringify(data, null, 2));
         
         if (response.ok && data.success) {
           isValid = true;
@@ -386,11 +394,16 @@ export async function registerRoutes(
         };
       } else {
         // Validate with Hydra (works in all environments)
-        console.log("Validating OTP with Hydra for email:", email, "code length:", code?.length);
+        // Include the validation_id from the OTP session
+        console.log("Validating OTP with Hydra for email:", email, "code length:", code?.length, "validation_id:", session.validationId);
         const response = await fetch(`${HYDRA_API_BASE}/otp/magic-link`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, code }),
+          body: JSON.stringify({ 
+            email, 
+            code,
+            validation_id: session.validationId 
+          }),
         });
 
         const data = await response.json();
