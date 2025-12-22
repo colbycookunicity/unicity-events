@@ -1,0 +1,74 @@
+GOAL:
+I am trying to fix and overhaul the "Landing Page" + "Registration Pages" system in the Unicity Events admin app.
+The current UX and backend model is broken, confusing for admins, and producing 500 errors.
+
+I want you to:
+• Research my codebase
+• Find relevant files, routes, database models, and API handlers
+• Assess architectural and UX issues
+• Identify why POST /api/events/:eventId/pages/login is returning a 500
+• Propose and implement a clean, unified solution
+• Write the fix plan to Instructions.md BEFORE coding
+
+CONTEXT / PROBLEM:
+Admins currently see TWO different places to edit pages:
+1. A "Landing Page" editor when viewing the Event
+2. Separate editors for:
+   - Login / Verification Page
+   - Registration Form Page
+   - Thank You / Confirmation Page
+
+This causes major confusion:
+- It's unclear which page controls what the user actually sees
+- The same "page builder" concept seems duplicated
+- Clicking "Create Registration Page" on Login/Form/Thank You causes a 500 error:
+  POST /api/events/:eventId/pages/login → 500 Internal Server Error
+
+This is NOT just a bug — the concept itself is flawed.
+
+EXPECTED OUTCOME (IMPORTANT):
+We need ONE clear, opinionated model.
+
+Either:
+A) A single "Registration Flow Page Builder" with sections:
+   - Step 1: Login / Verification
+   - Step 2: Registration Form
+   - Step 3: Thank You
+
+OR
+B) A single Landing Page + system-generated internal pages that are NOT editable separately
+
+But NOT BOTH.
+
+REQUIREMENTS:
+1. Eliminate duplicated page editing concepts
+2. Admin should always know:
+   "THIS is where I edit what the registrant sees"
+3. Fix the 500 error (likely missing DB row, bad enum, or bad page type handling)
+4. Backend must:
+   - Create missing page records safely
+   - Prevent partial / invalid page states
+5. Frontend must:
+   - Never show "Create Page" if the system auto-generates it
+   - Or clearly explain what each page does
+6. Update copy + labels to remove ambiguity ("Landing Page" is probably the wrong term)
+
+DELIVERABLES:
+1. Instructions.md with:
+   - Root cause analysis (UX + backend)
+   - Recommended architecture (with reasoning)
+   - Data model changes (if needed)
+   - API changes
+   - UI changes
+2. Then implement the fix cleanly
+
+CONSTRAINTS:
+- Do NOT hack around the error
+- Do NOT add conditionals without understanding the model
+- Favor simplicity, fewer concepts, fewer page types
+
+START BY:
+- Tracing how pages are stored (DB schema)
+- Tracing how page types are created
+- Identifying why /pages/login POST fails
+- Mapping admin navigation → actual user-facing URLs

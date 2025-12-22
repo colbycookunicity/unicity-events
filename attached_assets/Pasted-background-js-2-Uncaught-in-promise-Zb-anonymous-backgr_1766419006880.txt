@@ -1,0 +1,21 @@
+background.js:2 Uncaught (in promise) Zb
+(anonymous) @ background.js:2Understand this error
+contentScript.bundle.js:2 Loading the script 'https://events.unicity.com/43.bundle.js' violates the following Content Security Policy directive: "script-src 'self' 'wasm-unsafe-eval' 'inline-speculation-rules' chrome-extension://8bf3c1aa-dc62-455f-9109-d00df0e5792e/". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.
+a.l @ contentScript.bundle.js:2Understand this error
+contentScript.bundle.js:2 Failed to load font styles: ChunkLoadError: Loading chunk 43 failed.
+(error: https://events.unicity.com/43.bundle.js)
+    at a.f.j (contentScript.bundle.js:2:2505284)
+    at contentScript.bundle.js:2:2503863
+    at Array.reduce (<anonymous>)
+    at a.e (contentScript.bundle.js:2:2503842)
+    at contentScript.bundle.js:2:4636362
+    at Generator.<anonymous> (contentScript.bundle.js:2:4629728)
+    at Generator.next (contentScript.bundle.js:2:4630666)
+    at NMe (contentScript.bundle.js:2:4631812)
+    at a (contentScript.bundle.js:2:4632016)
+    at contentScript.bundle.js:2:4632079
+(anonymous) @ contentScript.bundle.js:2Understand this warning
+index.html:1 The resource https://apps.rokt.com/icons/rokt-icons.woff was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.Understand this warning
+index.html:1 The resource https://apps.rokt.com/icons/rokt-icons.woff was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.Understand this warning
+/api/events/9c363e38-eb19-4d0a-9ac3-7a6a6501b98a/pages/login:1  Failed to load resource: the server responded with a status of 500 ()Understand this error
+index.html:1 The resource https://apps.rokt.com/icons/rokt-icons.woff was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.

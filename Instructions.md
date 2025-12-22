@@ -1,3 +1,66 @@
+# Registration Pages System Overhaul
+
+## Root Cause Analysis
+
+### Current Problems
+
+**1. Dual Editing Locations (UX Confusion)**
+- **Location A**: Event Form (`EventFormPage.tsx`) has `registrationSettings` embedded with:
+  - heroImagePath, heading, headingEs, subheading, layout, accentColor, etc.
+- **Location B**: CMS Page Editor (`LandingEditorPage.tsx`) for 3 page types:
+  - Login / Verification Page
+  - Registration Form Page  
+  - Thank You / Confirmation Page
+
+Admins see both and don't know which one controls what the registrant actually sees.
+
+**2. Empty Database (500 Error Root Cause)**
+- The `event_pages` table is EMPTY - no page records exist
+- When admin clicks "Create Login Page", the POST to `/api/events/:eventId/pages/login` tries to create a page
+- This creates a confusing state where public pages work (hardcoded fallbacks) but admin can't edit them
+
+**3. Hardcoded Fallbacks Hide the Problem**
+- `RegistrationPage.tsx` uses hardcoded defaults when no CMS data exists
+- This makes public pages work, but admin CMS editor shows "no page exists"
+
+### Why the 500 Error Happens
+Traced to the storage layer - when inserting into `event_pages`, the unique constraint on `(eventId, pageType)` or a field type mismatch causes the failure.
+
+---
+
+## Recommended Architecture: Unified Registration Flow Editor
+
+### Design Decision: Option A - Single Registration Flow Editor
+
+**Why This Approach:**
+1. **One Mental Model**: Admins edit ONE thing - "The Registration Flow"
+2. **Auto-Created Pages**: All 3 pages created automatically when event is created
+3. **Tab-Based UI**: Switch between Login / Form / Thank You in the same editor
+4. **No "Create Page" Button**: Pages always exist, just edit them
+5. **Phase out duplicate settings**: Keep `registrationSettings` for now but migrate to CMS
+
+### Implementation Plan
+
+#### Phase 1: Fix the 500 Error (Immediate)
+1. Debug exact error in createEventPage
+2. Auto-create pages on event creation
+3. Ensure pages exist when fetching (idempotent create)
+
+#### Phase 2: Auto-Create Pages on Event Creation
+1. Modify event creation to also create 3 default pages with sections
+2. Add helper to ensure pages exist for existing events
+
+#### Phase 3: Unified UI
+1. Replace 3 separate page links with tabbed "Edit Registration Flow" editor
+2. Remove confusing "Create Page" button - pages auto-exist
+3. Update labels for clarity
+
+#### Phase 4: Cleanup (Later)
+1. Migrate registrationSettings to CMS sections
+2. Remove legacy API routes
+
+---
+
 # Swag Feature Implementation Plan
 
 ## Current State Analysis

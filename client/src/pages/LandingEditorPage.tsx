@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { 
   ArrowLeft, 
@@ -15,7 +16,10 @@ import {
   Save,
   Globe,
   Loader2,
-  Pencil
+  Pencil,
+  LogIn,
+  FileText,
+  CheckCircle
 } from "lucide-react";
 import { Link } from "wouter";
 import type { Event, EventPage, EventPageSection } from "@shared/schema";
@@ -308,7 +312,7 @@ export default function LandingEditorPage() {
           </Button>
           <div>
             <h1 className="text-2xl font-bold" data-testid="page-title">
-              {PAGE_TYPE_LABELS[pageType] || "Page Editor"}
+              Registration Flow Editor
             </h1>
             <p className="text-sm text-muted-foreground">{event.name}</p>
           </div>
@@ -316,7 +320,7 @@ export default function LandingEditorPage() {
 
         <div className="flex items-center gap-2">
           <Button variant="outline" asChild>
-              <a href={`/register/${event.slug}${pageType === 'thank_you' ? '?preview=thankyou' : ''}`} target="_blank" rel="noopener noreferrer">
+              <a href={`/register/${event.slug}`} target="_blank" rel="noopener noreferrer">
                 <Eye className="h-4 w-4 mr-2" />
                 Preview
               </a>
@@ -346,27 +350,56 @@ export default function LandingEditorPage() {
         </div>
       </div>
 
+      <Tabs value={pageType} className="w-full">
+        <TabsList className="grid w-full grid-cols-3 max-w-lg">
+          <TabsTrigger 
+            value="login" 
+            onClick={() => setLocation(`/admin/events/${eventId}/pages/login`)}
+            className="gap-2"
+            data-testid="tab-login"
+          >
+            <LogIn className="h-4 w-4" />
+            <span className="hidden sm:inline">Login</span>
+          </TabsTrigger>
+          <TabsTrigger 
+            value="registration" 
+            onClick={() => setLocation(`/admin/events/${eventId}/pages/registration`)}
+            className="gap-2"
+            data-testid="tab-registration"
+          >
+            <FileText className="h-4 w-4" />
+            <span className="hidden sm:inline">Form</span>
+          </TabsTrigger>
+          <TabsTrigger 
+            value="thank_you" 
+            onClick={() => setLocation(`/admin/events/${eventId}/pages/thank_you`)}
+            className="gap-2"
+            data-testid="tab-thank-you"
+          >
+            <CheckCircle className="h-4 w-4" />
+            <span className="hidden sm:inline">Thank You</span>
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       <div className="flex items-center gap-2">
         {page && (
           <Badge variant={isPublished ? "default" : "secondary"}>
             {isPublished ? 'Published' : 'Draft'}
           </Badge>
         )}
+        <span className="text-sm text-muted-foreground">
+          {PAGE_TYPE_LABELS[pageType]}
+        </span>
       </div>
 
       {!page ? (
         <Card>
           <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground mb-4">
-              No {PAGE_TYPE_LABELS[pageType]?.toLowerCase() || 'page'} design created for this event yet.
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-muted-foreground" />
+            <p className="text-muted-foreground">
+              Loading {PAGE_TYPE_LABELS[pageType]?.toLowerCase() || 'page'}...
             </p>
-            <Button 
-              onClick={() => createPageMutation.mutate()}
-              disabled={createPageMutation.isPending}
-              data-testid="button-create-page"
-            >
-              Create {PAGE_TYPE_LABELS[pageType] || 'Page'}
-            </Button>
           </CardContent>
         </Card>
       ) : (

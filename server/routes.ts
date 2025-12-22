@@ -1702,7 +1702,7 @@ export async function registerRoutes(
     }
   });
 
-  // Get event page by type for admin (includes draft)
+  // Get event page by type for admin (includes draft) - auto-creates if missing
   app.get("/api/events/:eventId/pages/:pageType", authenticateToken, requireRole("admin", "event_manager", "marketing"), async (req: AuthenticatedRequest, res) => {
     try {
       const event = await storage.getEventByIdOrSlug(req.params.eventId);
@@ -1711,7 +1711,37 @@ export async function registerRoutes(
       }
       
       const pageType = req.params.pageType || "registration";
-      const pageData = await storage.getEventPageWithSections(event.id, pageType);
+      let pageData = await storage.getEventPageWithSections(event.id, pageType);
+      
+      // Auto-create page if it doesn't exist (idempotent)
+      if (!pageData) {
+        try {
+          const page = await storage.createEventPage({
+            eventId: event.id,
+            pageType,
+            status: 'draft'
+          });
+          
+          // Create default sections
+          const defaultSections = getDefaultSectionsForPageType(pageType, event);
+          for (let i = 0; i < defaultSections.length; i++) {
+            await storage.createEventPageSection({
+              pageId: page.id,
+              type: defaultSections[i].type,
+              position: i,
+              isEnabled: true,
+              content: defaultSections[i].content
+            });
+          }
+          
+          // Fetch the complete page data
+          pageData = await storage.getEventPageWithSections(event.id, pageType);
+        } catch (createError) {
+          console.error("Error auto-creating page:", createError);
+          // If creation failed, still return null - let POST route handle it
+        }
+      }
+      
       res.json(pageData || null);
     } catch (error) {
       console.error("Error fetching event page:", error);

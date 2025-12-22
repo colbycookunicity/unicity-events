@@ -241,26 +241,14 @@ export default function EventFormPage() {
           
           <Card className="bg-muted/50">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Registration Pages</CardTitle>
-              <CardDescription>Customize the 3 pages of your registration flow</CardDescription>
+              <CardTitle className="text-base">Registration Flow</CardTitle>
+              <CardDescription>Customize what users see during registration</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-2">
-              <Button variant="outline" className="w-full justify-start" asChild data-testid="button-edit-login-page">
+            <CardContent>
+              <Button className="w-full" asChild data-testid="button-edit-registration-flow">
                 <Link href={`/admin/events/${event.id}/pages/login`}>
                   <FileEdit className="h-4 w-4 mr-2" />
-                  Login / Verification Page
-                </Link>
-              </Button>
-              <Button variant="outline" className="w-full justify-start" asChild data-testid="button-edit-registration-page">
-                <Link href={`/admin/events/${event.id}/pages/registration`}>
-                  <FileEdit className="h-4 w-4 mr-2" />
-                  Registration Form Page
-                </Link>
-              </Button>
-              <Button variant="outline" className="w-full justify-start" asChild data-testid="button-edit-thankyou-page">
-                <Link href={`/admin/events/${event.id}/pages/thank_you`}>
-                  <FileEdit className="h-4 w-4 mr-2" />
-                  Thank You / Confirmation Page
+                  Edit Registration Flow
                 </Link>
               </Button>
             </CardContent>
