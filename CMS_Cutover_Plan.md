@@ -224,12 +224,27 @@ This ensures:
 - New/migrated events use CMS content
 - Clear visibility into which source is being used via console logs
 
-### Phase 4: Clean Up
+### Phase 4: Clean Up - COMPLETED
 
-1. Remove `registrationSettings` from public API response
-2. Remove `registrationSettings` from event update handler
-3. Keep `registrationSettings` column in database temporarily (deprecation period)
-4. Eventually drop column after confirming no usage
+**Status: COMPLETE** (December 22, 2025)
+
+**What Changed:**
+1. ✅ Removed all `registrationSettings` fallback logic from RegistrationPage.tsx
+2. ✅ Removed `[CMS Fallback]` logging - no longer needed
+3. ✅ Removed `registrationSettings` from public API response (`/api/events/:idOrSlug/public`)
+4. ✅ Replaced `registrationSettings` in event update handler with `registrationLayout` and `requiresVerification`
+5. ✅ Marked `RegistrationSettings` type as @deprecated in schema
+6. ✅ Marked legacy routes (`/api/events/:eventId/page`) as @deprecated
+7. ✅ Kept `registrationSettings` column in database (for rollback safety, not used)
+
+**API Changes:**
+- Public event API now returns `registrationLayout` and `requiresVerification` instead of `registrationSettings`
+- Event update handler now accepts `registrationLayout` and `requiresVerification` instead of `registrationSettings`
+
+**Code Cleanup:**
+- `RegistrationPage.tsx` no longer imports or uses `RegistrationSettings` type
+- All helper functions now read exclusively from CMS or event-level columns
+- No fallback paths remain
 
 ---
 

@@ -730,7 +730,8 @@ export async function registerRoutes(
         capacity: event.capacity,
         buyInPrice: event.buyInPrice,
         formFields: event.formFields,
-        registrationSettings: event.registrationSettings,
+        registrationLayout: event.registrationLayout,
+        requiresVerification: event.requiresVerification,
         requiresQualification: event.requiresQualification,
         qualificationStartDate: event.qualificationStartDate,
         qualificationEndDate: event.qualificationEndDate,
@@ -785,7 +786,8 @@ export async function registerRoutes(
       if (req.body.capacity !== undefined) updates.capacity = req.body.capacity ? parseInt(String(req.body.capacity), 10) : null;
       if (req.body.buyInPrice !== undefined) updates.buyInPrice = req.body.buyInPrice ? Math.round(parseFloat(String(req.body.buyInPrice))) : null;
       if (req.body.requiresQualification !== undefined) updates.requiresQualification = req.body.requiresQualification;
-      if (req.body.registrationSettings !== undefined) updates.registrationSettings = req.body.registrationSettings;
+      if (req.body.registrationLayout !== undefined) updates.registrationLayout = req.body.registrationLayout;
+      if (req.body.requiresVerification !== undefined) updates.requiresVerification = req.body.requiresVerification;
       if (req.body.formFields !== undefined) updates.formFields = req.body.formFields;
       if (normalizedSlug !== undefined) updates.slug = normalizedSlug;
       
@@ -1693,7 +1695,10 @@ export async function registerRoutes(
     }
   });
 
-  // Get event page for admin (includes draft) - legacy route (defaults to registration page type)
+  /**
+   * @deprecated Use /api/events/:eventId/pages/:pageType instead
+   * Legacy single-page route - defaults to registration page type
+   */
   app.get("/api/events/:eventId/page", authenticateToken, requireRole("admin", "event_manager", "marketing"), async (req: AuthenticatedRequest, res) => {
     try {
       const event = await storage.getEventByIdOrSlug(req.params.eventId);

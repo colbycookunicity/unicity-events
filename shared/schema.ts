@@ -45,7 +45,17 @@ export const users = pgTable("users", {
 export const registrationLayoutEnum = ["standard", "split", "hero-background"] as const;
 export type RegistrationLayout = typeof registrationLayoutEnum[number];
 
-// Registration page settings type
+/**
+ * @deprecated PHASE 4 COMPLETE (Dec 22, 2025)
+ * This type is no longer used. All settings have been migrated to:
+ * - events.registrationLayout column (layout)
+ * - events.requiresVerification column (requiresVerification)
+ * - CMS hero sections (heading, subheading, heroImagePath)
+ * - CMS form sections (ctaLabel)
+ * 
+ * The registrationSettings column remains in the database for safety
+ * but is no longer read or written by the application.
+ */
 export type RegistrationSettings = {
   heroImagePath?: string;
   heading?: string;
@@ -77,8 +87,9 @@ export const events = pgTable("events", {
   qualificationStartDate: timestamp("qualification_start_date"),
   qualificationEndDate: timestamp("qualification_end_date"),
   formFields: jsonb("form_fields"),
+  /** @deprecated Use registrationLayout and requiresVerification columns + CMS sections instead */
   registrationSettings: jsonb("registration_settings").$type<RegistrationSettings>(),
-  // New columns for CMS cutover (Phase 1)
+  // CMS cutover columns (replace registrationSettings)
   registrationLayout: text("registration_layout").notNull().default("standard"),
   requiresVerification: boolean("requires_verification").notNull().default(true),
   createdBy: varchar("created_by").references(() => users.id),

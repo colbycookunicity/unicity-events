@@ -22,7 +22,7 @@ import { useTranslation, useLanguage } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { format, parseISO } from "date-fns";
-import type { Event, RegistrationSettings, EventPage, EventPageSection, IntroSectionContent, ThankYouSectionContent, HeroSectionContent, FormSectionContent } from "@shared/schema";
+import type { Event, EventPage, EventPageSection, IntroSectionContent, ThankYouSectionContent, HeroSectionContent, FormSectionContent } from "@shared/schema";
 import EventListPage from "./EventListPage";
 import { IntroSection, ThankYouSection } from "@/components/landing-sections";
 
@@ -55,7 +55,6 @@ type VerifiedProfile = {
 
 type PublicEvent = Event & {
   formFields?: any;
-  registrationSettings?: RegistrationSettings;
   registrationLayout?: string;
   requiresVerification?: boolean;
 };
@@ -248,19 +247,12 @@ export default function RegistrationPage() {
   const [savedEventInfo, setSavedEventInfo] = useState<{ name: string; nameEs?: string; startDate?: string } | null>(null);
 
   // Check if this event requires verification (default true if not set)
-  // PRIORITY: 1) event.requiresVerification column, 2) registrationSettings.requiresVerification (fallback)
   // IMPORTANT: If event requires qualification, we MUST require verification to check the qualified list
   const getRequiresVerification = (): boolean => {
-    // First check new event-level column
     if (event?.requiresVerification !== undefined) {
       return event.requiresVerification;
     }
-    // Fallback to legacy registrationSettings
-    if (event?.registrationSettings?.requiresVerification !== undefined) {
-      console.log("[CMS Fallback] Using legacy registrationSettings.requiresVerification");
-      return event.registrationSettings.requiresVerification;
-    }
-    // Default to true if neither is set
+    // Default to true if not set
     return true;
   };
   const requiresVerification = (
@@ -272,17 +264,7 @@ export default function RegistrationPage() {
   
   useEffect(() => {
     const fetchHeroImage = async () => {
-      // PRIORITY: 1) CMS hero section backgroundImage, 2) legacy registrationSettings.heroImagePath
-      let imagePath = registrationHeroContent?.backgroundImage;
-      
-      if (!imagePath) {
-        // Fallback to legacy registrationSettings
-        const settings = event?.registrationSettings;
-        if (settings?.heroImagePath) {
-          console.log("[CMS Fallback] Using legacy registrationSettings.heroImagePath");
-          imagePath = settings.heroImagePath;
-        }
-      }
+      const imagePath = registrationHeroContent?.backgroundImage;
       
       if (imagePath) {
         // If it's already a full URL, use it directly
@@ -517,72 +499,36 @@ export default function RegistrationPage() {
   };
 
   const getCustomHeading = () => {
-    // PRIORITY: 1) CMS hero section, 2) legacy registrationSettings
     if (registrationHeroContent) {
       if (language === "es" && registrationHeroContent.headlineEs) {
         return registrationHeroContent.headlineEs;
       }
       return registrationHeroContent.headline || null;
     }
-    // Fallback to legacy registrationSettings
-    const settings = event?.registrationSettings;
-    if (!settings) return null;
-    console.log("[CMS Fallback] Using legacy registrationSettings.heading");
-    if (language === "es" && settings.headingEs) {
-      return settings.headingEs;
-    }
-    return settings.heading || null;
+    return null;
   };
 
   const getCustomSubheading = () => {
-    // PRIORITY: 1) CMS hero section, 2) legacy registrationSettings
     if (registrationHeroContent) {
       if (language === "es" && registrationHeroContent.subheadlineEs) {
         return registrationHeroContent.subheadlineEs;
       }
       return registrationHeroContent.subheadline || null;
     }
-    // Fallback to legacy registrationSettings
-    const settings = event?.registrationSettings;
-    if (!settings) return null;
-    console.log("[CMS Fallback] Using legacy registrationSettings.subheading");
-    if (language === "es" && settings.subheadingEs) {
-      return settings.subheadingEs;
-    }
-    return settings.subheading || null;
+    return null;
   };
 
   const getCtaLabel = () => {
-    // PRIORITY: 1) CMS form section, 2) legacy registrationSettings
     if (formSectionContent) {
       if (language === "es" && formSectionContent.submitButtonLabelEs) {
         return formSectionContent.submitButtonLabelEs;
       }
       return formSectionContent.submitButtonLabel || t("register");
     }
-    // Fallback to legacy registrationSettings
-    const settings = event?.registrationSettings;
-    if (settings?.ctaLabel || settings?.ctaLabelEs) {
-      console.log("[CMS Fallback] Using legacy registrationSettings.ctaLabel");
-      if (language === "es" && settings.ctaLabelEs) {
-        return settings.ctaLabelEs;
-      }
-      return settings.ctaLabel || t("register");
-    }
     return t("register");
   };
 
-  // PRIORITY: 1) event.registrationLayout column, 2) registrationSettings.layout (fallback)
-  const layout = (() => {
-    if (event?.registrationLayout) {
-      return event.registrationLayout;
-    }
-    if (event?.registrationSettings?.layout) {
-      console.log("[CMS Fallback] Using legacy registrationSettings.layout");
-      return event.registrationSettings.layout;
-    }
-    return "standard";
-  })();
+  const layout = event?.registrationLayout || "standard";
 
   const getDietaryLabel = (option: typeof dietaryOptions[0]) => {
     return language === "es" ? option.labelEs : option.label;
