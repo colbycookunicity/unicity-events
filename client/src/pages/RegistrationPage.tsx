@@ -18,7 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import unicityLogoDark from "@/assets/unicity-logo-dark.png";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
-import { useTranslation } from "@/lib/i18n";
+import { useTranslation, useLanguage } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { format, parseISO } from "date-fns";
@@ -155,6 +155,7 @@ type RegistrationFormData = z.infer<typeof registrationSchema>;
 export default function RegistrationPage() {
   useForceLightTheme();
   const { t, language } = useTranslation();
+  const { setLanguage } = useLanguage();
   const { toast } = useToast();
   const params = useParams<{ eventId: string }>();
   const [isSuccess, setIsSuccess] = useState(false);
@@ -617,10 +618,7 @@ export default function RegistrationPage() {
         />
         <div className="flex items-center gap-1 text-sm font-medium">
           <button
-            onClick={() => {
-              localStorage.setItem("unicity-language", "en");
-              window.location.reload();
-            }}
+            onClick={() => setLanguage("en")}
             className={language === "en" ? "text-slate-900 font-semibold" : "text-slate-400 hover:text-slate-600"}
             data-testid="button-language-en"
           >
@@ -628,10 +626,7 @@ export default function RegistrationPage() {
           </button>
           <span className="text-slate-300">/</span>
           <button
-            onClick={() => {
-              localStorage.setItem("unicity-language", "es");
-              window.location.reload();
-            }}
+            onClick={() => setLanguage("es")}
             className={language === "es" ? "text-slate-900 font-semibold" : "text-slate-400 hover:text-slate-600"}
             data-testid="button-language-es"
           >
@@ -1532,10 +1527,7 @@ export default function RegistrationPage() {
                 </div>
                 <div className="flex items-center gap-1 text-sm font-medium">
                   <button
-                    onClick={() => {
-                      localStorage.setItem("unicity-language", "en");
-                      window.location.reload();
-                    }}
+                    onClick={() => setLanguage("en")}
                     className={language === "en" ? "text-slate-900 font-semibold" : "text-slate-400 hover:text-slate-600"}
                     data-testid="button-language-en"
                   >
@@ -1543,10 +1535,7 @@ export default function RegistrationPage() {
                   </button>
                   <span className="text-slate-300">/</span>
                   <button
-                    onClick={() => {
-                      localStorage.setItem("unicity-language", "es");
-                      window.location.reload();
-                    }}
+                    onClick={() => setLanguage("es")}
                     className={language === "es" ? "text-slate-900 font-semibold" : "text-slate-400 hover:text-slate-600"}
                     data-testid="button-language-es"
                   >
