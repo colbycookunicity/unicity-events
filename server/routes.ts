@@ -869,7 +869,16 @@ export async function registerRoutes(
 
   app.patch("/api/registrations/:id", authenticateToken, requireRole("admin", "event_manager"), async (req, res) => {
     try {
-      const registration = await storage.updateRegistration(req.params.id, req.body);
+      // Convert date strings to Date objects for timestamp fields
+      const updateData = { ...req.body };
+      if (updateData.dateOfBirth && typeof updateData.dateOfBirth === 'string') {
+        updateData.dateOfBirth = new Date(updateData.dateOfBirth);
+      }
+      if (updateData.passportExpiration && typeof updateData.passportExpiration === 'string') {
+        updateData.passportExpiration = new Date(updateData.passportExpiration);
+      }
+      
+      const registration = await storage.updateRegistration(req.params.id, updateData);
       if (!registration) {
         return res.status(404).json({ error: "Registration not found" });
       }
