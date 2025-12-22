@@ -72,22 +72,24 @@ Stores individual content blocks within a page.
 
 #### Section Types Enum
 
-Defined in `shared/schema.ts` (line 245-247):
+Defined in `shared/schema.ts`:
 ```typescript
 export const pageSectionTypeEnum = [
   "hero", "agenda", "speakers", "stats", "cta", 
-  "faq", "richtext", "gallery", "intro", "thank_you"
+  "faq", "richtext", "gallery", "intro", "thank_you", "form"
 ] as const;
 ```
 
+**Note:** The `form` section type was added for CMS Phase 1 to allow customizing the registration form's submit button text.
+
 ### Legacy: `registrationSettings` Field
 
-The `events` table still contains a `registrationSettings` JSONB column (line 80):
+The `events` table still contains a `registrationSettings` JSONB column:
 ```typescript
 registrationSettings: jsonb("registration_settings").$type<RegistrationSettings>()
 ```
 
-**RegistrationSettings Type** (lines 49-60):
+**RegistrationSettings Type**:
 ```typescript
 export type RegistrationSettings = {
   heroImagePath?: string;
@@ -102,6 +104,17 @@ export type RegistrationSettings = {
   requiresVerification?: boolean;
 };
 ```
+
+### CMS Phase 1: New Event Columns
+
+**Added December 22, 2025** - Two new columns added to the `events` table for CMS cutover:
+
+```typescript
+registrationLayout: text("registration_layout").notNull().default("standard"),
+requiresVerification: boolean("requires_verification").notNull().default(true),
+```
+
+These columns store the layout and verification settings at the event level, eventually replacing the nested `registrationSettings` JSONB values. Currently, RegistrationPage.tsx still reads from `registrationSettings` - the cutover to these new columns is Phase 2.
 
 **Status:** This field is DEPRECATED but still exists in database. The `RegistrationPage.tsx` still reads `layout` and `requiresVerification` from it. The EventFormPage no longer writes to it (removed on Dec 22).
 

@@ -150,12 +150,15 @@ RegistrationPage.tsx reads from appropriate sources:
 
 ## 5. MIGRATION PLAN
 
-### Phase 1: Add New Infrastructure (No Breaking Changes)
+### Phase 1: Add New Infrastructure (No Breaking Changes) - COMPLETED
 
-1. Add `registration_layout` column to `events` table
-2. Add `requires_verification` column to `events` table
-3. Add `form` section type to schema
-4. Update auto-creation logic to include `form` section with defaults
+**Status: COMPLETE** (December 22, 2025)
+
+1. ✅ Add `registration_layout` column to `events` table
+2. ✅ Add `requires_verification` column to `events` table
+3. ✅ Add `form` section type to schema
+4. ✅ Update auto-creation logic to include `form` section with defaults
+5. ✅ Add form section editor support in LandingEditorPage
 
 **Database changes:**
 ```sql

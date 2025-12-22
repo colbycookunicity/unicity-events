@@ -33,7 +33,8 @@ export type SectionType =
   | 'richtext'
   | 'gallery'
   | 'intro'
-  | 'thank_you';
+  | 'thank_you'
+  | 'form';
 
 export const SECTION_LABELS: Record<SectionType, { en: string; es: string }> = {
   hero: { en: 'Hero', es: 'Portada' },
@@ -46,6 +47,7 @@ export const SECTION_LABELS: Record<SectionType, { en: string; es: string }> = {
   gallery: { en: 'Gallery', es: 'Galería' },
   intro: { en: 'Intro / Verification', es: 'Introducción / Verificación' },
   thank_you: { en: 'Thank You Page', es: 'Página de Agradecimiento' },
+  form: { en: 'Form Settings', es: 'Configuración del Formulario' },
 };
 
 interface SectionRendererProps {
@@ -82,6 +84,12 @@ export function SectionRenderer({ section, isEditing, onEditContent }: SectionRe
       return <IntroSection content={content as any} isEditing={isEditing} onEdit={handleEdit} />;
     case 'thank_you':
       return <ThankYouSection content={content as any} isEditing={isEditing} onEdit={handleEdit} />;
+    case 'form':
+      return (
+        <div className="py-8 text-center text-muted-foreground bg-muted/30 border rounded-md">
+          <p className="text-sm">Form Settings (configures submit button text)</p>
+        </div>
+      );
     default:
       return (
         <div className="py-8 text-center text-muted-foreground">

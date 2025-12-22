@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Trash2, Save, X, Loader2 } from "lucide-react";
-import type { EventPageSection, PageSectionContent, HeroSectionContent, AgendaSectionContent, SpeakersSectionContent, StatsSectionContent, CTASectionContent, FAQSectionContent, RichTextSectionContent, GallerySectionContent, IntroSectionContent, ThankYouSectionContent } from "@shared/schema";
+import type { EventPageSection, PageSectionContent, HeroSectionContent, AgendaSectionContent, SpeakersSectionContent, StatsSectionContent, CTASectionContent, FAQSectionContent, RichTextSectionContent, GallerySectionContent, IntroSectionContent, ThankYouSectionContent, FormSectionContent } from "@shared/schema";
 import { SECTION_LABELS, type SectionType } from "./index";
 
 interface SectionEditorProps {
@@ -171,6 +171,17 @@ export function SectionEditor({ section, onSave, onCancel, isSaving }: SectionEd
               </TabsContent>
               <TabsContent value="spanish" className="space-y-4">
                 <ThankYouFields content={content as ThankYouSectionContent} updateField={updateField} lang="es" />
+              </TabsContent>
+            </>
+          )}
+
+          {sectionType === 'form' && (
+            <>
+              <TabsContent value="english" className="space-y-4">
+                <FormFields content={content as FormSectionContent} updateField={updateField} lang="en" />
+              </TabsContent>
+              <TabsContent value="spanish" className="space-y-4">
+                <FormFields content={content as FormSectionContent} updateField={updateField} lang="es" />
               </TabsContent>
             </>
           )}
@@ -834,6 +845,27 @@ function ThankYouFields({ content, updateField, lang }: FieldProps<ThankYouSecti
           />
         </div>
       )}
+    </div>
+  );
+}
+
+function FormFields({ content, updateField, lang }: FieldProps<FormSectionContent>) {
+  return (
+    <div className="space-y-4">
+      <div>
+        <Label>{lang === 'es' ? 'Texto del Botón de Enviar' : 'Submit Button Text'}</Label>
+        <Input
+          value={lang === 'es' ? (content.submitButtonLabelEs || '') : (content.submitButtonLabel || '')}
+          onChange={(e) => updateField(lang === 'es' ? 'submitButtonLabelEs' : 'submitButtonLabel', e.target.value)}
+          placeholder={lang === 'es' ? "Registrar" : "Register"}
+          data-testid={`input-form-submitlabel-${lang}`}
+        />
+        <p className="text-xs text-muted-foreground mt-1">
+          {lang === 'es' 
+            ? 'Este texto aparecerá en el botón de envío del formulario de registro.' 
+            : 'This text will appear on the registration form submit button.'}
+        </p>
+      </div>
     </div>
   );
 }

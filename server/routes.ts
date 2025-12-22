@@ -99,6 +99,13 @@ function getDefaultSectionsForPageType(pageType: string, event: { name: string; 
           backgroundImage: event.heroImageUrl || '',
         }
       });
+      defaultSections.push({
+        type: 'form',
+        content: {
+          submitButtonLabel: 'Register',
+          submitButtonLabelEs: 'Registrar',
+        }
+      });
       break;
       
     case 'thank_you':

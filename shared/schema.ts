@@ -78,6 +78,9 @@ export const events = pgTable("events", {
   qualificationEndDate: timestamp("qualification_end_date"),
   formFields: jsonb("form_fields"),
   registrationSettings: jsonb("registration_settings").$type<RegistrationSettings>(),
+  // New columns for CMS cutover (Phase 1)
+  registrationLayout: text("registration_layout").notNull().default("standard"),
+  requiresVerification: boolean("requires_verification").notNull().default(true),
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   lastModified: timestamp("last_modified").defaultNow().notNull(),
@@ -242,8 +245,8 @@ export const swagAssignments = pgTable("swag_assignments", {
   lastModified: timestamp("last_modified").defaultNow().notNull(),
 });
 
-// Page section types enum - includes registration page sections (intro, thank_you)
-export const pageSectionTypeEnum = ["hero", "agenda", "speakers", "stats", "cta", "faq", "richtext", "gallery", "intro", "thank_you"] as const;
+// Page section types enum - includes registration page sections (intro, thank_you, form)
+export const pageSectionTypeEnum = ["hero", "agenda", "speakers", "stats", "cta", "faq", "richtext", "gallery", "intro", "thank_you", "form"] as const;
 export type PageSectionType = typeof pageSectionTypeEnum[number];
 
 // Page status enum
@@ -369,6 +372,12 @@ export type ThankYouSectionContent = {
   additionalInfoEs?: string;
 };
 
+// Form section content type (for registration form customization)
+export type FormSectionContent = {
+  submitButtonLabel?: string;      // Default: "Register"
+  submitButtonLabelEs?: string;    // Default: "Registrar"
+};
+
 // Union type for all section content
 export type PageSectionContent = 
   | HeroSectionContent 
@@ -380,7 +389,8 @@ export type PageSectionContent =
   | RichTextSectionContent 
   | GallerySectionContent
   | IntroSectionContent
-  | ThankYouSectionContent;
+  | ThankYouSectionContent
+  | FormSectionContent;
 
 // Event Pages table - Landing page configuration per event (supports multiple page types per event)
 export const eventPages = pgTable("event_pages", {
