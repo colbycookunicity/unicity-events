@@ -7,6 +7,8 @@ import { CTASection } from "./CTASection";
 import { FAQSection } from "./FAQSection";
 import { RichTextSection } from "./RichTextSection";
 import { GallerySection } from "./GallerySection";
+import { IntroSection } from "./IntroSection";
+import { ThankYouSection } from "./ThankYouSection";
 
 export {
   HeroSection,
@@ -17,6 +19,8 @@ export {
   FAQSection,
   RichTextSection,
   GallerySection,
+  IntroSection,
+  ThankYouSection,
 };
 
 export type SectionType = 
@@ -27,7 +31,9 @@ export type SectionType =
   | 'cta'
   | 'faq'
   | 'richtext'
-  | 'gallery';
+  | 'gallery'
+  | 'intro'
+  | 'thank_you';
 
 export const SECTION_LABELS: Record<SectionType, { en: string; es: string }> = {
   hero: { en: 'Hero', es: 'Portada' },
@@ -38,6 +44,8 @@ export const SECTION_LABELS: Record<SectionType, { en: string; es: string }> = {
   faq: { en: 'FAQ', es: 'Preguntas Frecuentes' },
   richtext: { en: 'Rich Text', es: 'Texto Enriquecido' },
   gallery: { en: 'Gallery', es: 'Galería' },
+  intro: { en: 'Intro / Verification', es: 'Introducción / Verificación' },
+  thank_you: { en: 'Thank You Page', es: 'Página de Agradecimiento' },
 };
 
 interface SectionRendererProps {
@@ -70,6 +78,10 @@ export function SectionRenderer({ section, isEditing, onEditContent }: SectionRe
       return <RichTextSection content={content as any} isEditing={isEditing} onEdit={handleEdit} />;
     case 'gallery':
       return <GallerySection content={content as any} isEditing={isEditing} onEdit={handleEdit} />;
+    case 'intro':
+      return <IntroSection content={content as any} isEditing={isEditing} onEdit={handleEdit} />;
+    case 'thank_you':
+      return <ThankYouSection content={content as any} isEditing={isEditing} onEdit={handleEdit} />;
     default:
       return (
         <div className="py-8 text-center text-muted-foreground">

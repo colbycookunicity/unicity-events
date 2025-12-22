@@ -238,8 +238,8 @@ export const swagAssignments = pgTable("swag_assignments", {
   lastModified: timestamp("last_modified").defaultNow().notNull(),
 });
 
-// Page section types enum
-export const pageSectionTypeEnum = ["hero", "agenda", "speakers", "stats", "cta", "faq", "richtext", "gallery"] as const;
+// Page section types enum - includes registration page sections (intro, thank_you)
+export const pageSectionTypeEnum = ["hero", "agenda", "speakers", "stats", "cta", "faq", "richtext", "gallery", "intro", "thank_you"] as const;
 export type PageSectionType = typeof pageSectionTypeEnum[number];
 
 // Page status enum
@@ -341,6 +341,30 @@ export type GallerySectionContent = {
   }>;
 };
 
+// Intro section content type (for registration page verification step)
+export type IntroSectionContent = {
+  headline?: string;
+  headlineEs?: string;
+  subheadline?: string;
+  subheadlineEs?: string;
+  backgroundImage?: string;
+  eventDetails?: string;
+  eventDetailsEs?: string;
+  showEventInfo?: boolean;
+};
+
+// Thank You section content type (for registration success page)
+export type ThankYouSectionContent = {
+  headline?: string;
+  headlineEs?: string;
+  message?: string;
+  messageEs?: string;
+  backgroundImage?: string;
+  showConfirmationDetails?: boolean;
+  additionalInfo?: string;
+  additionalInfoEs?: string;
+};
+
 // Union type for all section content
 export type PageSectionContent = 
   | HeroSectionContent 
@@ -350,7 +374,9 @@ export type PageSectionContent =
   | CTASectionContent 
   | FAQSectionContent 
   | RichTextSectionContent 
-  | GallerySectionContent;
+  | GallerySectionContent
+  | IntroSectionContent
+  | ThankYouSectionContent;
 
 // Event Pages table - Landing page configuration per event
 export const eventPages = pgTable("event_pages", {

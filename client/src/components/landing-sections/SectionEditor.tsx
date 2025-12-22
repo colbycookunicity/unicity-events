@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Trash2, Save, X, Loader2 } from "lucide-react";
-import type { EventPageSection, PageSectionContent, HeroSectionContent, AgendaSectionContent, SpeakersSectionContent, StatsSectionContent, CTASectionContent, FAQSectionContent, RichTextSectionContent, GallerySectionContent } from "@shared/schema";
+import type { EventPageSection, PageSectionContent, HeroSectionContent, AgendaSectionContent, SpeakersSectionContent, StatsSectionContent, CTASectionContent, FAQSectionContent, RichTextSectionContent, GallerySectionContent, IntroSectionContent, ThankYouSectionContent } from "@shared/schema";
 import { SECTION_LABELS, type SectionType } from "./index";
 
 interface SectionEditorProps {
@@ -149,6 +149,28 @@ export function SectionEditor({ section, onSave, onCancel, isSaving }: SectionEd
               </TabsContent>
               <TabsContent value="spanish" className="space-y-4">
                 <GalleryFields content={content as GallerySectionContent} updateField={updateField} lang="es" />
+              </TabsContent>
+            </>
+          )}
+
+          {sectionType === 'intro' && (
+            <>
+              <TabsContent value="english" className="space-y-4">
+                <IntroFields content={content as IntroSectionContent} updateField={updateField} lang="en" />
+              </TabsContent>
+              <TabsContent value="spanish" className="space-y-4">
+                <IntroFields content={content as IntroSectionContent} updateField={updateField} lang="es" />
+              </TabsContent>
+            </>
+          )}
+
+          {sectionType === 'thank_you' && (
+            <>
+              <TabsContent value="english" className="space-y-4">
+                <ThankYouFields content={content as ThankYouSectionContent} updateField={updateField} lang="en" />
+              </TabsContent>
+              <TabsContent value="spanish" className="space-y-4">
+                <ThankYouFields content={content as ThankYouSectionContent} updateField={updateField} lang="es" />
               </TabsContent>
             </>
           )}
@@ -720,6 +742,98 @@ function GalleryFields({ content, updateField, lang }: FieldProps<GallerySection
           </p>
         )}
       </div>
+    </div>
+  );
+}
+
+function IntroFields({ content, updateField, lang }: FieldProps<IntroSectionContent>) {
+  const suffix = lang === 'es' ? 'Es' : '';
+  return (
+    <div className="space-y-4">
+      <div>
+        <Label>Headline</Label>
+        <Input
+          value={(content as any)[`headline${suffix}`] || content.headline || ''}
+          onChange={(e) => updateField(lang === 'es' ? 'headlineEs' : 'headline', e.target.value)}
+          placeholder={lang === 'es' ? "Título del evento" : "Event Title"}
+          data-testid={`input-intro-headline-${lang}`}
+        />
+      </div>
+      <div>
+        <Label>Subheadline</Label>
+        <Input
+          value={(content as any)[`subheadline${suffix}`] || content.subheadline || ''}
+          onChange={(e) => updateField(lang === 'es' ? 'subheadlineEs' : 'subheadline', e.target.value)}
+          placeholder={lang === 'es' ? "Subtítulo o tagline" : "Subtitle or tagline"}
+          data-testid={`input-intro-subheadline-${lang}`}
+        />
+      </div>
+      <div>
+        <Label>Event Details</Label>
+        <Textarea
+          value={(content as any)[`eventDetails${suffix}`] || content.eventDetails || ''}
+          onChange={(e) => updateField(lang === 'es' ? 'eventDetailsEs' : 'eventDetails', e.target.value)}
+          placeholder={lang === 'es' ? "Fecha, ubicación, etc." : "Date, location, etc."}
+          data-testid={`input-intro-eventdetails-${lang}`}
+        />
+      </div>
+      {lang === 'en' && (
+        <div>
+          <Label>Background Image URL</Label>
+          <Input
+            value={content.backgroundImage || ''}
+            onChange={(e) => updateField('backgroundImage', e.target.value)}
+            placeholder="https://example.com/image.jpg"
+            data-testid="input-intro-background"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ThankYouFields({ content, updateField, lang }: FieldProps<ThankYouSectionContent>) {
+  const suffix = lang === 'es' ? 'Es' : '';
+  return (
+    <div className="space-y-4">
+      <div>
+        <Label>Headline</Label>
+        <Input
+          value={(content as any)[`headline${suffix}`] || content.headline || ''}
+          onChange={(e) => updateField(lang === 'es' ? 'headlineEs' : 'headline', e.target.value)}
+          placeholder={lang === 'es' ? "¡Gracias por registrarte!" : "Thank you for registering!"}
+          data-testid={`input-thankyou-headline-${lang}`}
+        />
+      </div>
+      <div>
+        <Label>Message</Label>
+        <Textarea
+          value={(content as any)[`message${suffix}`] || content.message || ''}
+          onChange={(e) => updateField(lang === 'es' ? 'messageEs' : 'message', e.target.value)}
+          placeholder={lang === 'es' ? "Te hemos enviado un correo de confirmación..." : "We've sent you a confirmation email..."}
+          data-testid={`input-thankyou-message-${lang}`}
+        />
+      </div>
+      <div>
+        <Label>Additional Info</Label>
+        <Textarea
+          value={(content as any)[`additionalInfo${suffix}`] || content.additionalInfo || ''}
+          onChange={(e) => updateField(lang === 'es' ? 'additionalInfoEs' : 'additionalInfo', e.target.value)}
+          placeholder={lang === 'es' ? "Próximos pasos o instrucciones" : "Next steps or instructions"}
+          data-testid={`input-thankyou-additionalinfo-${lang}`}
+        />
+      </div>
+      {lang === 'en' && (
+        <div>
+          <Label>Background Image URL</Label>
+          <Input
+            value={content.backgroundImage || ''}
+            onChange={(e) => updateField('backgroundImage', e.target.value)}
+            placeholder="https://example.com/image.jpg"
+            data-testid="input-thankyou-background"
+          />
+        </div>
+      )}
     </div>
   );
 }

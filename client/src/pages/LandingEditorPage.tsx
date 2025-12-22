@@ -214,7 +214,7 @@ export default function LandingEditorPage() {
       apiRequest('POST', `/api/events/${eventId}/page/publish`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/events', eventId, 'page'] });
-      toast({ title: "Page published", description: "Your landing page is now live." });
+      toast({ title: "Page published", description: "Your registration page is now live." });
     },
   });
 
@@ -223,7 +223,7 @@ export default function LandingEditorPage() {
       apiRequest('POST', `/api/events/${eventId}/page/unpublish`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/events', eventId, 'page'] });
-      toast({ title: "Page unpublished", description: "Your landing page is now in draft mode." });
+      toast({ title: "Page unpublished", description: "Your registration page is now in draft mode." });
     },
   });
 
@@ -288,7 +288,7 @@ export default function LandingEditorPage() {
   const page = pageData?.page;
   const isPublished = page?.status === 'published';
 
-  const sectionTypes: SectionType[] = ['hero', 'agenda', 'speakers', 'stats', 'cta', 'faq', 'richtext', 'gallery'];
+  const sectionTypes: SectionType[] = ['intro', 'hero', 'agenda', 'speakers', 'stats', 'cta', 'faq', 'richtext', 'gallery', 'thank_you'];
 
   return (
     <div className="space-y-6">
@@ -301,21 +301,19 @@ export default function LandingEditorPage() {
           </Button>
           <div>
             <h1 className="text-2xl font-bold" data-testid="page-title">
-              Landing Page Editor
+              Registration Page Editor
             </h1>
             <p className="text-sm text-muted-foreground">{event.name}</p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          {event.slug && (
-            <Button variant="outline" asChild>
-              <a href={`/events/${event.slug}`} target="_blank" rel="noopener noreferrer">
+          <Button variant="outline" asChild>
+              <a href={`/register/${eventId}`} target="_blank" rel="noopener noreferrer">
                 <Eye className="h-4 w-4 mr-2" />
                 Preview
               </a>
             </Button>
-          )}
           
           {page && (
             isPublished ? (
@@ -353,14 +351,14 @@ export default function LandingEditorPage() {
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground mb-4">
-              No landing page created for this event yet.
+              No registration page design created for this event yet.
             </p>
             <Button 
               onClick={() => createPageMutation.mutate()}
               disabled={createPageMutation.isPending}
               data-testid="button-create-page"
             >
-              Create Landing Page
+              Create Registration Page
             </Button>
           </CardContent>
         </Card>
@@ -393,7 +391,7 @@ export default function LandingEditorPage() {
               <CardContent className="space-y-3">
                 {sections.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-8">
-                    No sections added yet. Click "Add Section" to start building your landing page.
+                    No sections added yet. Click "Add Section" to start building your registration page.
                   </p>
                 ) : (
                   <DndContext

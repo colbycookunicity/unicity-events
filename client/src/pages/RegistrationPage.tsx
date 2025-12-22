@@ -22,8 +22,14 @@ import { useTranslation } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { format, parseISO } from "date-fns";
-import type { Event, RegistrationSettings } from "@shared/schema";
+import type { Event, RegistrationSettings, EventPage, EventPageSection, IntroSectionContent, ThankYouSectionContent } from "@shared/schema";
 import EventListPage from "./EventListPage";
+import { IntroSection, ThankYouSection } from "@/components/landing-sections";
+
+interface PageData {
+  page: EventPage;
+  sections: EventPageSection[];
+}
 
 // Helper to parse date strings as local time (prevents timezone shift)
 const parseLocalDate = (dateStr: string | Date | null | undefined) => {
@@ -182,6 +188,27 @@ export default function RegistrationPage() {
   const { data: event, isLoading } = useQuery<PublicEvent>({
     queryKey: ["/api/events", params.eventId, "public"],
   });
+
+  // Fetch CMS page sections for this event (intro, thank_you, etc.)
+  const { data: pageData, isLoading: isPageDataLoading, isError: isPageDataError, error: pageDataError } = useQuery<PageData & { event?: Event } | null>({
+    queryKey: ["/api/public/event-pages", params.eventId],
+    enabled: !!params.eventId,
+    retry: 2, // Retry twice on failure before giving up
+  });
+
+  // Log CMS fetch errors for debugging (silent to users, falls back to default content)
+  if (isPageDataError && pageDataError) {
+    const errorMessage = pageDataError instanceof Error ? pageDataError.message : String(pageDataError);
+    console.error("Failed to fetch CMS page sections:", errorMessage);
+  }
+
+  // Find intro and thank_you sections from CMS (only when page data is loaded and no error)
+  const cmsDataReady = !isPageDataLoading && !isPageDataError && pageData;
+  const introSection = cmsDataReady ? pageData?.sections?.find(s => s.type === "intro" && s.isEnabled) : null;
+  const thankYouSection = cmsDataReady ? pageData?.sections?.find(s => s.type === "thank_you" && s.isEnabled) : null;
+  
+  // Store event info for thank you page (preserves data after mutation/refetch)
+  const [savedEventInfo, setSavedEventInfo] = useState<{ name: string; nameEs?: string; startDate?: string } | null>(null);
 
   // Check if this event requires verification (default true if not set)
   // IMPORTANT: If event requires qualification, we MUST require verification to check the qualified list
@@ -396,6 +423,14 @@ export default function RegistrationPage() {
   });
 
   const onSubmit = (data: RegistrationFormData) => {
+    // Save event info before mutation (preserves data for thank you page)
+    if (event) {
+      setSavedEventInfo({
+        name: event.name,
+        nameEs: event.nameEs,
+        startDate: event.startDate,
+      });
+    }
     registerMutation.mutate(data);
   };
 
@@ -464,67 +499,7 @@ export default function RegistrationPage() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-slate-50">
-        <header className="flex items-center justify-end gap-2 p-4">
-          <LanguageToggle />
-        </header>
-        <div className="max-w-2xl mx-auto p-4">
-          <Card>
-            <CardHeader>
-              <Skeleton className="h-8 w-3/4" />
-              <Skeleton className="h-4 w-1/2" />
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {[...Array(10)].map((_, i) => (
-                <div key={i} className="space-y-2">
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-10 w-full" />
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
-  if (!event) {
-    return <EventListPage showNotFoundMessage={true} notFoundSlug={params.eventId} />;
-  }
-
-  if (isSuccess) {
-    return (
-      <div className="min-h-screen bg-slate-50">
-        <header className="flex items-center justify-end gap-2 p-4">
-          <LanguageToggle />
-        </header>
-        <div className="flex items-center justify-center min-h-[80vh] p-4">
-          <Card className="max-w-md w-full">
-            <CardContent className="p-8 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30 mb-6">
-                <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400" />
-              </div>
-              <h2 className="text-2xl font-semibold mb-2">{t("registrationSuccess")}</h2>
-              <p className="text-muted-foreground mb-4">
-                {language === "es"
-                  ? "Su registro ha sido completado. Recibira un correo de confirmacion pronto."
-                  : "Your registration has been completed. You will receive a confirmation email shortly."}
-              </p>
-              <div className="text-sm text-muted-foreground">
-                <p className="font-medium">{getEventName()}</p>
-                {event.startDate && (
-                  <p>{format(parseLocalDate(event.startDate)!, "MMMM d, yyyy")}</p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
+  // Define renderHeader early so it can be used in success sections
   const renderHeader = () => (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-20">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
@@ -560,6 +535,94 @@ export default function RegistrationPage() {
       </div>
     </header>
   );
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <header className="flex items-center justify-end gap-2 p-4">
+          <LanguageToggle />
+        </header>
+        <div className="max-w-2xl mx-auto p-4">
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-8 w-3/4" />
+              <Skeleton className="h-4 w-1/2" />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {[...Array(10)].map((_, i) => (
+                <div key={i} className="space-y-2">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  if (!event) {
+    return <EventListPage showNotFoundMessage={true} notFoundSlug={params.eventId} />;
+  }
+
+  if (isSuccess) {
+    // Use saved event info for thank you page (or fallback to event)
+    const eventName = language === "es" && savedEventInfo?.nameEs 
+      ? savedEventInfo.nameEs 
+      : (savedEventInfo?.name || event?.name || "Event");
+    const eventDate = savedEventInfo?.startDate || event?.startDate;
+    const formattedDate = eventDate ? parseLocalDate(eventDate) : null;
+    
+    // Use CMS thank_you section if available
+    if (thankYouSection) {
+      const content = thankYouSection.content as ThankYouSectionContent;
+      return (
+        <div className="min-h-screen bg-slate-50">
+          {renderHeader()}
+          <ThankYouSection content={content} />
+          <div className="max-w-md mx-auto p-6 text-center">
+            <div className="text-sm text-slate-600">
+              <p className="font-medium">{eventName}</p>
+              {formattedDate && (
+                <p>{format(formattedDate, "MMMM d, yyyy")}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+    
+    // Default thank you page
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <header className="flex items-center justify-end gap-2 p-4">
+          <LanguageToggle />
+        </header>
+        <div className="flex items-center justify-center min-h-[80vh] p-4">
+          <Card className="max-w-md w-full bg-white border-slate-200">
+            <CardContent className="p-8 text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 mb-6">
+                <CheckCircle className="h-8 w-8 text-green-600" />
+              </div>
+              <h2 className="text-2xl font-semibold mb-2 text-slate-900">{t("registrationSuccess")}</h2>
+              <p className="text-slate-600 mb-4">
+                {language === "es"
+                  ? "Su registro ha sido completado. Recibira un correo de confirmacion pronto."
+                  : "Your registration has been completed. You will receive a confirmation email shortly."}
+              </p>
+              <div className="text-sm text-slate-500">
+                <p className="font-medium">{eventName}</p>
+                {formattedDate && (
+                  <p>{format(formattedDate, "MMMM d, yyyy")}</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   const renderEventInfo = (forHero = false) => (
     <div className={`flex items-center justify-center gap-4 flex-wrap ${forHero ? "text-white/80" : "text-muted-foreground"}`}>
@@ -1247,8 +1310,12 @@ export default function RegistrationPage() {
     return (
       <div className="min-h-screen bg-slate-50 relative">
         {renderHeader()}
-        <div className="max-w-2xl mx-auto p-4 pb-12 pt-16">
-          <div className="mb-8 text-center">
+        
+        {/* Use CMS intro section if available, otherwise use default hero */}
+        {introSection ? (
+          <IntroSection content={introSection.content as IntroSectionContent} />
+        ) : (
+          <div className="max-w-2xl mx-auto p-4 pt-16 text-center">
             {heroImageUrl && (
               <img 
                 src={heroImageUrl} 
@@ -1256,20 +1323,22 @@ export default function RegistrationPage() {
                 className="w-full h-48 object-cover rounded-lg mb-6"
               />
             )}
-            <h1 className="text-3xl font-semibold tracking-tight mb-2">
+            <h1 className="text-3xl font-semibold tracking-tight mb-2 text-slate-900">
               {getCustomHeading() || getEventName()}
             </h1>
             {getCustomSubheading() && (
-              <p className="text-muted-foreground mb-4">{getCustomSubheading()}</p>
+              <p className="text-slate-600 mb-4">{getCustomSubheading()}</p>
             )}
             {renderEventInfo()}
           </div>
-
-          {getEventDescription() && !getCustomSubheading() && (
-            <Card className="mb-6">
+        )}
+        
+        <div className="max-w-2xl mx-auto p-4 pb-12">
+          {!introSection && getEventDescription() && !getCustomSubheading() && (
+            <Card className="mb-6 bg-white border-slate-200">
               <CardContent className="p-6">
                 <div 
-                  className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground"
+                  className="prose prose-sm max-w-none text-slate-600"
                   dangerouslySetInnerHTML={{ __html: getEventDescription() || "" }}
                 />
               </CardContent>
@@ -1278,7 +1347,7 @@ export default function RegistrationPage() {
 
           {renderMainContent()}
 
-          <footer className="mt-8 text-center text-sm text-muted-foreground">
+          <footer className="mt-8 text-center text-sm text-slate-500">
             Unicity International
           </footer>
         </div>
