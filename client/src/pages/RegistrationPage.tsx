@@ -833,8 +833,8 @@ export default function RegistrationPage() {
       </CardHeader>
       <CardContent className="text-center text-muted-foreground text-sm">
         {language === "es" 
-          ? "Si cree que esto es un error, contacte al soporte."
-          : "If you believe this is an error, please contact support."}
+          ? <>Si cree que esto es un error, <a href="mailto:americasevent@unicity.com" className="text-primary underline hover:no-underline">contacte al soporte</a>.</>
+          : <>If you believe this is an error, please <a href="mailto:americasevent@unicity.com" className="text-primary underline hover:no-underline">contact support</a>.</>}
       </CardContent>
     </Card>
   );
