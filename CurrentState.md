@@ -114,9 +114,14 @@ registrationLayout: text("registration_layout").notNull().default("standard"),
 requiresVerification: boolean("requires_verification").notNull().default(true),
 ```
 
-These columns store the layout and verification settings at the event level, eventually replacing the nested `registrationSettings` JSONB values. Currently, RegistrationPage.tsx still reads from `registrationSettings` - the cutover to these new columns is Phase 2.
+These columns store the layout and verification settings at the event level, replacing the nested `registrationSettings` JSONB values. 
 
-**Status:** This field is DEPRECATED but still exists in database. The `RegistrationPage.tsx` still reads `layout` and `requiresVerification` from it. The EventFormPage no longer writes to it (removed on Dec 22).
+**Status (Updated Dec 22):** CMS cutover Phase 3 COMPLETE. `RegistrationPage.tsx` now reads from:
+1. **Event-level columns** (`registrationLayout`, `requiresVerification`) - PRIMARY source
+2. **CMS sections** (hero section for heading/subheading, form section for submit button label) - PRIMARY source
+3. **Legacy `registrationSettings`** - FALLBACK only, with `[CMS Fallback]` logging
+
+The `registrationSettings` JSONB column is kept for safety/reversibility but is no longer the primary data source.
 
 ### Page Auto-Creation
 

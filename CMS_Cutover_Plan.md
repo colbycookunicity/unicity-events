@@ -199,33 +199,30 @@ For each event that has `registrationSettings`:
    - `submitButtonLabelEs` ← `ctaLabelEs` (or "Registrar" if null)
 5. ✅ **Auto-publish** → Registration pages for published events
 
-### Phase 3: Update RegistrationPage.tsx
+### Phase 3: Update RegistrationPage.tsx - COMPLETED
 
-Replace all `registrationSettings` reads with new sources:
+**Status: COMPLETE** (December 22, 2025)
 
-| Current Code | New Code | Source |
-|--------------|----------|--------|
-| `event.registrationSettings?.layout` | `event.registrationLayout` | events table |
-| `event.registrationSettings?.requiresVerification` | `event.requiresVerification` | events table |
-| `settings.heading` | `heroSection.content.headline` | CMS section |
-| `settings.heroImagePath` | `heroSection.content.backgroundImage` | CMS section |
-| `settings.ctaLabel` | `formSection.content.submitButtonLabel` | CMS section |
+**What Changed:**
+1. ✅ Added fetch for registration page CMS data (hero + form sections)
+2. ✅ Updated `getRequiresVerification()` to check event column first, fallback to registrationSettings
+3. ✅ Updated `layout` to use event.registrationLayout first, fallback to registrationSettings
+4. ✅ Updated `getCustomHeading()` to use CMS hero section first, fallback to registrationSettings
+5. ✅ Updated `getCustomSubheading()` to use CMS hero section first, fallback to registrationSettings
+6. ✅ Updated `getCtaLabel()` to use CMS form section first, fallback to registrationSettings
+7. ✅ Updated hero image fetch to use CMS backgroundImage first, fallback to registrationSettings
+8. ✅ Added `[CMS Fallback]` logging for debugging when legacy values are used
 
-**Code paths to update:**
+**Fallback Strategy:**
+All helper functions now follow the pattern:
+1. Check new source (CMS sections or event-level columns) FIRST
+2. If undefined/missing, log `[CMS Fallback]` and use legacy `registrationSettings`
+3. Return sensible defaults if neither exists
 
-```typescript
-// Line 232-234: Verification check
-// BEFORE:
-(event?.registrationSettings?.requiresVerification !== false)
-// AFTER:
-(event?.requiresVerification !== false)
-
-// Line 494: Layout selection
-// BEFORE:
-const layout = event?.registrationSettings?.layout || "standard";
-// AFTER:
-const layout = event?.registrationLayout || "standard";
-```
+This ensures:
+- Existing events continue to work during migration
+- New/migrated events use CMS content
+- Clear visibility into which source is being used via console logs
 
 ### Phase 4: Clean Up
 
