@@ -1532,6 +1532,166 @@ export default function AttendeesPage() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Add/Edit Qualifier Dialog */}
+      <Dialog open={qualifierDialogOpen} onOpenChange={setQualifierDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingQualifier ? "Edit Person" : "Add Person"}</DialogTitle>
+            <DialogDescription>
+              {editingQualifier 
+                ? "Update this person's information" 
+                : "Add a new person to the qualified registrants list"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="qualifier-firstName">First Name *</Label>
+                <Input
+                  id="qualifier-firstName"
+                  value={qualifierFormData.firstName}
+                  onChange={(e) => setQualifierFormData(prev => ({ ...prev, firstName: e.target.value }))}
+                  placeholder="First name"
+                  data-testid="input-qualifier-first-name"
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="qualifier-lastName">Last Name *</Label>
+                <Input
+                  id="qualifier-lastName"
+                  value={qualifierFormData.lastName}
+                  onChange={(e) => setQualifierFormData(prev => ({ ...prev, lastName: e.target.value }))}
+                  placeholder="Last name"
+                  data-testid="input-qualifier-last-name"
+                />
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="qualifier-email">Email *</Label>
+              <Input
+                id="qualifier-email"
+                type="email"
+                value={qualifierFormData.email}
+                onChange={(e) => setQualifierFormData(prev => ({ ...prev, email: e.target.value }))}
+                placeholder="email@example.com"
+                data-testid="input-qualifier-email"
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="qualifier-unicityId">Unicity ID (optional)</Label>
+              <Input
+                id="qualifier-unicityId"
+                value={qualifierFormData.unicityId}
+                onChange={(e) => setQualifierFormData(prev => ({ ...prev, unicityId: e.target.value }))}
+                placeholder="Distributor ID"
+                data-testid="input-qualifier-unicity-id"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setQualifierDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleQualifierSubmit}
+              disabled={!qualifierFormData.firstName || !qualifierFormData.lastName || !qualifierFormData.email || createQualifierMutation.isPending || updateQualifierMutation.isPending}
+              data-testid="button-save-qualifier"
+            >
+              {createQualifierMutation.isPending || updateQualifierMutation.isPending ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Qualifier Confirmation Dialog */}
+      <AlertDialog open={qualifierDeleteDialogOpen} onOpenChange={setQualifierDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Person</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove {qualifierToDelete?.firstName} {qualifierToDelete?.lastName} from the qualified list? 
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => qualifierToDelete && deleteQualifierMutation.mutate(qualifierToDelete.id)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* CSV Import Dialog */}
+      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Import Qualifiers</DialogTitle>
+            <DialogDescription>
+              Review the data before importing
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-4">
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-sm font-medium">Records to import:</span>
+              <Badge>{csvData.length}</Badge>
+            </div>
+            <div className="max-h-64 overflow-y-auto border rounded-md">
+              <table className="w-full text-sm">
+                <thead className="bg-muted sticky top-0">
+                  <tr>
+                    <th className="text-left p-2 font-medium">Name</th>
+                    <th className="text-left p-2 font-medium">Email</th>
+                    <th className="text-left p-2 font-medium">ID</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {csvData.slice(0, 50).map((row, idx) => (
+                    <tr key={idx} className="border-t">
+                      <td className="p-2">{row.firstName} {row.lastName}</td>
+                      <td className="p-2 text-muted-foreground">{row.email}</td>
+                      <td className="p-2">{row.unicityId || "-"}</td>
+                    </tr>
+                  ))}
+                  {csvData.length > 50 && (
+                    <tr className="border-t">
+                      <td colSpan={3} className="p-2 text-center text-muted-foreground">
+                        ...and {csvData.length - 50} more
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="replaceExisting"
+                checked={replaceExisting}
+                onCheckedChange={(checked) => setReplaceExisting(!!checked)}
+              />
+              <Label htmlFor="replaceExisting" className="text-sm font-normal">
+                Replace existing qualifiers (clear list before import)
+              </Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setImportDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => importMutation.mutate({ registrants: csvData, clearExisting: replaceExisting })}
+              disabled={importMutation.isPending}
+              data-testid="button-confirm-import"
+            >
+              {importMutation.isPending ? "Importing..." : `Import ${csvData.length} Records`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
