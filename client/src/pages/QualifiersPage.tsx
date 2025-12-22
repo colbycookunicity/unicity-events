@@ -46,7 +46,7 @@ export default function QualifiersPage() {
   });
 
   const { data: registrations } = useQuery<Registration[]>({
-    queryKey: ["/api/events", eventFilter, "registrations"],
+    queryKey: [`/api/registrations?eventId=${eventFilter}`],
     enabled: !!eventFilter,
   });
 
