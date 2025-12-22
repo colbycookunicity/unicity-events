@@ -1,13 +1,16 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Search, Download, MoreHorizontal, Mail, Edit, Trash2, User, Shirt, Save, Pencil, ChevronUp, ChevronDown, Settings2, ArrowUpDown } from "lucide-react";
+import { Search, Download, MoreHorizontal, Mail, Edit, Trash2, User, Shirt, Save, Pencil, ChevronUp, ChevronDown, Settings2, ArrowUpDown, Plus, Upload, Edit2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PhoneInput from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "@/components/StatusBadge";
+import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -24,7 +27,20 @@ import { useTranslation } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
-import type { Registration, Event, SwagAssignmentWithDetails } from "@shared/schema";
+import type { Registration, Event, SwagAssignmentWithDetails, QualifiedRegistrant } from "@shared/schema";
+
+type UnifiedPerson = {
+  type: "registration" | "qualifier";
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  unicityId: string | null;
+  phone?: string | null;
+  registration?: Registration;
+  qualifier?: QualifiedRegistrant;
+  isRegistered: boolean;
+};
 
 const DIETARY_OPTIONS = [
   { value: "vegetarian", label: "Vegetarian" },
@@ -79,8 +95,10 @@ const STORAGE_KEY = "attendees-visible-columns";
 export default function AttendeesPage() {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [registrationStatusFilter, setRegistrationStatusFilter] = useState<string>("all");
   const [eventFilter, setEventFilter] = useState<string>("all");
   const [swagFilter, setSwagFilter] = useState<string>("all");
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
@@ -88,6 +106,20 @@ export default function AttendeesPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<Partial<Registration>>({});
+  
+  const [qualifierDialogOpen, setQualifierDialogOpen] = useState(false);
+  const [editingQualifier, setEditingQualifier] = useState<QualifiedRegistrant | null>(null);
+  const [qualifierDeleteDialogOpen, setQualifierDeleteDialogOpen] = useState(false);
+  const [qualifierToDelete, setQualifierToDelete] = useState<QualifiedRegistrant | null>(null);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [csvData, setCsvData] = useState<Array<{ firstName: string; lastName: string; email: string; unicityId: string }>>([]);
+  const [replaceExisting, setReplaceExisting] = useState(false);
+  const [qualifierFormData, setQualifierFormData] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    unicityId: "",
+  });
   
   const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(() => {
     try {
@@ -102,6 +134,17 @@ export default function AttendeesPage() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(visibleColumns)));
   }, [visibleColumns]);
+
+  useEffect(() => {
+    if (eventFilter === "all") {
+      setQualifierDialogOpen(false);
+      setQualifierDeleteDialogOpen(false);
+      setImportDialogOpen(false);
+      setEditingQualifier(null);
+      setQualifierToDelete(null);
+      setCsvData([]);
+    }
+  }, [eventFilter]);
 
   const toggleColumn = (key: ColumnKey) => {
     setVisibleColumns(prev => {
@@ -153,10 +196,254 @@ export default function AttendeesPage() {
     queryKey: [registrationsUrl],
   });
 
+  const { data: qualifiers } = useQuery<QualifiedRegistrant[]>({
+    queryKey: [`/api/events/${eventFilter}/qualifiers`],
+    enabled: eventFilter !== "all",
+  });
+
   const { data: swagAssignments } = useQuery<SwagAssignmentWithDetails[]>({
     queryKey: [`/api/registrations/${selectedAttendee?.id}/swag-assignments`],
     enabled: !!selectedAttendee && drawerOpen,
   });
+
+  const registeredEmails = useMemo(() => 
+    new Set(registrations?.map(r => r.email.toLowerCase()) ?? []), 
+    [registrations]
+  );
+  const registeredUnicityIds = useMemo(() => 
+    new Set(registrations?.filter(r => r.unicityId).map(r => r.unicityId!) ?? []),
+    [registrations]
+  );
+
+  const isQualifierRegistered = (qualifier: QualifiedRegistrant): boolean => {
+    if (qualifier.unicityId && registeredUnicityIds.has(qualifier.unicityId)) {
+      return true;
+    }
+    return registeredEmails.has(qualifier.email.toLowerCase());
+  };
+
+  const qualifiersByEmail = useMemo(() => {
+    const map = new Map<string, QualifiedRegistrant>();
+    qualifiers?.forEach(q => {
+      map.set(q.email.toLowerCase(), q);
+      if (q.unicityId) {
+        map.set(`uid:${q.unicityId}`, q);
+      }
+    });
+    return map;
+  }, [qualifiers]);
+
+  const findMatchingQualifier = (reg: Registration): QualifiedRegistrant | undefined => {
+    if (reg.unicityId && qualifiersByEmail.has(`uid:${reg.unicityId}`)) {
+      return qualifiersByEmail.get(`uid:${reg.unicityId}`);
+    }
+    return qualifiersByEmail.get(reg.email.toLowerCase());
+  };
+
+  const unifiedPeople = useMemo((): UnifiedPerson[] => {
+    const people: UnifiedPerson[] = [];
+    const processedQualifierIds = new Set<string>();
+
+    registrations?.forEach(reg => {
+      const matchingQualifier = eventFilter !== "all" ? findMatchingQualifier(reg) : undefined;
+      if (matchingQualifier) {
+        processedQualifierIds.add(matchingQualifier.id);
+      }
+      people.push({
+        type: "registration",
+        id: reg.id,
+        firstName: reg.firstName,
+        lastName: reg.lastName,
+        email: reg.email,
+        unicityId: reg.unicityId || null,
+        phone: reg.phone,
+        registration: reg,
+        qualifier: matchingQualifier,
+        isRegistered: true,
+      });
+    });
+
+    if (eventFilter !== "all" && qualifiers) {
+      qualifiers.forEach(q => {
+        if (!processedQualifierIds.has(q.id)) {
+          people.push({
+            type: "qualifier",
+            id: q.id,
+            firstName: q.firstName,
+            lastName: q.lastName,
+            email: q.email,
+            unicityId: q.unicityId || null,
+            qualifier: q,
+            isRegistered: false,
+          });
+        }
+      });
+    }
+
+    return people;
+  }, [registrations, qualifiers, eventFilter, qualifiersByEmail]);
+
+  const createQualifierMutation = useMutation({
+    mutationFn: async (data: typeof qualifierFormData) => {
+      if (eventFilter === "all") throw new Error("Cannot create qualifier without selecting an event");
+      const response = await apiRequest("POST", `/api/events/${eventFilter}/qualifiers`, data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/events/${eventFilter}/qualifiers`] });
+      setQualifierDialogOpen(false);
+      setQualifierFormData({ firstName: "", lastName: "", email: "", unicityId: "" });
+      toast({ title: t("success"), description: "Qualifier added successfully" });
+    },
+    onError: () => {
+      toast({ title: t("error"), description: "Failed to add qualifier", variant: "destructive" });
+    },
+  });
+
+  const updateQualifierMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: typeof qualifierFormData }) => {
+      if (eventFilter === "all") throw new Error("Cannot update qualifier without selecting an event");
+      const response = await apiRequest("PATCH", `/api/qualifiers/${id}`, data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/events/${eventFilter}/qualifiers`] });
+      setQualifierDialogOpen(false);
+      setEditingQualifier(null);
+      setQualifierFormData({ firstName: "", lastName: "", email: "", unicityId: "" });
+      toast({ title: t("success"), description: "Qualifier updated successfully" });
+    },
+    onError: () => {
+      toast({ title: t("error"), description: "Failed to update qualifier", variant: "destructive" });
+    },
+  });
+
+  const deleteQualifierMutation = useMutation({
+    mutationFn: async (id: string) => {
+      if (eventFilter === "all") throw new Error("Cannot delete qualifier without selecting an event");
+      await apiRequest("DELETE", `/api/qualifiers/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/events/${eventFilter}/qualifiers`] });
+      setQualifierDeleteDialogOpen(false);
+      setQualifierToDelete(null);
+      toast({ title: t("success"), description: "Qualifier removed successfully" });
+    },
+    onError: () => {
+      toast({ title: t("error"), description: "Failed to remove qualifier", variant: "destructive" });
+    },
+  });
+
+  const importMutation = useMutation({
+    mutationFn: async (data: { registrants: typeof csvData; clearExisting: boolean }) => {
+      if (eventFilter === "all") throw new Error("Cannot import qualifiers without selecting an event");
+      const response = await apiRequest("POST", `/api/events/${eventFilter}/qualifiers/import`, data);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/events/${eventFilter}/qualifiers`] });
+      setImportDialogOpen(false);
+      setCsvData([]);
+      setReplaceExisting(false);
+      toast({ title: t("success"), description: `Imported ${data.imported} qualifiers` });
+    },
+    onError: () => {
+      toast({ title: t("error"), description: "Failed to import qualifiers", variant: "destructive" });
+    },
+  });
+
+  const handleQualifierSubmit = () => {
+    if (editingQualifier) {
+      updateQualifierMutation.mutate({ id: editingQualifier.id, data: qualifierFormData });
+    } else {
+      createQualifierMutation.mutate(qualifierFormData);
+    }
+  };
+
+  const handleEditQualifier = (qualifier: QualifiedRegistrant) => {
+    setEditingQualifier(qualifier);
+    setQualifierFormData({
+      firstName: qualifier.firstName,
+      lastName: qualifier.lastName,
+      email: qualifier.email,
+      unicityId: qualifier.unicityId || "",
+    });
+    setQualifierDialogOpen(true);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const lines = text.split("\n").filter(line => line.trim());
+      
+      if (lines.length < 2) {
+        toast({ title: t("error"), description: "CSV file must have a header row and at least one data row", variant: "destructive" });
+        return;
+      }
+
+      const headerRow = lines[0].toLowerCase();
+      const headers = headerRow.split(",").map(h => h.trim().replace(/"/g, ""));
+      
+      const firstNameIdx = headers.findIndex(h => h.includes("first") && h.includes("name"));
+      const lastNameIdx = headers.findIndex(h => h.includes("last") && h.includes("name"));
+      const emailIdx = headers.findIndex(h => h.includes("email"));
+      const unicityIdIdx = headers.findIndex(h => h.includes("unicity") || h.includes("distributor") || h === "id");
+
+      if (emailIdx === -1) {
+        toast({ title: t("error"), description: "CSV must contain an email column", variant: "destructive" });
+        return;
+      }
+
+      const parsedData: typeof csvData = [];
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(",").map(v => v.trim().replace(/"/g, ""));
+        const email = values[emailIdx] || "";
+        if (!email || !email.includes("@")) continue;
+        
+        parsedData.push({
+          firstName: values[firstNameIdx] || "",
+          lastName: values[lastNameIdx] || "",
+          email,
+          unicityId: unicityIdIdx >= 0 ? values[unicityIdIdx] || "" : "",
+        });
+      }
+
+      if (parsedData.length === 0) {
+        toast({ title: t("error"), description: "No valid records found in CSV", variant: "destructive" });
+        return;
+      }
+
+      setCsvData(parsedData);
+      setImportDialogOpen(true);
+    };
+    reader.readAsText(file);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleExportQualifiers = () => {
+    if (eventFilter === "all") return;
+    if (!qualifiers?.length) return;
+
+    const csvContent = [
+      "First Name,Last Name,Email,Unicity ID,Status",
+      ...qualifiers.map(q => 
+        `"${q.firstName}","${q.lastName}","${q.email}","${q.unicityId || ""}","${isQualifierRegistered(q) ? "Registered" : "Not Registered"}"`
+      ),
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `qualifiers-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    toast({ title: t("success"), description: "Qualifiers exported successfully" });
+  };
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
@@ -225,22 +512,35 @@ export default function AttendeesPage() {
     updateAttendeeMutation.mutate(updateData);
   };
 
-  const filteredRegistrations = useMemo(() => {
-    let result = registrations?.filter((reg) => {
+  const filteredPeople = useMemo(() => {
+    let result = unifiedPeople.filter((person) => {
       const searchLower = searchQuery.toLowerCase();
       const matchesSearch =
-        reg.firstName.toLowerCase().includes(searchLower) ||
-        reg.lastName.toLowerCase().includes(searchLower) ||
-        reg.email.toLowerCase().includes(searchLower) ||
-        reg.unicityId?.toLowerCase().includes(searchLower) ||
-        reg.phone?.toLowerCase().includes(searchLower);
+        person.firstName.toLowerCase().includes(searchLower) ||
+        person.lastName.toLowerCase().includes(searchLower) ||
+        person.email.toLowerCase().includes(searchLower) ||
+        person.unicityId?.toLowerCase().includes(searchLower) ||
+        person.phone?.toLowerCase().includes(searchLower);
 
-      const matchesStatus = statusFilter === "all" || reg.status === statusFilter;
-      const matchesEvent = eventFilter === "all" || reg.eventId === eventFilter;
-      const matchesSwag = swagFilter === "all" || (reg.swagStatus || "pending") === swagFilter;
+      const matchesRegistrationStatus = 
+        registrationStatusFilter === "all" ||
+        (registrationStatusFilter === "registered" && person.isRegistered) ||
+        (registrationStatusFilter === "not_registered" && !person.isRegistered);
 
-      return matchesSearch && matchesStatus && matchesEvent && matchesSwag;
-    }) ?? [];
+      const matchesStatus = 
+        statusFilter === "all" || 
+        (person.registration && person.registration.status === statusFilter);
+      
+      const matchesEvent = eventFilter === "all" || 
+        (person.registration && person.registration.eventId === eventFilter) ||
+        person.type === "qualifier";
+      
+      const matchesSwag = 
+        swagFilter === "all" || 
+        (person.registration && (person.registration.swagStatus || "pending") === swagFilter);
+
+      return matchesSearch && matchesRegistrationStatus && matchesStatus && matchesEvent && matchesSwag;
+    });
 
     if (sortConfig) {
       result = [...result].sort((a, b) => {
@@ -261,36 +561,36 @@ export default function AttendeesPage() {
             bVal = b.phone || "";
             break;
           case "status":
-            aVal = a.status;
-            bVal = b.status;
+            aVal = a.registration?.status || "";
+            bVal = b.registration?.status || "";
             break;
           case "swagStatus":
-            aVal = a.swagStatus || "pending";
-            bVal = b.swagStatus || "pending";
+            aVal = a.registration?.swagStatus || "pending";
+            bVal = b.registration?.swagStatus || "pending";
             break;
           case "shirtSize":
-            aVal = a.shirtSize || "";
-            bVal = b.shirtSize || "";
+            aVal = a.registration?.shirtSize || "";
+            bVal = b.registration?.shirtSize || "";
             break;
           case "registeredAt":
-            aVal = a.registeredAt ? new Date(a.registeredAt).getTime() : 0;
-            bVal = b.registeredAt ? new Date(b.registeredAt).getTime() : 0;
+            aVal = a.registration?.registeredAt ? new Date(a.registration.registeredAt).getTime() : 0;
+            bVal = b.registration?.registeredAt ? new Date(b.registration.registeredAt).getTime() : 0;
             break;
           case "lastModified":
-            aVal = a.lastModified ? new Date(a.lastModified).getTime() : 0;
-            bVal = b.lastModified ? new Date(b.lastModified).getTime() : 0;
+            aVal = a.registration?.lastModified ? new Date(a.registration.lastModified).getTime() : 0;
+            bVal = b.registration?.lastModified ? new Date(b.registration.lastModified).getTime() : 0;
             break;
           case "checkedInAt":
-            aVal = a.checkedInAt ? new Date(a.checkedInAt).getTime() : 0;
-            bVal = b.checkedInAt ? new Date(b.checkedInAt).getTime() : 0;
+            aVal = a.registration?.checkedInAt ? new Date(a.registration.checkedInAt).getTime() : 0;
+            bVal = b.registration?.checkedInAt ? new Date(b.registration.checkedInAt).getTime() : 0;
             break;
           case "unicityId":
             aVal = a.unicityId || "";
             bVal = b.unicityId || "";
             break;
           default:
-            aVal = (a as any)[sortConfig.key] || "";
-            bVal = (b as any)[sortConfig.key] || "";
+            aVal = (a.registration as any)?.[sortConfig.key] || "";
+            bVal = (b.registration as any)?.[sortConfig.key] || "";
         }
 
         if (aVal < bVal) return sortConfig.direction === "asc" ? -1 : 1;
@@ -300,7 +600,7 @@ export default function AttendeesPage() {
     }
 
     return result;
-  }, [registrations, searchQuery, statusFilter, eventFilter, swagFilter, sortConfig]);
+  }, [unifiedPeople, searchQuery, statusFilter, registrationStatusFilter, eventFilter, swagFilter, sortConfig]);
 
   const handleSort = (key: string) => {
     setSortConfig(prev => {
@@ -313,79 +613,80 @@ export default function AttendeesPage() {
   };
 
   const handleExportCSV = () => {
-    if (!filteredRegistrations?.length) return;
+    if (!filteredPeople?.length) return;
 
     const exportColumns = ALL_COLUMNS.filter(c => visibleColumns.has(c.key) && c.key !== "actions");
     const headers = exportColumns.map(c => c.label);
     
     const csvContent = [
       headers.join(","),
-      ...filteredRegistrations.map((reg) => {
+      ...filteredPeople.map((person) => {
+        const reg = person.registration;
         return exportColumns.map(col => {
           let value = "";
           switch (col.key) {
             case "name":
-              value = `${reg.firstName} ${reg.lastName}`;
+              value = `${person.firstName} ${person.lastName}`;
               break;
             case "unicityId":
-              value = reg.unicityId || "";
+              value = person.unicityId || "";
               break;
             case "email":
-              value = reg.email;
+              value = person.email;
               break;
             case "phone":
-              value = reg.phone || "";
+              value = person.phone || "";
               break;
             case "gender":
-              value = reg.gender || "";
+              value = reg?.gender || "";
               break;
             case "dateOfBirth":
-              value = reg.dateOfBirth ? format(new Date(reg.dateOfBirth), "yyyy-MM-dd") : "";
+              value = reg?.dateOfBirth ? format(new Date(reg.dateOfBirth), "yyyy-MM-dd") : "";
               break;
             case "status":
-              value = reg.status;
+              value = reg?.status || "Not Registered";
               break;
             case "swagStatus":
-              value = reg.swagStatus || "pending";
+              value = reg?.swagStatus || "pending";
               break;
             case "shirtSize":
-              value = reg.shirtSize || "";
+              value = reg?.shirtSize || "";
               break;
             case "pantSize":
-              value = reg.pantSize || "";
+              value = reg?.pantSize || "";
               break;
             case "roomType":
-              value = reg.roomType || "";
+              value = reg?.roomType || "";
               break;
             case "passportNumber":
-              value = reg.passportNumber || "";
+              value = reg?.passportNumber || "";
               break;
             case "passportCountry":
-              value = reg.passportCountry || "";
+              value = reg?.passportCountry || "";
               break;
             case "passportExpiration":
-              value = reg.passportExpiration ? format(new Date(reg.passportExpiration), "yyyy-MM-dd") : "";
+              value = reg?.passportExpiration ? format(new Date(reg.passportExpiration), "yyyy-MM-dd") : "";
               break;
             case "emergencyContact":
-              value = reg.emergencyContact || "";
+              value = reg?.emergencyContact || "";
               break;
             case "emergencyContactPhone":
-              value = reg.emergencyContactPhone || "";
+              value = reg?.emergencyContactPhone || "";
               break;
             case "dietaryRestrictions":
-              value = reg.dietaryRestrictions?.join("; ") || "";
+              value = reg?.dietaryRestrictions?.join("; ") || "";
               break;
             case "adaAccommodations":
-              value = reg.adaAccommodations ? "Yes" : "No";
+              value = reg?.adaAccommodations ? "Yes" : "No";
               break;
             case "registeredAt":
-              value = reg.registeredAt ? format(new Date(reg.registeredAt), "yyyy-MM-dd HH:mm") : "";
+              value = reg?.registeredAt ? format(new Date(reg.registeredAt), "yyyy-MM-dd HH:mm") : "";
               break;
             case "checkedInAt":
-              value = reg.checkedInAt ? format(new Date(reg.checkedInAt), "yyyy-MM-dd HH:mm") : "";
+              value = reg?.checkedInAt ? format(new Date(reg.checkedInAt), "yyyy-MM-dd HH:mm") : "";
               break;
             case "lastModified":
-              value = reg.lastModified ? format(new Date(reg.lastModified), "yyyy-MM-dd HH:mm") : "";
+              value = reg?.lastModified ? format(new Date(reg.lastModified), "yyyy-MM-dd HH:mm") : "";
               break;
           }
           return `"${value.toString().replace(/"/g, '""')}"`;
@@ -426,107 +727,145 @@ export default function AttendeesPage() {
     );
   };
 
-  const renderCell = (reg: Registration, key: ColumnKey) => {
+  const renderCell = (person: UnifiedPerson, key: ColumnKey) => {
+    const reg = person.registration;
     switch (key) {
       case "name":
         return (
           <div className="min-w-[150px]">
-            <div className="font-medium whitespace-nowrap">{reg.firstName} {reg.lastName}</div>
+            <div className="flex items-center gap-2">
+              <span className="font-medium whitespace-nowrap" data-testid={`text-name-${person.id}`}>{person.firstName} {person.lastName}</span>
+              {!person.isRegistered && (
+                <Badge variant="secondary" className="text-xs" data-testid={`badge-pending-${person.id}`}>Pending</Badge>
+              )}
+              {person.isRegistered && person.qualifier && eventFilter !== "all" && (
+                <Badge variant="outline" className="text-xs" data-testid={`badge-qualified-${person.id}`}>Qualified</Badge>
+              )}
+            </div>
           </div>
         );
       case "unicityId":
-        return <span className="text-muted-foreground whitespace-nowrap">{reg.unicityId || "-"}</span>;
+        return <span className="text-muted-foreground whitespace-nowrap">{person.unicityId || "-"}</span>;
       case "email":
-        return <span className="text-muted-foreground whitespace-nowrap">{reg.email}</span>;
+        return <span className="text-muted-foreground whitespace-nowrap">{person.email}</span>;
       case "phone":
-        return <span className="text-muted-foreground whitespace-nowrap">{reg.phone || "-"}</span>;
+        return <span className="text-muted-foreground whitespace-nowrap">{person.phone || "-"}</span>;
       case "gender":
-        return <span className="text-muted-foreground capitalize whitespace-nowrap">{reg.gender || "-"}</span>;
+        return <span className="text-muted-foreground capitalize whitespace-nowrap">{reg?.gender || "-"}</span>;
       case "dateOfBirth":
-        return <span className="text-muted-foreground whitespace-nowrap">{reg.dateOfBirth ? format(new Date(reg.dateOfBirth), "MMM d, yyyy") : "-"}</span>;
+        return <span className="text-muted-foreground whitespace-nowrap">{reg?.dateOfBirth ? format(new Date(reg.dateOfBirth), "MMM d, yyyy") : "-"}</span>;
       case "status":
-        return <StatusBadge status={reg.status} />;
-      case "swagStatus":
-        return <StatusBadge status={reg.swagStatus || "pending"} type="swag" />;
-      case "shirtSize":
-        return <span className="text-muted-foreground whitespace-nowrap">{reg.shirtSize || "-"}</span>;
-      case "pantSize":
-        return <span className="text-muted-foreground whitespace-nowrap">{reg.pantSize || "-"}</span>;
-      case "roomType":
-        return <span className="text-muted-foreground capitalize whitespace-nowrap">{reg.roomType || "-"}</span>;
-      case "passportNumber":
-        return <span className="text-muted-foreground whitespace-nowrap">{reg.passportNumber || "-"}</span>;
-      case "passportCountry":
-        return <span className="text-muted-foreground whitespace-nowrap">{reg.passportCountry || "-"}</span>;
-      case "passportExpiration":
-        return <span className="text-muted-foreground whitespace-nowrap">{reg.passportExpiration ? format(new Date(reg.passportExpiration), "MMM d, yyyy") : "-"}</span>;
-      case "emergencyContact":
-        return <span className="text-muted-foreground whitespace-nowrap">{reg.emergencyContact || "-"}</span>;
-      case "emergencyContactPhone":
-        return <span className="text-muted-foreground whitespace-nowrap">{reg.emergencyContactPhone || "-"}</span>;
-      case "dietaryRestrictions":
-        return <span className="text-muted-foreground whitespace-nowrap">{reg.dietaryRestrictions?.join(", ") || "-"}</span>;
-      case "adaAccommodations":
-        return <span className="text-muted-foreground whitespace-nowrap">{reg.adaAccommodations ? "Yes" : "No"}</span>;
-      case "registeredAt":
-        return <span className="text-muted-foreground text-sm whitespace-nowrap">{reg.registeredAt ? format(new Date(reg.registeredAt), "MMM d, yyyy") : "-"}</span>;
-      case "checkedInAt":
-        return <span className="text-muted-foreground text-sm whitespace-nowrap">{reg.checkedInAt ? format(new Date(reg.checkedInAt), "MMM d, h:mm a") : "-"}</span>;
-      case "lastModified":
-        return <span className="text-muted-foreground text-sm whitespace-nowrap">{reg.lastModified ? format(new Date(reg.lastModified), "MMM d, h:mm a") : "-"}</span>;
-      case "actions":
-        return (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" data-testid={`button-actions-${reg.id}`} onClick={(e) => e.stopPropagation()}>
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem 
-                onClick={(e) => { 
-                  e.stopPropagation(); 
-                  setSelectedAttendee(reg);
-                  setEditForm(reg);
-                  setIsEditing(true);
-                  setDrawerOpen(true);
-                }}
-                data-testid={`action-edit-${reg.id}`}
-              >
-                <Edit className="h-4 w-4 mr-2" />
-                {t("edit")}
-              </DropdownMenuItem>
-              <DropdownMenuItem data-testid={`action-email-${reg.id}`}>
-                <Mail className="h-4 w-4 mr-2" />
-                Resend Confirmation
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={(e) => { e.stopPropagation(); updateStatusMutation.mutate({ id: reg.id, status: "registered" }); }}
-                data-testid={`action-mark-registered-${reg.id}`}
-              >
-                Mark as Registered
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={(e) => { e.stopPropagation(); updateStatusMutation.mutate({ id: reg.id, status: "checked_in" }); }}
-                data-testid={`action-mark-checked-in-${reg.id}`}
-              >
-                Mark as Checked In
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={(e) => { e.stopPropagation(); updateStatusMutation.mutate({ id: reg.id, status: "not_coming" }); }}
-                data-testid={`action-mark-not-coming-${reg.id}`}
-              >
-                Mark as Not Coming
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive" data-testid={`action-delete-${reg.id}`}>
-                <Trash2 className="h-4 w-4 mr-2" />
-                {t("delete")}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+        return person.isRegistered && reg ? (
+          <StatusBadge status={reg.status} />
+        ) : (
+          <span className="text-muted-foreground">Not Registered</span>
         );
+      case "swagStatus":
+        return reg ? <StatusBadge status={reg.swagStatus || "pending"} type="swag" /> : <span className="text-muted-foreground">-</span>;
+      case "shirtSize":
+        return <span className="text-muted-foreground whitespace-nowrap">{reg?.shirtSize || "-"}</span>;
+      case "pantSize":
+        return <span className="text-muted-foreground whitespace-nowrap">{reg?.pantSize || "-"}</span>;
+      case "roomType":
+        return <span className="text-muted-foreground capitalize whitespace-nowrap">{reg?.roomType || "-"}</span>;
+      case "passportNumber":
+        return <span className="text-muted-foreground whitespace-nowrap">{reg?.passportNumber || "-"}</span>;
+      case "passportCountry":
+        return <span className="text-muted-foreground whitespace-nowrap">{reg?.passportCountry || "-"}</span>;
+      case "passportExpiration":
+        return <span className="text-muted-foreground whitespace-nowrap">{reg?.passportExpiration ? format(new Date(reg.passportExpiration), "MMM d, yyyy") : "-"}</span>;
+      case "emergencyContact":
+        return <span className="text-muted-foreground whitespace-nowrap">{reg?.emergencyContact || "-"}</span>;
+      case "emergencyContactPhone":
+        return <span className="text-muted-foreground whitespace-nowrap">{reg?.emergencyContactPhone || "-"}</span>;
+      case "dietaryRestrictions":
+        return <span className="text-muted-foreground whitespace-nowrap">{reg?.dietaryRestrictions?.join(", ") || "-"}</span>;
+      case "adaAccommodations":
+        return <span className="text-muted-foreground whitespace-nowrap">{reg?.adaAccommodations ? "Yes" : "No"}</span>;
+      case "registeredAt":
+        return <span className="text-muted-foreground text-sm whitespace-nowrap">{reg?.registeredAt ? format(new Date(reg.registeredAt), "MMM d, yyyy") : "-"}</span>;
+      case "checkedInAt":
+        return <span className="text-muted-foreground text-sm whitespace-nowrap">{reg?.checkedInAt ? format(new Date(reg.checkedInAt), "MMM d, h:mm a") : "-"}</span>;
+      case "lastModified":
+        return <span className="text-muted-foreground text-sm whitespace-nowrap">{reg?.lastModified ? format(new Date(reg.lastModified), "MMM d, h:mm a") : "-"}</span>;
+      case "actions":
+        if (person.isRegistered && reg) {
+          return (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" data-testid={`button-actions-${person.id}`} onClick={(e) => e.stopPropagation()}>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem 
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    setSelectedAttendee(reg);
+                    setEditForm(reg);
+                    setIsEditing(true);
+                    setDrawerOpen(true);
+                  }}
+                  data-testid={`action-edit-${person.id}`}
+                >
+                  <Edit className="h-4 w-4 mr-2" />
+                  {t("edit")}
+                </DropdownMenuItem>
+                <DropdownMenuItem data-testid={`action-email-${person.id}`}>
+                  <Mail className="h-4 w-4 mr-2" />
+                  Resend Confirmation
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={(e) => { e.stopPropagation(); updateStatusMutation.mutate({ id: reg.id, status: "registered" }); }}
+                  data-testid={`action-mark-registered-${person.id}`}
+                >
+                  Mark as Registered
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={(e) => { e.stopPropagation(); updateStatusMutation.mutate({ id: reg.id, status: "checked_in" }); }}
+                  data-testid={`action-mark-checked-in-${person.id}`}
+                >
+                  Mark as Checked In
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={(e) => { e.stopPropagation(); updateStatusMutation.mutate({ id: reg.id, status: "not_coming" }); }}
+                  data-testid={`action-mark-not-coming-${person.id}`}
+                >
+                  Mark as Not Coming
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-destructive" data-testid={`action-delete-${person.id}`}>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  {t("delete")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          );
+        } else if (person.qualifier) {
+          return (
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={(e) => { e.stopPropagation(); handleEditQualifier(person.qualifier!); }}
+                data-testid={`action-edit-qualifier-${person.id}`}
+              >
+                <Edit2 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={(e) => { e.stopPropagation(); setQualifierToDelete(person.qualifier!); setQualifierDeleteDialogOpen(true); }}
+                className="text-destructive"
+                data-testid={`action-delete-qualifier-${person.id}`}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          );
+        }
+        return "-";
       default:
         return "-";
     }
@@ -540,10 +879,51 @@ export default function AttendeesPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{t("attendees")}</h1>
           <p className="text-muted-foreground">
-            {filteredRegistrations?.length ?? 0} attendees
+            {filteredPeople?.length ?? 0} people
+            {eventFilter !== "all" && qualifiers && ` (${registrations?.length ?? 0} registered, ${qualifiers.filter(q => !isQualifierRegistered(q)).length} pending)`}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {eventFilter !== "all" && (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv"
+                onChange={handleFileChange}
+                className="hidden"
+                data-testid="input-csv-upload"
+              />
+              <Button 
+                variant="outline" 
+                onClick={() => fileInputRef.current?.click()}
+                data-testid="button-upload-csv"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Upload CSV
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={handleExportQualifiers}
+                disabled={!qualifiers?.length}
+                data-testid="button-export-qualifiers"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export List
+              </Button>
+              <Button 
+                onClick={() => {
+                  setEditingQualifier(null);
+                  setQualifierFormData({ firstName: "", lastName: "", email: "", unicityId: "" });
+                  setQualifierDialogOpen(true);
+                }}
+                data-testid="button-add-qualifier"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Person
+              </Button>
+            </>
+          )}
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" data-testid="button-column-settings">
@@ -607,6 +987,18 @@ export default function AttendeesPage() {
             ))}
           </SelectContent>
         </Select>
+        {eventFilter !== "all" && (
+          <Select value={registrationStatusFilter} onValueChange={setRegistrationStatusFilter}>
+            <SelectTrigger className="w-[160px]" data-testid="select-registration-status-filter">
+              <SelectValue placeholder="All People" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All People</SelectItem>
+              <SelectItem value="registered">Registered</SelectItem>
+              <SelectItem value="not_registered">Not Registered</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-[150px]" data-testid="select-status-filter">
             <SelectValue placeholder="All Statuses" />
@@ -662,24 +1054,24 @@ export default function AttendeesPage() {
                     ))}
                   </tr>
                 ))
-              ) : filteredRegistrations.length === 0 ? (
+              ) : filteredPeople.length === 0 ? (
                 <tr>
                   <td colSpan={visibleColumnList.length} className="px-4 py-12 text-center text-muted-foreground">
                     <User className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>No attendees found</p>
+                    <p>No people found</p>
                   </td>
                 </tr>
               ) : (
-                filteredRegistrations.map((reg) => (
+                filteredPeople.map((person) => (
                   <tr
-                    key={reg.id}
-                    onClick={() => handleRowClick(reg)}
-                    className="hover-elevate cursor-pointer"
-                    data-testid={`row-attendee-${reg.id}`}
+                    key={person.id}
+                    onClick={() => person.registration && handleRowClick(person.registration)}
+                    className={`hover-elevate ${person.registration ? 'cursor-pointer' : ''}`}
+                    data-testid={`row-attendee-${person.id}`}
                   >
                     {visibleColumnList.map((col) => (
                       <td key={col.key} className="px-4 py-3">
-                        {renderCell(reg, col.key)}
+                        {renderCell(person, col.key)}
                       </td>
                     ))}
                   </tr>

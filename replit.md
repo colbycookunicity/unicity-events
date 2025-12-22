@@ -34,9 +34,13 @@ Preferred communication style: Simple, everyday language.
 - **Users**: Admin/staff accounts with role-based access (admin, event_manager, marketing, readonly)
 - **Events**: Event definitions with bilingual support, qualification periods, and registration settings
 - **Registrations**: Attendee records linked to events and Unicity IDs
+- **QualifiedRegistrants**: Pre-approved people who can register for events (managed via unified Attendees page)
 - **Guests**: Plus-one guests linked to registrations with payment tracking
 - **Flights**: Flight information for transportation coordination
 - **Reimbursements**: Expense tracking with receipt uploads
+
+### Key Pages
+- **AttendeesPage**: Unified page showing both registered attendees and qualifiers (non-registered people). When an event is selected, shows qualifier management tools (Add Person, Upload CSV, Export List). Supports registration status filter (All/Registered/Not Registered).
 
 ### File Structure Pattern
 ```

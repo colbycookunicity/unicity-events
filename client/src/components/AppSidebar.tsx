@@ -8,7 +8,6 @@ import {
   FileBarChart,
   Settings,
   LogOut,
-  UserCheck,
 } from "lucide-react";
 import {
   Sidebar,
@@ -55,11 +54,6 @@ export function AppSidebar() {
       title: t("attendees"),
       url: "/admin/attendees",
       icon: Users,
-    },
-    {
-      title: "Qualifiers",
-      url: "/admin/qualifiers",
-      icon: UserCheck,
     },
     {
       title: t("checkIn"),
