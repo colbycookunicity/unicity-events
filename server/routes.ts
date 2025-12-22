@@ -70,6 +70,54 @@ function requireRole(...roles: string[]) {
   };
 }
 
+// Helper function to get default sections for each page type
+function getDefaultSectionsForPageType(pageType: string, event: { name: string; nameEs?: string | null; heroImageUrl?: string | null }) {
+  const defaultSections: Array<{ type: string; content: Record<string, unknown> }> = [];
+  
+  switch (pageType) {
+    case 'login':
+      defaultSections.push({
+        type: 'hero',
+        content: {
+          headline: 'Verify Your Identity',
+          headlineEs: 'Verifica Tu Identidad',
+          subheadline: 'Enter your email to receive a verification code',
+          subheadlineEs: 'Ingresa tu correo electrónico para recibir un código de verificación',
+          backgroundImage: event.heroImageUrl || '',
+        }
+      });
+      break;
+      
+    case 'registration':
+      defaultSections.push({
+        type: 'hero',
+        content: {
+          headline: event.name,
+          headlineEs: event.nameEs || event.name,
+          subheadline: 'Complete your registration',
+          subheadlineEs: 'Completa tu registro',
+          backgroundImage: event.heroImageUrl || '',
+        }
+      });
+      break;
+      
+    case 'thank_you':
+      defaultSections.push({
+        type: 'thank_you',
+        content: {
+          headline: 'Registration Complete!',
+          headlineEs: 'Registro Completado!',
+          message: 'Thank you for registering. You will receive a confirmation email shortly.',
+          messageEs: 'Gracias por registrarte. Recibirás un correo de confirmación en breve.',
+          showConfetti: true,
+        }
+      });
+      break;
+  }
+  
+  return defaultSections;
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -1717,6 +1765,18 @@ export async function registerRoutes(
           pageType,
           ...req.body
         });
+        
+        // Auto-create default sections based on page type
+        const defaultSections = getDefaultSectionsForPageType(pageType, event);
+        for (let i = 0; i < defaultSections.length; i++) {
+          await storage.createEventPageSection({
+            pageId: page.id,
+            type: defaultSections[i].type,
+            position: i,
+            isEnabled: true,
+            content: defaultSections[i].content
+          });
+        }
       }
       
       res.json(page);
