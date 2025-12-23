@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowLeft, Loader2, Copy, ExternalLink, Check, FileEdit, Clock } from "lucide-react";
+import { ArrowLeft, Loader2, Copy, ExternalLink, Check, FileEdit, Clock, Plus, Trash2, Star, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,10 +16,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useTranslation } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import type { Event } from "@shared/schema";
+import type { Event, GuestAllowanceRule } from "@shared/schema";
 
 // Format date to local datetime string for datetime-local input (avoids UTC conversion issues)
 function formatDateForInput(dateValue: string | Date | null | undefined): string {
@@ -47,7 +49,7 @@ const eventFormSchema = z.object({
   endDate: z.string().min(1, "End date is required"),
   status: z.enum(["draft", "published", "private", "archived"]),
   capacity: z.coerce.number().min(0).optional(),
-  guestPolicy: z.enum(["not_allowed", "allowed_free", "allowed_paid"]).default("not_allowed"),
+  guestPolicy: z.enum(["not_allowed", "allowed_free", "allowed_paid", "allowed_mixed"]).default("not_allowed"),
   buyInPrice: z.coerce.number().min(0).optional(),
   requiresQualification: z.boolean().default(false),
   qualificationStartDate: z.string().optional(),
@@ -155,6 +157,117 @@ export default function EventFormPage() {
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
+
+  // Guest Allowance Rules state and queries
+  const [isRulesOpen, setIsRulesOpen] = useState(false);
+  const [showRuleDialog, setShowRuleDialog] = useState(false);
+  const [editingRule, setEditingRule] = useState<GuestAllowanceRule | null>(null);
+  const [ruleForm, setRuleForm] = useState({
+    name: "",
+    nameEs: "",
+    description: "",
+    descriptionEs: "",
+    freeGuestCount: 0,
+    maxPaidGuests: 0,
+    paidGuestPriceCents: "",
+    isDefault: false,
+  });
+
+  const { data: guestRules = [], refetch: refetchRules } = useQuery<GuestAllowanceRule[]>({
+    queryKey: [`/api/events/${params.id}/guest-rules`],
+    enabled: !!isEditing && form.watch("guestPolicy") === "allowed_mixed",
+  });
+
+  const createRuleMutation = useMutation({
+    mutationFn: async (data: typeof ruleForm) => {
+      return apiRequest("POST", `/api/events/${params.id}/guest-rules`, {
+        ...data,
+        paidGuestPriceCents: data.paidGuestPriceCents ? parseInt(data.paidGuestPriceCents) : null,
+      });
+    },
+    onSuccess: () => {
+      refetchRules();
+      setShowRuleDialog(false);
+      resetRuleForm();
+      toast({ title: "Success", description: "Guest allowance rule created" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to create rule", variant: "destructive" });
+    },
+  });
+
+  const updateRuleMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: typeof ruleForm }) => {
+      return apiRequest("PATCH", `/api/guest-rules/${id}`, {
+        ...data,
+        paidGuestPriceCents: data.paidGuestPriceCents ? parseInt(data.paidGuestPriceCents) : null,
+      });
+    },
+    onSuccess: () => {
+      refetchRules();
+      setShowRuleDialog(false);
+      setEditingRule(null);
+      resetRuleForm();
+      toast({ title: "Success", description: "Guest allowance rule updated" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to update rule", variant: "destructive" });
+    },
+  });
+
+  const deleteRuleMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest("DELETE", `/api/guest-rules/${id}`);
+    },
+    onSuccess: () => {
+      refetchRules();
+      toast({ title: "Success", description: "Guest allowance rule deleted" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to delete rule", variant: "destructive" });
+    },
+  });
+
+  const resetRuleForm = () => {
+    setRuleForm({
+      name: "",
+      nameEs: "",
+      description: "",
+      descriptionEs: "",
+      freeGuestCount: 0,
+      maxPaidGuests: 0,
+      paidGuestPriceCents: "",
+      isDefault: false,
+    });
+  };
+
+  const handleEditRule = (rule: GuestAllowanceRule) => {
+    setEditingRule(rule);
+    setRuleForm({
+      name: rule.name,
+      nameEs: rule.nameEs || "",
+      description: rule.description || "",
+      descriptionEs: rule.descriptionEs || "",
+      freeGuestCount: rule.freeGuestCount ?? 0,
+      maxPaidGuests: rule.maxPaidGuests ?? 0,
+      paidGuestPriceCents: rule.paidGuestPriceCents?.toString() || "",
+      isDefault: rule.isDefault ?? false,
+    });
+    setShowRuleDialog(true);
+  };
+
+  const handleSaveRule = () => {
+    if (editingRule) {
+      updateRuleMutation.mutate({ id: editingRule.id, data: ruleForm });
+    } else {
+      createRuleMutation.mutate(ruleForm);
+    }
+  };
+
+  const formatCurrency = (cents: number | null) => {
+    if (cents === null) return "N/A";
+    return `$${(cents / 100).toFixed(2)}`;
+  };
 
   if (isEditing && isLoading) {
     return (
@@ -475,12 +588,14 @@ export default function EventFormPage() {
                           <SelectItem value="not_allowed">Not Allowed</SelectItem>
                           <SelectItem value="allowed_free">Allowed (Free)</SelectItem>
                           <SelectItem value="allowed_paid">Allowed (Paid)</SelectItem>
+                          <SelectItem value="allowed_mixed">Mixed Policy</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormDescription>
                         {field.value === "not_allowed" && "Registrants cannot bring guests"}
                         {field.value === "allowed_free" && "Guests can attend at no additional cost"}
                         {field.value === "allowed_paid" && "Guests must pay a buy-in fee"}
+                        {field.value === "allowed_mixed" && "Different rules apply per distributor (configure below)"}
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -510,6 +625,195 @@ export default function EventFormPage() {
                     </FormItem>
                   )}
                 />
+              )}
+
+              {form.watch("guestPolicy") === "allowed_mixed" && isEditing && (
+                <Card className="border-dashed">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-2">
+                        <Users className="h-5 w-5 text-muted-foreground" />
+                        <CardTitle className="text-base">Guest Allowance Rules</CardTitle>
+                      </div>
+                      <Dialog open={showRuleDialog} onOpenChange={(open) => {
+                        setShowRuleDialog(open);
+                        if (!open) {
+                          setEditingRule(null);
+                          resetRuleForm();
+                        }
+                      }}>
+                        <DialogTrigger asChild>
+                          <Button size="sm" variant="outline" data-testid="button-add-guest-rule">
+                            <Plus className="h-4 w-4 mr-1" />
+                            Add Rule
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>{editingRule ? "Edit" : "Create"} Guest Allowance Rule</DialogTitle>
+                            <DialogDescription>
+                              Define how many free and paid guests a distributor can bring.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4 py-4">
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium">Rule Name</label>
+                              <Input
+                                value={ruleForm.name}
+                                onChange={(e) => setRuleForm({ ...ruleForm, name: e.target.value })}
+                                placeholder="e.g., Diamond Plus, Gold Member"
+                                data-testid="input-rule-name"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium">Rule Name (Spanish)</label>
+                              <Input
+                                value={ruleForm.nameEs}
+                                onChange={(e) => setRuleForm({ ...ruleForm, nameEs: e.target.value })}
+                                placeholder="e.g., Diamante Plus, Miembro Oro"
+                                data-testid="input-rule-name-es"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium">Description</label>
+                              <Input
+                                value={ruleForm.description}
+                                onChange={(e) => setRuleForm({ ...ruleForm, description: e.target.value })}
+                                placeholder="e.g., Top performers get 2 free guests"
+                                data-testid="input-rule-description"
+                              />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <label className="text-sm font-medium">Free Guests</label>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  value={ruleForm.freeGuestCount}
+                                  onChange={(e) => setRuleForm({ ...ruleForm, freeGuestCount: parseInt(e.target.value) || 0 })}
+                                  data-testid="input-rule-free-guests"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-sm font-medium">Max Paid Guests</label>
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  value={ruleForm.maxPaidGuests}
+                                  onChange={(e) => setRuleForm({ ...ruleForm, maxPaidGuests: parseInt(e.target.value) || 0 })}
+                                  data-testid="input-rule-max-paid"
+                                />
+                              </div>
+                            </div>
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium">Paid Guest Price (cents)</label>
+                              <Input
+                                type="number"
+                                min={0}
+                                value={ruleForm.paidGuestPriceCents}
+                                onChange={(e) => setRuleForm({ ...ruleForm, paidGuestPriceCents: e.target.value })}
+                                placeholder="e.g., 50000 for $500.00"
+                                data-testid="input-rule-price"
+                              />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Switch
+                                checked={ruleForm.isDefault}
+                                onCheckedChange={(checked) => setRuleForm({ ...ruleForm, isDefault: checked })}
+                                data-testid="switch-rule-default"
+                              />
+                              <label className="text-sm">Set as default rule for new qualifiers</label>
+                            </div>
+                          </div>
+                          <DialogFooter>
+                            <Button variant="outline" onClick={() => setShowRuleDialog(false)}>
+                              Cancel
+                            </Button>
+                            <Button
+                              onClick={handleSaveRule}
+                              disabled={!ruleForm.name || createRuleMutation.isPending || updateRuleMutation.isPending}
+                              data-testid="button-save-rule"
+                            >
+                              {(createRuleMutation.isPending || updateRuleMutation.isPending) && (
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              )}
+                              {editingRule ? "Update" : "Create"} Rule
+                            </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                    <CardDescription>
+                      Create rules to define different guest allowances for different distributor tiers.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {guestRules.length === 0 ? (
+                      <div className="text-center py-6 text-muted-foreground">
+                        <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                        <p>No guest allowance rules defined yet.</p>
+                        <p className="text-sm">Create rules to assign different guest policies to distributors.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {guestRules.map((rule) => (
+                          <div
+                            key={rule.id}
+                            className="flex items-center justify-between gap-4 p-3 rounded-md border bg-muted/30"
+                            data-testid={`rule-item-${rule.id}`}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-medium">{rule.name}</span>
+                                {rule.isDefault && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    <Star className="h-3 w-3 mr-1" />
+                                    Default
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="text-sm text-muted-foreground mt-1">
+                                {rule.freeGuestCount ?? 0} free guest{(rule.freeGuestCount ?? 0) !== 1 ? "s" : ""}
+                                {(rule.maxPaidGuests ?? 0) > 0 && (
+                                  <span>
+                                    {" + "}up to {rule.maxPaidGuests} paid at {formatCurrency(rule.paidGuestPriceCents)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => handleEditRule(rule)}
+                                data-testid={`button-edit-rule-${rule.id}`}
+                              >
+                                <FileEdit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => deleteRuleMutation.mutate(rule.id)}
+                                disabled={deleteRuleMutation.isPending}
+                                data-testid={`button-delete-rule-${rule.id}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {form.watch("guestPolicy") === "allowed_mixed" && !isEditing && (
+                <div className="rounded-lg border border-dashed p-4 bg-muted/30">
+                  <p className="text-sm text-muted-foreground text-center">
+                    Save the event first to configure guest allowance rules.
+                  </p>
+                </div>
               )}
 
               <FormField

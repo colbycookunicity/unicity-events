@@ -27,7 +27,7 @@ import { useTranslation } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
-import type { Registration, Event, SwagAssignmentWithDetails, QualifiedRegistrant } from "@shared/schema";
+import type { Registration, Event, SwagAssignmentWithDetails, QualifiedRegistrant, GuestAllowanceRule } from "@shared/schema";
 
 type UnifiedPerson = {
   type: "registration" | "qualifier";
@@ -119,6 +119,7 @@ export default function AttendeesPage() {
     lastName: "",
     email: "",
     unicityId: "",
+    guestAllowanceRuleId: "" as string | null,
   });
   
   const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(() => {
@@ -206,6 +207,22 @@ export default function AttendeesPage() {
     enabled: !!selectedAttendee && drawerOpen,
   });
 
+  const selectedEvent = useMemo(() => 
+    events?.find(e => e.id === eventFilter),
+    [events, eventFilter]
+  );
+
+  const { data: guestRules = [] } = useQuery<GuestAllowanceRule[]>({
+    queryKey: [`/api/events/${eventFilter}/guest-rules`],
+    enabled: eventFilter !== "all" && selectedEvent?.guestPolicy === "allowed_mixed",
+  });
+
+  const guestRulesById = useMemo(() => {
+    const map = new Map<string, GuestAllowanceRule>();
+    guestRules.forEach(r => map.set(r.id, r));
+    return map;
+  }, [guestRules]);
+
   const registeredEmails = useMemo(() => 
     new Set(registrations?.map(r => r.email.toLowerCase()) ?? []), 
     [registrations]
@@ -292,7 +309,7 @@ export default function AttendeesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/events/${eventFilter}/qualifiers`] });
       setQualifierDialogOpen(false);
-      setQualifierFormData({ firstName: "", lastName: "", email: "", unicityId: "" });
+      setQualifierFormData({ firstName: "", lastName: "", email: "", unicityId: "", guestAllowanceRuleId: null });
       toast({ title: t("success"), description: "Qualifier added successfully" });
     },
     onError: () => {
@@ -310,7 +327,7 @@ export default function AttendeesPage() {
       queryClient.invalidateQueries({ queryKey: [`/api/events/${eventFilter}/qualifiers`] });
       setQualifierDialogOpen(false);
       setEditingQualifier(null);
-      setQualifierFormData({ firstName: "", lastName: "", email: "", unicityId: "" });
+      setQualifierFormData({ firstName: "", lastName: "", email: "", unicityId: "", guestAllowanceRuleId: null });
       toast({ title: t("success"), description: "Qualifier updated successfully" });
     },
     onError: () => {
@@ -367,6 +384,7 @@ export default function AttendeesPage() {
       lastName: qualifier.lastName,
       email: qualifier.email,
       unicityId: qualifier.unicityId || "",
+      guestAllowanceRuleId: qualifier.guestAllowanceRuleId || null,
     });
     setQualifierDialogOpen(true);
   };
@@ -733,6 +751,9 @@ export default function AttendeesPage() {
     const reg = person.registration;
     switch (key) {
       case "name":
+        const assignedRule = person.qualifier?.guestAllowanceRuleId 
+          ? guestRulesById.get(person.qualifier.guestAllowanceRuleId)
+          : undefined;
         return (
           <div className="min-w-[150px]">
             <div className="flex items-center gap-2">
@@ -742,6 +763,11 @@ export default function AttendeesPage() {
               )}
               {person.isRegistered && person.qualifier && eventFilter !== "all" && (
                 <Badge variant="outline" className="text-xs" data-testid={`badge-qualified-${person.id}`}>Qualified</Badge>
+              )}
+              {selectedEvent?.guestPolicy === "allowed_mixed" && person.qualifier && assignedRule && (
+                <Badge variant="outline" className="text-xs" data-testid={`badge-rule-${person.id}`}>
+                  {assignedRule.name}
+                </Badge>
               )}
             </div>
           </div>
@@ -916,7 +942,7 @@ export default function AttendeesPage() {
               <Button 
                 onClick={() => {
                   setEditingQualifier(null);
-                  setQualifierFormData({ firstName: "", lastName: "", email: "", unicityId: "" });
+                  setQualifierFormData({ firstName: "", lastName: "", email: "", unicityId: "", guestAllowanceRuleId: null });
                   setQualifierDialogOpen(true);
                 }}
                 data-testid="button-add-qualifier"
@@ -1588,6 +1614,33 @@ export default function AttendeesPage() {
                 data-testid="input-qualifier-unicity-id"
               />
             </div>
+            {selectedEvent?.guestPolicy === "allowed_mixed" && guestRules.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="qualifier-guestRule">Guest Allowance Rule</Label>
+                <Select
+                  value={qualifierFormData.guestAllowanceRuleId || "default"}
+                  onValueChange={(value) => setQualifierFormData(prev => ({ 
+                    ...prev, 
+                    guestAllowanceRuleId: value === "default" ? null : value 
+                  }))}
+                >
+                  <SelectTrigger data-testid="select-qualifier-guest-rule">
+                    <SelectValue placeholder="Select a rule" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">Use Default Rule</SelectItem>
+                    {guestRules.map((rule) => (
+                      <SelectItem key={rule.id} value={rule.id}>
+                        {rule.name} ({rule.freeGuestCount ?? 0} free{(rule.maxPaidGuests ?? 0) > 0 ? `, ${rule.maxPaidGuests} paid` : ""})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Determines how many guests this person can bring
+                </p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setQualifierDialogOpen(false)}>
