@@ -47,14 +47,15 @@ export function ImageUploader({
     try {
       const ext = file.name.split(".").pop() || "jpg";
       const filename = `hero-${Date.now()}.${ext}`;
+      const relativePath = `images/${filename}`;
 
       const presignRes = await apiRequest("POST", "/api/objects/presign", {
-        objectPath: `images/${filename}`,
+        objectPath: relativePath,
         permission: "public-read",
       });
-      const { uploadUrl, objectPath } = await presignRes.json();
+      const { uploadUrl } = await presignRes.json();
 
-      await fetch(uploadUrl, {
+      const uploadRes = await fetch(uploadUrl, {
         method: "PUT",
         body: file,
         headers: {
@@ -62,11 +63,29 @@ export function ImageUploader({
         },
       });
 
-      const publicUrl = `/api/objects/public/${objectPath.split("/").slice(-2).join("/")}`;
+      if (!uploadRes.ok) {
+        const errorText = await uploadRes.text();
+        console.error("Upload error response:", errorText);
+        throw new Error(`Upload failed: ${uploadRes.statusText || uploadRes.status}`);
+      }
+
+      const publicUrl = `/api/objects/public/${relativePath}`;
       onChange(publicUrl);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Upload error:", err);
-      setError("Failed to upload image. Please try again.");
+      let errorMessage = "Failed to upload image. Please try again.";
+      if (err.message) {
+        const jsonMatch = err.message.match(/\{.*\}/);
+        if (jsonMatch) {
+          try {
+            const parsed = JSON.parse(jsonMatch[0]);
+            errorMessage = parsed.error || errorMessage;
+          } catch {
+            errorMessage = err.message;
+          }
+        }
+      }
+      setError(errorMessage);
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) {
