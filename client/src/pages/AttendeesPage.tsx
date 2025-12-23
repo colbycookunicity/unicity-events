@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Search, Download, MoreHorizontal, Mail, Edit, Trash2, User, Shirt, Save, Pencil, ChevronUp, ChevronDown, Settings2, ArrowUpDown, Plus, Upload, Edit2 } from "lucide-react";
+import { Search, Download, MoreHorizontal, Mail, Edit, Trash2, User, Shirt, Save, Pencil, ChevronUp, ChevronDown, Settings2, ArrowUpDown, Plus, Upload, Edit2, ArrowRightLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PhoneInput from "react-phone-number-input";
@@ -111,6 +111,9 @@ export default function AttendeesPage() {
   const [editingQualifier, setEditingQualifier] = useState<QualifiedRegistrant | null>(null);
   const [qualifierDeleteDialogOpen, setQualifierDeleteDialogOpen] = useState(false);
   const [qualifierToDelete, setQualifierToDelete] = useState<QualifiedRegistrant | null>(null);
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const [registrationToMove, setRegistrationToMove] = useState<Registration | null>(null);
+  const [targetEventId, setTargetEventId] = useState<string>("");
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [csvData, setCsvData] = useState<Array<{ firstName: string; lastName: string; email: string; unicityId: string }>>([]);
   const [replaceExisting, setReplaceExisting] = useState(false);
@@ -499,6 +502,27 @@ export default function AttendeesPage() {
     },
   });
 
+  const moveToEventMutation = useMutation({
+    mutationFn: async ({ registrationId, newEventId }: { registrationId: string; newEventId: string }) => {
+      const response = await apiRequest("PATCH", `/api/registrations/${registrationId}`, { eventId: newEventId });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ predicate: (query) => 
+        String(query.queryKey[0]).startsWith("/api/registrations")
+      });
+      setMoveDialogOpen(false);
+      setRegistrationToMove(null);
+      setTargetEventId("");
+      setDrawerOpen(false);
+      setSelectedAttendee(null);
+      toast({ title: t("success"), description: "Attendee moved to new event successfully" });
+    },
+    onError: () => {
+      toast({ title: t("error"), description: "Failed to move attendee", variant: "destructive" });
+    },
+  });
+
   const handleSave = () => {
     if (!selectedAttendee) return;
     
@@ -863,6 +887,18 @@ export default function AttendeesPage() {
                   Mark as Not Coming
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    setRegistrationToMove(reg);
+                    setTargetEventId("");
+                    setMoveDialogOpen(true);
+                  }}
+                  data-testid={`action-move-${person.id}`}
+                >
+                  <ArrowRightLeft className="h-4 w-4 mr-2" />
+                  Move to Event
+                </DropdownMenuItem>
                 <DropdownMenuItem className="text-destructive" data-testid={`action-delete-${person.id}`}>
                   <Trash2 className="h-4 w-4 mr-2" />
                   {t("delete")}
@@ -1741,6 +1777,70 @@ export default function AttendeesPage() {
               data-testid="button-confirm-import"
             >
               {importMutation.isPending ? "Importing..." : `Import ${csvData.length} Records`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Move to Event Dialog */}
+      <Dialog open={moveDialogOpen} onOpenChange={(open) => { setMoveDialogOpen(open); if (!open) setRegistrationToMove(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Move Attendee to Different Event</DialogTitle>
+            <DialogDescription>
+              {registrationToMove && (
+                <>Moving <strong>{registrationToMove.firstName} {registrationToMove.lastName}</strong> to a different event.</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-4">
+            {(() => {
+              const otherEvents = events?.filter(e => e.id !== registrationToMove?.eventId) || [];
+              if (otherEvents.length === 0) {
+                return (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No other events available to move this attendee to.
+                  </p>
+                );
+              }
+              return (
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="target-event">Select Target Event</Label>
+                  <Select value={targetEventId} onValueChange={setTargetEventId}>
+                    <SelectTrigger id="target-event" data-testid="select-target-event">
+                      <SelectValue placeholder="Choose an event..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {otherEvents.map(event => (
+                        <SelectItem key={event.id} value={event.id}>
+                          {event.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              );
+            })()}
+            {registrationToMove && (
+              <p className="text-sm text-muted-foreground">
+                Currently registered for: {events?.find(e => e.id === registrationToMove.eventId)?.name || "Unknown Event"}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMoveDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (registrationToMove && targetEventId) {
+                  moveToEventMutation.mutate({ registrationId: registrationToMove.id, newEventId: targetEventId });
+                }
+              }}
+              disabled={!targetEventId || moveToEventMutation.isPending || (events?.filter(e => e.id !== registrationToMove?.eventId).length === 0)}
+              data-testid="button-confirm-move"
+            >
+              {moveToEventMutation.isPending ? "Moving..." : "Move Attendee"}
             </Button>
           </DialogFooter>
         </DialogContent>
