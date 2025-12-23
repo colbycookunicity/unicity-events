@@ -460,6 +460,154 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
+  // Reports
+  async getRegistrationTrends(days: number = 30) {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    
+    const trends = await db
+      .select({
+        date: sql<string>`DATE(${registrations.createdAt})`,
+        count: count(),
+      })
+      .from(registrations)
+      .where(gte(registrations.createdAt, startDate))
+      .groupBy(sql`DATE(${registrations.createdAt})`)
+      .orderBy(sql`DATE(${registrations.createdAt})`);
+    
+    return trends.map(t => ({
+      date: t.date,
+      count: Number(t.count),
+    }));
+  }
+
+  async getRevenueStats() {
+    const [guestRevenue] = await db
+      .select({
+        totalRevenue: sql<number>`COALESCE(SUM(${guests.amountPaidCents}), 0)`,
+        paidGuestCount: sql<number>`COUNT(*) FILTER (WHERE ${guests.paymentStatus} = 'paid')`,
+        pendingCount: sql<number>`COUNT(*) FILTER (WHERE ${guests.paymentStatus} = 'pending')`,
+      })
+      .from(guests);
+
+    const revenueByEvent = await db
+      .select({
+        eventId: registrations.eventId,
+        eventName: events.name,
+        revenue: sql<number>`COALESCE(SUM(${guests.amountPaidCents}), 0)`,
+        guestCount: count(guests.id),
+      })
+      .from(guests)
+      .innerJoin(registrations, eq(guests.registrationId, registrations.id))
+      .innerJoin(events, eq(registrations.eventId, events.id))
+      .where(eq(guests.paymentStatus, 'paid'))
+      .groupBy(registrations.eventId, events.name)
+      .orderBy(desc(sql`COALESCE(SUM(${guests.amountPaidCents}), 0)`));
+
+    return {
+      totalRevenue: Number(guestRevenue?.totalRevenue) || 0,
+      paidGuestCount: Number(guestRevenue?.paidGuestCount) || 0,
+      pendingCount: Number(guestRevenue?.pendingCount) || 0,
+      revenueByEvent: revenueByEvent.map(r => ({
+        eventId: r.eventId,
+        eventName: r.eventName,
+        revenue: Number(r.revenue),
+        guestCount: Number(r.guestCount),
+      })),
+    };
+  }
+
+  async getCheckInRates() {
+    const rates = await db
+      .select({
+        eventId: registrations.eventId,
+        eventName: events.name,
+        eventDate: events.startDate,
+        totalRegistrations: count(),
+        checkedInCount: sql<number>`COUNT(*) FILTER (WHERE ${registrations.status} = 'checked_in')`,
+      })
+      .from(registrations)
+      .innerJoin(events, eq(registrations.eventId, events.id))
+      .groupBy(registrations.eventId, events.name, events.startDate)
+      .orderBy(desc(events.startDate));
+
+    return rates.map(r => ({
+      eventId: r.eventId,
+      eventName: r.eventName,
+      eventDate: r.eventDate,
+      totalRegistrations: Number(r.totalRegistrations),
+      checkedInCount: Number(r.checkedInCount),
+      checkInRate: r.totalRegistrations > 0 
+        ? Math.round((Number(r.checkedInCount) / Number(r.totalRegistrations)) * 100)
+        : 0,
+    }));
+  }
+
+  async getExportData(type: 'registrations' | 'guests' | 'events', eventId?: string) {
+    if (type === 'registrations') {
+      let query = db
+        .select({
+          id: registrations.id,
+          eventName: events.name,
+          firstName: registrations.firstName,
+          lastName: registrations.lastName,
+          email: registrations.email,
+          phone: registrations.phone,
+          unicityId: registrations.unicityId,
+          status: registrations.status,
+          createdAt: registrations.createdAt,
+        })
+        .from(registrations)
+        .innerJoin(events, eq(registrations.eventId, events.id));
+      
+      if (eventId) {
+        query = query.where(eq(registrations.eventId, eventId)) as any;
+      }
+      
+      return query.orderBy(desc(registrations.createdAt));
+    }
+
+    if (type === 'guests') {
+      let query = db
+        .select({
+          id: guests.id,
+          eventName: events.name,
+          registrantName: sql<string>`${registrations.firstName} || ' ' || ${registrations.lastName}`,
+          guestFirstName: guests.firstName,
+          guestLastName: guests.lastName,
+          guestEmail: guests.email,
+          paymentStatus: guests.paymentStatus,
+          amountPaidCents: guests.amountPaidCents,
+        })
+        .from(guests)
+        .innerJoin(registrations, eq(guests.registrationId, registrations.id))
+        .innerJoin(events, eq(registrations.eventId, events.id));
+      
+      if (eventId) {
+        query = query.where(eq(registrations.eventId, eventId)) as any;
+      }
+      
+      return query.orderBy(desc(guests.createdAt));
+    }
+
+    if (type === 'events') {
+      return db
+        .select({
+          id: events.id,
+          name: events.name,
+          status: events.status,
+          startDate: events.startDate,
+          endDate: events.endDate,
+          location: events.location,
+          capacity: events.capacity,
+        })
+        .from(events)
+        .orderBy(desc(events.startDate));
+    }
+
+    return [];
+  }
+
   // Swag Items
   async getSwagItemsByEvent(eventId: string): Promise<SwagItemWithStats[]> {
     const items = await db.select().from(swagItems)

@@ -698,6 +698,81 @@ export async function registerRoutes(
     }
   });
 
+  // Reports API
+  app.get("/api/admin/reports/registration-trends", authenticateToken, async (req, res) => {
+    try {
+      const days = parseInt(req.query.days as string) || 30;
+      const trends = await storage.getRegistrationTrends(days);
+      res.json(trends);
+    } catch (error) {
+      console.error("Registration trends error:", error);
+      res.status(500).json({ error: "Failed to get registration trends" });
+    }
+  });
+
+  app.get("/api/admin/reports/revenue", authenticateToken, async (req, res) => {
+    try {
+      const stats = await storage.getRevenueStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Revenue stats error:", error);
+      res.status(500).json({ error: "Failed to get revenue stats" });
+    }
+  });
+
+  app.get("/api/admin/reports/check-in-rates", authenticateToken, async (req, res) => {
+    try {
+      const rates = await storage.getCheckInRates();
+      res.json(rates);
+    } catch (error) {
+      console.error("Check-in rates error:", error);
+      res.status(500).json({ error: "Failed to get check-in rates" });
+    }
+  });
+
+  app.get("/api/admin/reports/export/:type", authenticateToken, async (req, res) => {
+    try {
+      const { type } = req.params;
+      const { eventId } = req.query;
+      
+      if (!['registrations', 'guests', 'events'].includes(type)) {
+        return res.status(400).json({ error: "Invalid export type" });
+      }
+      
+      const data = await storage.getExportData(type as any, eventId as string);
+      
+      if (data.length === 0) {
+        return res.status(404).json({ error: "No data to export" });
+      }
+
+      // Convert to CSV
+      const headers = Object.keys(data[0]);
+      const csvRows = [
+        headers.join(','),
+        ...data.map((row: any) => 
+          headers.map(h => {
+            const val = row[h];
+            if (val === null || val === undefined) return '';
+            if (typeof val === 'string' && (val.includes(',') || val.includes('"') || val.includes('\n'))) {
+              return `"${val.replace(/"/g, '""')}"`;
+            }
+            if (val instanceof Date) {
+              return val.toISOString();
+            }
+            return String(val);
+          }).join(',')
+        )
+      ];
+      
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="${type}-export-${new Date().toISOString().split('T')[0]}.csv"`);
+      res.send(csvRows.join('\n'));
+    } catch (error) {
+      console.error("Export error:", error);
+      res.status(500).json({ error: "Failed to export data" });
+    }
+  });
+
   // User Management Routes (Admin only)
   app.get("/api/admin/users", authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
