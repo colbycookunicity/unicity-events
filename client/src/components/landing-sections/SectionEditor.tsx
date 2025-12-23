@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Trash2, Save, X, Loader2 } from "lucide-react";
+import { ImageUploader } from "@/components/ui/image-uploader";
 import type { EventPageSection, PageSectionContent, HeroSectionContent, AgendaSectionContent, SpeakersSectionContent, StatsSectionContent, CTASectionContent, FAQSectionContent, RichTextSectionContent, GallerySectionContent, IntroSectionContent, ThankYouSectionContent, FormSectionContent } from "@shared/schema";
 import { SECTION_LABELS, type SectionType } from "./index";
 
@@ -220,15 +221,13 @@ function HeroFields({ content, updateField, lang }: FieldProps<HeroSectionConten
         />
       </div>
       {lang === 'en' && (
-        <div>
-          <Label>Background Image URL</Label>
-          <Input
-            value={content.backgroundImage || ''}
-            onChange={(e) => updateField('backgroundImage', e.target.value)}
-            placeholder="https://example.com/image.jpg"
-            data-testid="input-hero-bg-image"
-          />
-        </div>
+        <ImageUploader
+          value={content.backgroundImage || ''}
+          onChange={(url) => updateField('backgroundImage', url)}
+          label="Background Image"
+          recommendedSize="1920 x 1080 pixels (16:9 aspect ratio)"
+          testId="input-hero-bg-image"
+        />
       )}
       <div>
         <Label>Primary Button Label</Label>
@@ -789,15 +788,13 @@ function IntroFields({ content, updateField, lang }: FieldProps<IntroSectionCont
         />
       </div>
       {lang === 'en' && (
-        <div>
-          <Label>Background Image URL</Label>
-          <Input
-            value={content.backgroundImage || ''}
-            onChange={(e) => updateField('backgroundImage', e.target.value)}
-            placeholder="https://example.com/image.jpg"
-            data-testid="input-intro-background"
-          />
-        </div>
+        <ImageUploader
+          value={content.backgroundImage || ''}
+          onChange={(url) => updateField('backgroundImage', url)}
+          label="Background Image"
+          recommendedSize="1920 x 1080 pixels (16:9 aspect ratio)"
+          testId="input-intro-background"
+        />
       )}
     </div>
   );
@@ -835,15 +832,13 @@ function ThankYouFields({ content, updateField, lang }: FieldProps<ThankYouSecti
         />
       </div>
       {lang === 'en' && (
-        <div>
-          <Label>Background Image URL</Label>
-          <Input
-            value={content.backgroundImage || ''}
-            onChange={(e) => updateField('backgroundImage', e.target.value)}
-            placeholder="https://example.com/image.jpg"
-            data-testid="input-thankyou-background"
-          />
-        </div>
+        <ImageUploader
+          value={content.backgroundImage || ''}
+          onChange={(url) => updateField('backgroundImage', url)}
+          label="Background Image"
+          recommendedSize="1920 x 1080 pixels (16:9 aspect ratio)"
+          testId="input-thankyou-background"
+        />
       )}
     </div>
   );
