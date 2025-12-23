@@ -330,6 +330,18 @@ export async function registerRoutes(
         if (event.status !== "published") {
           return res.status(400).json({ error: "Registration is not open for this event" });
         }
+        
+        // Check if user is qualified for this event (or already registered)
+        if (event.requiresQualification) {
+          const qualifier = await storage.getQualifiedRegistrantByEmail(event.id, email.toLowerCase().trim());
+          const existingRegistration = await storage.getRegistrationByEmailAndEvent(email.toLowerCase().trim(), event.id);
+          
+          if (!qualifier && !existingRegistration) {
+            return res.status(403).json({ 
+              error: "You are not qualified for this event. If you believe this is an error, please contact americasevent@unicity.com" 
+            });
+          }
+        }
       }
 
       // For development, simulate OTP

@@ -363,9 +363,24 @@ export default function RegistrationPage() {
         console.log("DEV MODE: Use code", data.devCode);
       }
     } catch (error: any) {
+      // Parse error message - may contain JSON like "403: {"error":"..."}"
+      let errorMessage = "Failed to send verification code";
+      if (error.message) {
+        const jsonMatch = error.message.match(/\{.*\}/);
+        if (jsonMatch) {
+          try {
+            const parsed = JSON.parse(jsonMatch[0]);
+            errorMessage = parsed.error || errorMessage;
+          } catch {
+            errorMessage = error.message;
+          }
+        } else {
+          errorMessage = error.message;
+        }
+      }
       toast({
         title: t("error"),
-        description: error.message || "Failed to send verification code",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
