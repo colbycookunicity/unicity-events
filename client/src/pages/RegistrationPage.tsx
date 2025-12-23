@@ -24,6 +24,20 @@ import { apiRequest } from "@/lib/queryClient";
 import { format, parseISO } from "date-fns";
 import type { Event, EventPage, EventPageSection, IntroSectionContent, ThankYouSectionContent, HeroSectionContent, FormSectionContent } from "@shared/schema";
 import EventListPage from "./EventListPage";
+import { Textarea } from "@/components/ui/textarea";
+
+// Custom form field type (matches FormBuilder output)
+interface CustomFormField {
+  id: string;
+  type: "text" | "email" | "phone" | "select" | "checkbox" | "textarea" | "date" | "number";
+  label: string;
+  labelEs?: string;
+  placeholder?: string;
+  placeholderEs?: string;
+  required: boolean;
+  options?: { value: string; label: string; labelEs?: string }[];
+}
+
 import { IntroSection, ThankYouSection } from "@/components/landing-sections";
 
 interface PageData {
@@ -245,6 +259,9 @@ export default function RegistrationPage() {
   
   // Store event info for thank you page (preserves data after mutation/refetch)
   const [savedEventInfo, setSavedEventInfo] = useState<{ name: string; nameEs?: string; startDate?: string } | null>(null);
+
+  // Custom form fields data (for events with custom form fields)
+  const [customFormData, setCustomFormData] = useState<Record<string, any>>({});
 
   // Check if this event requires verification (default true if not set)
   // IMPORTANT: If event requires qualification, we MUST require verification to check the qualified list
@@ -472,6 +489,7 @@ export default function RegistrationPage() {
         language,
         dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth).toISOString() : null,
         passportExpiration: data.passportExpiration ? new Date(data.passportExpiration).toISOString() : null,
+        formData: Object.keys(customFormData).length > 0 ? customFormData : undefined,
       });
     },
     onSuccess: () => {
@@ -488,6 +506,35 @@ export default function RegistrationPage() {
   });
 
   const onSubmit = (data: RegistrationFormData) => {
+    // Validate required custom fields before submission
+    if (event?.formFields && Array.isArray(event.formFields)) {
+      const customFields = event.formFields as CustomFormField[];
+      const missingFields: string[] = [];
+      
+      for (const field of customFields) {
+        if (field.required) {
+          const value = customFormData[field.id];
+          const isEmpty = value === undefined || value === null || value === "" || 
+            (field.type === "checkbox" && value !== true);
+          
+          if (isEmpty) {
+            missingFields.push(field.label);
+          }
+        }
+      }
+      
+      if (missingFields.length > 0) {
+        toast({
+          title: language === "es" ? "Campos requeridos" : "Required Fields",
+          description: language === "es" 
+            ? `Por favor complete: ${missingFields.join(", ")}`
+            : `Please complete: ${missingFields.join(", ")}`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    
     // Save event info before mutation (preserves data for thank you page)
     if (event) {
       setSavedEventInfo({
@@ -1297,6 +1344,125 @@ export default function RegistrationPage() {
                 )}
               />
             </div>
+
+            {/* Custom Form Fields Section */}
+            {event?.formFields && Array.isArray(event.formFields) && event.formFields.length > 0 && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium border-b pb-2">
+                  {language === "es" ? "Informacion Adicional" : "Additional Information"}
+                </h3>
+                {(event.formFields as CustomFormField[]).map((field) => {
+                  const fieldLabel = language === "es" && field.labelEs ? field.labelEs : field.label;
+                  const fieldPlaceholder = language === "es" && field.placeholderEs ? field.placeholderEs : field.placeholder;
+                  
+                  return (
+                    <div key={field.id} className="space-y-2">
+                      <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                        {fieldLabel}{field.required && " *"}
+                      </label>
+                      
+                      {field.type === "text" && (
+                        <Input
+                          placeholder={fieldPlaceholder}
+                          value={customFormData[field.id] || ""}
+                          onChange={(e) => setCustomFormData(prev => ({ ...prev, [field.id]: e.target.value }))}
+                          required={field.required}
+                          data-testid={`input-custom-${field.id}`}
+                        />
+                      )}
+                      
+                      {field.type === "email" && (
+                        <Input
+                          type="email"
+                          placeholder={fieldPlaceholder}
+                          value={customFormData[field.id] || ""}
+                          onChange={(e) => setCustomFormData(prev => ({ ...prev, [field.id]: e.target.value }))}
+                          required={field.required}
+                          data-testid={`input-custom-${field.id}`}
+                        />
+                      )}
+                      
+                      {field.type === "phone" && (
+                        <PhoneInput
+                          international
+                          defaultCountry="US"
+                          value={customFormData[field.id] || ""}
+                          onChange={(value) => setCustomFormData(prev => ({ ...prev, [field.id]: value }))}
+                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm"
+                          data-testid={`input-custom-${field.id}`}
+                        />
+                      )}
+                      
+                      {field.type === "number" && (
+                        <Input
+                          type="number"
+                          placeholder={fieldPlaceholder}
+                          value={customFormData[field.id] || ""}
+                          onChange={(e) => setCustomFormData(prev => ({ ...prev, [field.id]: e.target.value }))}
+                          required={field.required}
+                          data-testid={`input-custom-${field.id}`}
+                        />
+                      )}
+                      
+                      {field.type === "date" && (
+                        <Input
+                          type="date"
+                          value={customFormData[field.id] || ""}
+                          onChange={(e) => setCustomFormData(prev => ({ ...prev, [field.id]: e.target.value }))}
+                          required={field.required}
+                          data-testid={`input-custom-${field.id}`}
+                        />
+                      )}
+                      
+                      {field.type === "textarea" && (
+                        <Textarea
+                          placeholder={fieldPlaceholder}
+                          value={customFormData[field.id] || ""}
+                          onChange={(e) => setCustomFormData(prev => ({ ...prev, [field.id]: e.target.value }))}
+                          required={field.required}
+                          data-testid={`input-custom-${field.id}`}
+                        />
+                      )}
+                      
+                      {field.type === "select" && field.options && (
+                        <Select
+                          value={customFormData[field.id] || ""}
+                          onValueChange={(value) => setCustomFormData(prev => ({ ...prev, [field.id]: value }))}
+                        >
+                          <SelectTrigger data-testid={`select-custom-${field.id}`}>
+                            <SelectValue placeholder={fieldPlaceholder || (language === "es" ? "Seleccionar" : "Select")} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {field.options.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {language === "es" && option.labelEs ? option.labelEs : option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                      
+                      {field.type === "checkbox" && (
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`custom-${field.id}`}
+                            checked={customFormData[field.id] || false}
+                            onCheckedChange={(checked) => setCustomFormData(prev => ({ ...prev, [field.id]: checked }))}
+                            data-testid={`checkbox-custom-${field.id}`}
+                          />
+                          <label 
+                            htmlFor={`custom-${field.id}`}
+                            className="text-sm text-muted-foreground cursor-pointer"
+                          >
+                            {fieldPlaceholder || fieldLabel}
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Terms Section */}
             <FormField

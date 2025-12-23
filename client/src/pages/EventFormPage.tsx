@@ -24,6 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import type { Event, GuestAllowanceRule, User, EventManagerAssignment } from "@shared/schema";
+import { FormBuilder, FormFieldDefinition } from "@/components/FormBuilder";
 
 // Format date to local datetime string for datetime-local input (avoids UTC conversion issues)
 function formatDateForInput(dateValue: string | Date | null | undefined): string {
@@ -40,6 +41,21 @@ function formatDateForInput(dateValue: string | Date | null | undefined): string
   
   return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
+
+const formFieldSchema = z.object({
+  id: z.string(),
+  type: z.enum(["text", "email", "phone", "select", "checkbox", "textarea", "date", "number"]),
+  label: z.string(),
+  labelEs: z.string().optional(),
+  placeholder: z.string().optional(),
+  placeholderEs: z.string().optional(),
+  required: z.boolean(),
+  options: z.array(z.object({
+    value: z.string(),
+    label: z.string(),
+    labelEs: z.string().optional(),
+  })).optional(),
+});
 
 const eventFormSchema = z.object({
   name: z.string().min(1, "Event name is required"),
@@ -58,6 +74,7 @@ const eventFormSchema = z.object({
   qualificationEndDate: z.string().optional(),
   slug: z.string().regex(/^[a-z0-9-]+$/, "Only lowercase letters, numbers, and hyphens allowed").min(3).max(50).optional().or(z.literal("")),
   formTemplateId: z.string().optional(),
+  formFields: z.array(formFieldSchema).optional(),
 });
 
 // Form template type
@@ -103,6 +120,7 @@ export default function EventFormPage() {
       qualificationEndDate: "",
       slug: "",
       formTemplateId: "",
+      formFields: [],
     },
   });
 
@@ -131,6 +149,10 @@ export default function EventFormPage() {
         slug: event.slug || "",
         formTemplateId: (event as any).formTemplateId || "",
       });
+      // Load custom fields if present
+      if ((event as any).formFields) {
+        setCustomFields((event as any).formFields as FormFieldDefinition[]);
+      }
     }
   }, [event, form]);
 
@@ -164,9 +186,11 @@ export default function EventFormPage() {
 
   const onSubmit = (data: EventFormData) => {
     // Normalize slug: convert empty string to undefined so backend stores null
-    const normalizedData = {
+    const normalizedData: EventFormData = {
       ...data,
       slug: data.slug?.trim() || undefined,
+      // Include custom form fields only when no template is selected
+      formFields: !data.formTemplateId ? customFields : undefined,
     };
     
     if (isEditing) {
@@ -177,6 +201,9 @@ export default function EventFormPage() {
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
+
+  // Custom form fields state (used when no template selected)
+  const [customFields, setCustomFields] = useState<FormFieldDefinition[]>([]);
 
   // Guest Allowance Rules state and queries
   const [isRulesOpen, setIsRulesOpen] = useState(false);
@@ -641,6 +668,22 @@ export default function EventFormPage() {
                   </FormItem>
                 )}
               />
+
+              {/* Show FormBuilder when no template is selected */}
+              {!form.watch("formTemplateId") && (
+                <div className="mt-6 pt-6 border-t">
+                  <div className="mb-4">
+                    <h4 className="font-medium">Custom Form Fields</h4>
+                    <p className="text-sm text-muted-foreground">
+                      Add custom fields that attendees will fill out during registration
+                    </p>
+                  </div>
+                  <FormBuilder 
+                    fields={customFields} 
+                    onChange={setCustomFields} 
+                  />
+                </div>
+              )}
             </CardContent>
           </Card>
 
