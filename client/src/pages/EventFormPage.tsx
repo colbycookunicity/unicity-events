@@ -22,7 +22,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useTranslation } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import type { Event, GuestAllowanceRule } from "@shared/schema";
+import { useAuth } from "@/lib/auth";
+import type { Event, GuestAllowanceRule, User, EventManagerAssignment } from "@shared/schema";
 
 // Format date to local datetime string for datetime-local input (avoids UTC conversion issues)
 function formatDateForInput(dateValue: string | Date | null | undefined): string {
@@ -287,6 +288,54 @@ export default function EventFormPage() {
     if (cents === null) return "N/A";
     return `$${(cents / 100).toFixed(2)}`;
   };
+
+  // Event Manager Assignments (admin only)
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  
+  const { data: eventManagers = [], refetch: refetchManagers } = useQuery<(EventManagerAssignment & { user: User })[]>({
+    queryKey: [`/api/events/${params.id}/managers`],
+    enabled: !!isEditing && isAdmin,
+  });
+
+  // Get all users with event_manager role for assignment dropdown
+  const { data: allUsers = [] } = useQuery<User[]>({
+    queryKey: ["/api/users"],
+    enabled: !!isEditing && isAdmin,
+  });
+
+  const eventManagerUsers = allUsers.filter(u => u.role === "event_manager");
+  const assignedUserIds = eventManagers.map(em => em.userId);
+  const availableManagers = eventManagerUsers.filter(u => !assignedUserIds.includes(u.id));
+
+  const [selectedManagerId, setSelectedManagerId] = useState<string>("");
+
+  const assignManagerMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      return apiRequest("POST", `/api/events/${params.id}/managers`, { userId });
+    },
+    onSuccess: () => {
+      refetchManagers();
+      setSelectedManagerId("");
+      toast({ title: "Success", description: "Event manager assigned" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to assign event manager", variant: "destructive" });
+    },
+  });
+
+  const removeManagerMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      return apiRequest("DELETE", `/api/events/${params.id}/managers/${userId}`);
+    },
+    onSuccess: () => {
+      refetchManagers();
+      toast({ title: "Success", description: "Event manager removed" });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to remove event manager", variant: "destructive" });
+    },
+  });
 
   if (isEditing && isLoading) {
     return (
@@ -1024,6 +1073,110 @@ export default function EventFormPage() {
                     </FormItem>
                   )}
                 />
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Event Manager Assignments - Admin Only */}
+          {isEditing && isAdmin && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Event Managers
+                </CardTitle>
+                <CardDescription>
+                  Assign event managers who can view and edit this event. Event managers can only see events they created or were assigned to.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Creator info */}
+                {event?.createdBy && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Badge variant="secondary">Owner</Badge>
+                    <span>Created by user</span>
+                  </div>
+                )}
+                
+                {/* Assigned managers list */}
+                {eventManagers.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Assigned Managers</p>
+                    <div className="space-y-2">
+                      {eventManagers.map((assignment) => (
+                        <div 
+                          key={assignment.id} 
+                          className="flex items-center justify-between p-3 rounded-md border bg-muted/30"
+                          data-testid={`manager-assignment-${assignment.userId}`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                              <span className="text-sm font-medium text-primary">
+                                {assignment.user.name.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium">{assignment.user.name}</p>
+                              <p className="text-xs text-muted-foreground">{assignment.user.email}</p>
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => removeManagerMutation.mutate(assignment.userId)}
+                            disabled={removeManagerMutation.isPending}
+                            data-testid={`button-remove-manager-${assignment.userId}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Add manager form */}
+                {availableManagers.length > 0 ? (
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <FormLabel>Add Event Manager</FormLabel>
+                      <Select value={selectedManagerId} onValueChange={setSelectedManagerId}>
+                        <SelectTrigger data-testid="select-add-manager">
+                          <SelectValue placeholder="Select an event manager..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableManagers.map((manager) => (
+                            <SelectItem key={manager.id} value={manager.id}>
+                              {manager.name} ({manager.email})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => selectedManagerId && assignManagerMutation.mutate(selectedManagerId)}
+                      disabled={!selectedManagerId || assignManagerMutation.isPending}
+                      data-testid="button-assign-manager"
+                    >
+                      {assignManagerMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Plus className="h-4 w-4 mr-2" />
+                      )}
+                      Add
+                    </Button>
+                  </div>
+                ) : eventManagerUsers.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No event managers available. Create users with the "Event Manager" role to assign them to events.
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    All event managers are already assigned to this event.
+                  </p>
+                )}
               </CardContent>
             </Card>
           )}

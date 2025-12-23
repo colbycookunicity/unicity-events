@@ -500,10 +500,44 @@ export const qualifiedRegistrants = pgTable("qualified_registrants", {
   lastModified: timestamp("last_modified").defaultNow().notNull(),
 });
 
+// Event Manager Assignments table - Tracks which event managers have access to which events
+export const eventManagerAssignments = pgTable("event_manager_assignments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  eventId: varchar("event_id").references(() => events.id, { onDelete: "cascade" }).notNull(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  assignedBy: varchar("assigned_by").references(() => users.id),
+  assignedAt: timestamp("assigned_at").defaultNow().notNull(),
+}, (table) => ({
+  uniqueEventUser: uniqueIndex("event_manager_unique_idx").on(table.eventId, table.userId),
+}));
+
+export const insertEventManagerAssignmentSchema = createInsertSchema(eventManagerAssignments).omit({
+  id: true,
+  assignedAt: true,
+});
+export type InsertEventManagerAssignment = z.infer<typeof insertEventManagerAssignmentSchema>;
+export type EventManagerAssignment = typeof eventManagerAssignments.$inferSelect;
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   events: many(events),
   checkIns: many(registrations),
+  eventAssignments: many(eventManagerAssignments),
+}));
+
+export const eventManagerAssignmentsRelations = relations(eventManagerAssignments, ({ one }) => ({
+  event: one(events, {
+    fields: [eventManagerAssignments.eventId],
+    references: [events.id],
+  }),
+  user: one(users, {
+    fields: [eventManagerAssignments.userId],
+    references: [users.id],
+  }),
+  assignedByUser: one(users, {
+    fields: [eventManagerAssignments.assignedBy],
+    references: [users.id],
+  }),
 }));
 
 export const eventsRelations = relations(events, ({ one, many }) => ({
@@ -515,6 +549,7 @@ export const eventsRelations = relations(events, ({ one, many }) => ({
   swagItems: many(swagItems),
   guestAllowanceRules: many(guestAllowanceRules),
   qualifiedRegistrants: many(qualifiedRegistrants),
+  managerAssignments: many(eventManagerAssignments),
 }));
 
 export const registrationsRelations = relations(registrations, ({ one, many }) => ({

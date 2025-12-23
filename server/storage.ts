@@ -1,7 +1,7 @@
 import {
   users, events, registrations, guests, flights, reimbursements, otpSessions, authSessions,
   swagItems, swagAssignments, qualifiedRegistrants, eventPages, eventPageSections, guestAllowanceRules,
-  formTemplates,
+  formTemplates, eventManagerAssignments,
   type User, type InsertUser,
   type Event, type InsertEvent,
   type Registration, type InsertRegistration,
@@ -17,6 +17,7 @@ import {
   type EventPageSection, type InsertEventPageSection,
   type GuestAllowanceRule, type InsertGuestAllowanceRule,
   type FormTemplate,
+  type EventManagerAssignment, type InsertEventManagerAssignment,
   type EventWithStats, type RegistrationWithDetails,
   type SwagItemWithStats, type SwagAssignmentWithDetails,
 } from "@shared/schema";
@@ -148,6 +149,13 @@ export interface IStorage {
   updateGuestAllowanceRule(id: string, data: Partial<InsertGuestAllowanceRule>): Promise<GuestAllowanceRule | undefined>;
   deleteGuestAllowanceRule(id: string): Promise<boolean>;
   setDefaultGuestAllowanceRule(eventId: string, ruleId: string): Promise<void>;
+
+  // Event Manager Assignments
+  getEventManagerAssignments(eventId: string): Promise<(EventManagerAssignment & { user: User })[]>;
+  getEventsForManager(userId: string): Promise<EventWithStats[]>;
+  canUserAccessEvent(userId: string, eventId: string, userRole: string): Promise<boolean>;
+  assignEventManager(eventId: string, userId: string, assignedBy: string): Promise<EventManagerAssignment>;
+  removeEventManager(eventId: string, userId: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -857,6 +865,111 @@ export class DatabaseStorage implements IStorage {
     await db.update(guestAllowanceRules)
       .set({ isDefault: true, lastModified: new Date() })
       .where(eq(guestAllowanceRules.id, ruleId));
+  }
+
+  // Event Manager Assignments
+  async getEventManagerAssignments(eventId: string): Promise<(EventManagerAssignment & { user: User })[]> {
+    const assignments = await db
+      .select()
+      .from(eventManagerAssignments)
+      .innerJoin(users, eq(eventManagerAssignments.userId, users.id))
+      .where(eq(eventManagerAssignments.eventId, eventId))
+      .orderBy(eventManagerAssignments.assignedAt);
+    
+    return assignments.map(row => ({
+      ...row.event_manager_assignments,
+      user: row.users,
+    }));
+  }
+
+  async getEventsForManager(userId: string): Promise<EventWithStats[]> {
+    // Get events where user is creator OR assigned manager
+    const assignedEventIds = await db
+      .select({ eventId: eventManagerAssignments.eventId })
+      .from(eventManagerAssignments)
+      .where(eq(eventManagerAssignments.userId, userId));
+    
+    const assignedIds = assignedEventIds.map(r => r.eventId);
+    
+    // Get all events where user is creator or assigned
+    const eventsData = await db.select().from(events)
+      .where(or(
+        eq(events.createdBy, userId),
+        ...assignedIds.map(id => eq(events.id, id))
+      ))
+      .orderBy(desc(events.startDate));
+    
+    // Add stats to each event
+    const eventsWithStats: EventWithStats[] = await Promise.all(
+      eventsData.map(async (event) => {
+        const [regStats] = await db
+          .select({
+            total: count(),
+            checkedIn: sql<number>`count(*) filter (where ${registrations.status} = 'checked_in')`,
+          })
+          .from(registrations)
+          .where(eq(registrations.eventId, event.id));
+
+        return {
+          ...event,
+          totalRegistrations: Number(regStats?.total) || 0,
+          checkedInCount: Number(regStats?.checkedIn) || 0,
+        };
+      })
+    );
+
+    return eventsWithStats;
+  }
+
+  async canUserAccessEvent(userId: string, eventId: string, userRole: string): Promise<boolean> {
+    // Admins can access all events
+    if (userRole === 'admin') {
+      return true;
+    }
+    
+    // Marketing and readonly can access all events (view only)
+    if (userRole === 'marketing' || userRole === 'readonly') {
+      return true;
+    }
+    
+    // Event managers can only access events they created or are assigned to
+    const event = await this.getEvent(eventId);
+    if (!event) return false;
+    
+    // Check if creator
+    if (event.createdBy === userId) {
+      return true;
+    }
+    
+    // Check if assigned
+    const [assignment] = await db.select()
+      .from(eventManagerAssignments)
+      .where(and(
+        eq(eventManagerAssignments.eventId, eventId),
+        eq(eventManagerAssignments.userId, userId)
+      ));
+    
+    return !!assignment;
+  }
+
+  async assignEventManager(eventId: string, userId: string, assignedBy: string): Promise<EventManagerAssignment> {
+    const [assignment] = await db.insert(eventManagerAssignments)
+      .values({
+        eventId,
+        userId,
+        assignedBy,
+      })
+      .returning();
+    return assignment;
+  }
+
+  async removeEventManager(eventId: string, userId: string): Promise<boolean> {
+    const result = await db.delete(eventManagerAssignments)
+      .where(and(
+        eq(eventManagerAssignments.eventId, eventId),
+        eq(eventManagerAssignments.userId, userId)
+      ));
+    return (result.rowCount ?? 0) > 0;
   }
 }
 

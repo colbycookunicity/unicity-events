@@ -820,10 +820,19 @@ export async function registerRoutes(
   });
 
   // Events Routes
-  app.get("/api/events", async (req, res) => {
+  app.get("/api/events", authenticateToken as any, async (req: AuthenticatedRequest, res) => {
     try {
-      const events = await storage.getEvents();
-      res.json(events);
+      const user = req.user!;
+      
+      // Event managers only see their own events
+      if (user.role === "event_manager") {
+        const events = await storage.getEventsForManager(user.id);
+        res.json(events);
+      } else {
+        // Admins, marketing, readonly see all events
+        const events = await storage.getEvents();
+        res.json(events);
+      }
     } catch (error) {
       console.error("Get events error:", error);
       res.status(500).json({ error: "Failed to get events" });
@@ -1039,6 +1048,58 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Delete event error:", error);
       res.status(500).json({ error: "Failed to delete event" });
+    }
+  });
+
+  // Event Manager Assignments Routes
+  app.get("/api/events/:id/managers", authenticateToken, requireRole("admin"), async (req, res) => {
+    try {
+      const assignments = await storage.getEventManagerAssignments(req.params.id);
+      res.json(assignments);
+    } catch (error) {
+      console.error("Get event managers error:", error);
+      res.status(500).json({ error: "Failed to get event managers" });
+    }
+  });
+
+  app.post("/api/events/:id/managers", authenticateToken, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const { userId } = req.body;
+      if (!userId) {
+        return res.status(400).json({ error: "userId is required" });
+      }
+      
+      // Verify the user exists and is an event manager
+      const userToAssign = await storage.getUser(userId);
+      if (!userToAssign) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      if (userToAssign.role !== "event_manager") {
+        return res.status(400).json({ error: "User must have event_manager role" });
+      }
+      
+      const assignment = await storage.assignEventManager(req.params.id, userId, req.user!.id);
+      res.status(201).json(assignment);
+    } catch (error: any) {
+      console.error("Assign event manager error:", error);
+      // Handle unique constraint violation
+      if (error?.code === "23505") {
+        return res.status(409).json({ error: "User is already assigned to this event" });
+      }
+      res.status(500).json({ error: "Failed to assign event manager" });
+    }
+  });
+
+  app.delete("/api/events/:id/managers/:userId", authenticateToken, requireRole("admin"), async (req, res) => {
+    try {
+      const success = await storage.removeEventManager(req.params.id, req.params.userId);
+      if (!success) {
+        return res.status(404).json({ error: "Assignment not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Remove event manager error:", error);
+      res.status(500).json({ error: "Failed to remove event manager" });
     }
   });
 
