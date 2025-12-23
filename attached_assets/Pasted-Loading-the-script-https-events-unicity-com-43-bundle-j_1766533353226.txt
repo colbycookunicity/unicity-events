@@ -1,0 +1,170 @@
+Loading the script 'https://events.unicity.com/43.bundle.js' violates the following Content Security Policy directive: "script-src 'self' 'wasm-unsafe-eval' 'inline-speculation-rules' chrome-extension://8bf3c1aa-dc62-455f-9109-d00df0e5792e/". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.
+a.l @ contentScript.bundle.js:2Understand this error
+contentScript.bundle.js:2 Failed to load font styles: ChunkLoadError: Loading chunk 43 failed.
+(error: https://events.unicity.com/43.bundle.js)
+    at a.f.j (contentScript.bundle.js:2:2505284)
+    at contentScript.bundle.js:2:2503863
+    at Array.reduce (<anonymous>)
+    at a.e (contentScript.bundle.js:2:2503842)
+    at contentScript.bundle.js:2:4636362
+    at Generator.<anonymous> (contentScript.bundle.js:2:4629728)
+    at Generator.next (contentScript.bundle.js:2:4630666)
+    at NMe (contentScript.bundle.js:2:4631812)
+    at a (contentScript.bundle.js:2:4632016)
+    at contentScript.bundle.js:2:4632079
+(anonymous) @ contentScript.bundle.js:2Understand this warning
+contentScript.bundle.js:2 Loading the script 'https://events.unicity.com/43.bundle.js' violates the following Content Security Policy directive: "script-src 'self' 'wasm-unsafe-eval' 'inline-speculation-rules' chrome-extension://8bf3c1aa-dc62-455f-9109-d00df0e5792e/". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.
+a.l @ contentScript.bundle.js:2Understand this error
+contentScript.bundle.js:2 Failed to load font styles: ChunkLoadError: Loading chunk 43 failed.
+(error: https://events.unicity.com/43.bundle.js)
+    at a.f.j (contentScript.bundle.js:2:2505284)
+    at contentScript.bundle.js:2:2503863
+    at Array.reduce (<anonymous>)
+    at a.e (contentScript.bundle.js:2:2503842)
+    at contentScript.bundle.js:2:4636362
+    at Generator.<anonymous> (contentScript.bundle.js:2:4629728)
+    at Generator.next (contentScript.bundle.js:2:4630666)
+    at NMe (contentScript.bundle.js:2:4631812)
+    at a (contentScript.bundle.js:2:4632016)
+    at contentScript.bundle.js:2:4632079
+(anonymous) @ contentScript.bundle.js:2Understand this warning
+/api/objects/public/api/objects/public/images/hero-1766532746331.png?redirect=false:1  Failed to load resource: the server responded with a status of 404 ()Understand this error
+index.html:1 The resource https://apps.rokt.com/icons/rokt-icons.woff was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.Understand this warning
+index.html:1 The resource https://apps.rokt.com/icons/rokt-icons.woff was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.Understand this warning
+content.min.js:2 Uncaught (in promise) TypeError: e.className.includes is not a function
+    at content.min.js:2:441645
+    at Array.some (<anonymous>)
+    at content.min.js:2:441594
+    at Array.filter (<anonymous>)
+    at Object.<anonymous> (content.min.js:2:441281)
+    at f (content.min.js:2:169418)
+    at Generator.<anonymous> (content.min.js:2:170773)
+    at Generator.next (content.min.js:2:169781)
+    at y (content.min.js:2:327508)
+    at i (content.min.js:2:327711)Understand this error
+content.min.js:2 Uncaught (in promise) TypeError: e.className.includes is not a function
+    at content.min.js:2:441466
+    at Array.some (<anonymous>)
+    at content.min.js:2:441415
+    at Array.filter (<anonymous>)
+    at Object.<anonymous> (content.min.js:2:441281)
+    at f (content.min.js:2:169418)
+    at Generator.<anonymous> (content.min.js:2:170773)
+    at Generator.next (content.min.js:2:169781)
+    at y (content.min.js:2:327508)
+    at i (content.min.js:2:327711)Understand this error
+content.min.js:2 Uncaught (in promise) TypeError: e.className.includes is not a function
+    at content.min.js:2:441645
+    at Array.some (<anonymous>)
+    at content.min.js:2:441594
+    at Array.filter (<anonymous>)
+    at Object.<anonymous> (content.min.js:2:441281)
+    at f (content.min.js:2:169418)
+    at Generator.<anonymous> (content.min.js:2:170773)
+    at Generator.next (content.min.js:2:169781)
+    at y (content.min.js:2:327508)
+    at i (content.min.js:2:327711)Understand this error
+/api/register/otp/validate:1  Failed to load resource: the server responded with a status of 400 ()Understand this error
+content.min.js:2 Uncaught (in promise) TypeError: e.className.includes is not a function
+    at content.min.js:2:441466
+    at Array.some (<anonymous>)
+    at content.min.js:2:441415
+    at Array.filter (<anonymous>)
+    at Object.<anonymous> (content.min.js:2:441281)
+    at f (content.min.js:2:169418)
+    at Generator.<anonymous> (content.min.js:2:170773)
+    at Generator.next (content.min.js:2:169781)
+    at y (content.min.js:2:327508)
+    at i (content.min.js:2:327711)Understand this error
+content.min.js:2 Uncaught (in promise) TypeError: e.className.includes is not a function
+    at content.min.js:2:441645
+    at Array.some (<anonymous>)
+    at content.min.js:2:441594
+    at Array.filter (<anonymous>)
+    at Object.<anonymous> (content.min.js:2:441281)
+    at f (content.min.js:2:169418)
+    at Generator.<anonymous> (content.min.js:2:170773)
+    at Generator.next (content.min.js:2:169781)
+    at y (content.min.js:2:327508)
+    at i (content.min.js:2:327711)Understand this error
+/api/register/otp/validate:1  Failed to load resource: the server responded with a status of 400 ()Understand this error
+content.min.js:2 Uncaught (in promise) TypeError: e.className.includes is not a function
+    at content.min.js:2:441466
+    at Array.some (<anonymous>)
+    at content.min.js:2:441415
+    at Array.filter (<anonymous>)
+    at Object.<anonymous> (content.min.js:2:441281)
+    at f (content.min.js:2:169418)
+    at Generator.<anonymous> (content.min.js:2:170773)
+    at Generator.next (content.min.js:2:169781)
+    at y (content.min.js:2:327508)
+    at i (content.min.js:2:327711)Understand this error
+content.min.js:2 Uncaught (in promise) TypeError: e.className.includes is not a function
+    at content.min.js:2:441645
+    at Array.some (<anonymous>)
+    at content.min.js:2:441594
+    at Array.filter (<anonymous>)
+    at Object.<anonymous> (content.min.js:2:441281)
+    at f (content.min.js:2:169418)
+    at Generator.<anonymous> (content.min.js:2:170773)
+    at Generator.next (content.min.js:2:169781)
+    at y (content.min.js:2:327508)
+    at i (content.min.js:2:327711)Understand this error
+/api/register/otp/validate:1  Failed to load resource: the server responded with a status of 400 ()Understand this error
+content.min.js:2 Uncaught (in promise) TypeError: e.className.includes is not a function
+    at content.min.js:2:441466
+    at Array.some (<anonymous>)
+    at content.min.js:2:441415
+    at Array.filter (<anonymous>)
+    at Object.<anonymous> (content.min.js:2:441281)
+    at f (content.min.js:2:169418)
+    at Generator.<anonymous> (content.min.js:2:170773)
+    at Generator.next (content.min.js:2:169781)
+    at y (content.min.js:2:327508)
+    at i (content.min.js:2:327711)Understand this error
+content.min.js:2 Uncaught (in promise) TypeError: e.className.includes is not a function
+    at content.min.js:2:441645
+    at Array.some (<anonymous>)
+    at content.min.js:2:441594
+    at Array.filter (<anonymous>)
+    at Object.<anonymous> (content.min.js:2:441281)
+    at f (content.min.js:2:169418)
+    at Generator.<anonymous> (content.min.js:2:170773)
+    at Generator.next (content.min.js:2:169781)
+    at y (content.min.js:2:327508)
+    at i (content.min.js:2:327711)Understand this error
+content.min.js:2 Uncaught (in promise) TypeError: e.className.includes is not a function
+    at content.min.js:2:441466
+    at Array.some (<anonymous>)
+    at content.min.js:2:441415
+    at Array.filter (<anonymous>)
+    at Object.<anonymous> (content.min.js:2:441281)
+    at f (content.min.js:2:169418)
+    at Generator.<anonymous> (content.min.js:2:170773)
+    at Generator.next (content.min.js:2:169781)
+    at y (content.min.js:2:327508)
+    at i (content.min.js:2:327711)Understand this error
+content.min.js:2 Uncaught (in promise) TypeError: e.className.includes is not a function
+    at content.min.js:2:441645
+    at Array.some (<anonymous>)
+    at content.min.js:2:441594
+    at Array.filter (<anonymous>)
+    at Object.<anonymous> (content.min.js:2:441281)
+    at f (content.min.js:2:169418)
+    at Generator.<anonymous> (content.min.js:2:170773)
+    at Generator.next (content.min.js:2:169781)
+    at y (content.min.js:2:327508)
+    at i (content.min.js:2:327711)Understand this error
+/api/register/otp/validate:1  Failed to load resource: the server responded with a status of 400 ()Understand this error
+content.min.js:2 Uncaught (in promise) TypeError: e.className.includes is not a function
+    at content.min.js:2:441466
+    at Array.some (<anonymous>)
+    at content.min.js:2:441415
+    at Array.filter (<anonymous>)
+    at Object.<anonymous> (content.min.js:2:441281)
+    at f (content.min.js:2:169418)
+    at Generator.<anonymous> (content.min.js:2:170773)
+    at Generator.next (content.min.js:2:169781)
+    at y (content.min.js:2:327508)
+    at i (content.min.js:2:327711)Understand this error
+index.html:1 The resource https://apps.rokt.com/icons/rokt-icons.woff was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.Understand this warning
