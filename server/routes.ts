@@ -879,7 +879,18 @@ export async function registerRoutes(
       // Normalize slug: empty/whitespace -> null
       const normalizedSlug = req.body.slug?.trim() || null;
       
-      const data = insertEventSchema.parse({
+      // Handle guest policy and buy-in price validation
+      const guestPolicy = req.body.guestPolicy || "not_allowed";
+      let buyInPrice = req.body.buyInPrice;
+      
+      // Normalize buyInPrice based on guest policy
+      if (guestPolicy === "not_allowed" || guestPolicy === "allowed_free") {
+        buyInPrice = null; // Clear price if guests not allowed or free
+      } else if (guestPolicy === "allowed_paid" && (!buyInPrice || buyInPrice <= 0)) {
+        return res.status(400).json({ error: "Buy-in price is required and must be greater than 0 when guests are paid" });
+      }
+      
+      const eventData: Record<string, unknown> = {
         ...req.body,
         slug: normalizedSlug,
         startDate: req.body.startDate ? new Date(req.body.startDate) : undefined,
@@ -889,8 +900,18 @@ export async function registerRoutes(
         // Provide defaults for CMS fields that have database defaults but are required by Zod
         registrationLayout: req.body.registrationLayout || "standard",
         requiresVerification: req.body.requiresVerification !== undefined ? req.body.requiresVerification : true,
+        guestPolicy,
         createdBy: req.user!.id,
-      });
+      };
+      
+      // Only include buyInPrice if it has a value (otherwise omit to allow DB null)
+      if (buyInPrice !== null && buyInPrice !== undefined) {
+        eventData.buyInPrice = buyInPrice;
+      } else {
+        delete eventData.buyInPrice;
+      }
+      
+      const data = insertEventSchema.parse(eventData);
       const event = await storage.createEvent(data);
       res.status(201).json(event);
     } catch (error) {
@@ -920,7 +941,16 @@ export async function registerRoutes(
       if (req.body.location !== undefined) updates.location = req.body.location;
       if (req.body.status !== undefined) updates.status = req.body.status;
       if (req.body.capacity !== undefined) updates.capacity = req.body.capacity ? parseInt(String(req.body.capacity), 10) : null;
-      if (req.body.buyInPrice !== undefined) updates.buyInPrice = req.body.buyInPrice ? Math.round(parseFloat(String(req.body.buyInPrice))) : null;
+      if (req.body.guestPolicy !== undefined) updates.guestPolicy = req.body.guestPolicy;
+      // Handle buyInPrice based on guestPolicy
+      if (req.body.guestPolicy !== undefined || req.body.buyInPrice !== undefined) {
+        const guestPolicy = req.body.guestPolicy;
+        if (guestPolicy === "not_allowed" || guestPolicy === "allowed_free") {
+          updates.buyInPrice = null;
+        } else if (req.body.buyInPrice !== undefined) {
+          updates.buyInPrice = req.body.buyInPrice ? Math.round(parseFloat(String(req.body.buyInPrice))) : null;
+        }
+      }
       if (req.body.requiresQualification !== undefined) updates.requiresQualification = req.body.requiresQualification;
       if (req.body.registrationLayout !== undefined) updates.registrationLayout = req.body.registrationLayout;
       if (req.body.requiresVerification !== undefined) updates.requiresVerification = req.body.requiresVerification;

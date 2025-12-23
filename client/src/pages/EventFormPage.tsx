@@ -47,6 +47,7 @@ const eventFormSchema = z.object({
   endDate: z.string().min(1, "End date is required"),
   status: z.enum(["draft", "published", "private", "archived"]),
   capacity: z.coerce.number().min(0).optional(),
+  guestPolicy: z.enum(["not_allowed", "allowed_free", "allowed_paid"]).default("not_allowed"),
   buyInPrice: z.coerce.number().min(0).optional(),
   requiresQualification: z.boolean().default(false),
   qualificationStartDate: z.string().optional(),
@@ -80,6 +81,7 @@ export default function EventFormPage() {
       endDate: "",
       status: "draft",
       capacity: undefined,
+      guestPolicy: "not_allowed",
       buyInPrice: undefined,
       requiresQualification: false,
       qualificationStartDate: "",
@@ -100,6 +102,7 @@ export default function EventFormPage() {
         endDate: formatDateForInput(event.endDate),
         status: event.status as EventFormData["status"],
         capacity: event.capacity || undefined,
+        guestPolicy: (event.guestPolicy as EventFormData["guestPolicy"]) || "not_allowed",
         buyInPrice: event.buyInPrice || undefined,
         requiresQualification: event.requiresQualification || false,
         qualificationStartDate: formatDateForInput(event.qualificationStartDate),
@@ -458,19 +461,56 @@ export default function EventFormPage() {
                 />
                 <FormField
                   control={form.control}
-                  name="buyInPrice"
+                  name="guestPolicy"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t("buyInPrice")} (cents)</FormLabel>
-                      <FormControl>
-                        <Input type="number" {...field} placeholder="50000" data-testid="input-buyin-price" />
-                      </FormControl>
-                      <FormDescription>Guest buy-in price in cents</FormDescription>
+                      <FormLabel>Guest Policy</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-guest-policy">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="not_allowed">Not Allowed</SelectItem>
+                          <SelectItem value="allowed_free">Allowed (Free)</SelectItem>
+                          <SelectItem value="allowed_paid">Allowed (Paid)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        {field.value === "not_allowed" && "Registrants cannot bring guests"}
+                        {field.value === "allowed_free" && "Guests can attend at no additional cost"}
+                        {field.value === "allowed_paid" && "Guests must pay a buy-in fee"}
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               </div>
+
+              {form.watch("guestPolicy") === "allowed_paid" && (
+                <FormField
+                  control={form.control}
+                  name="buyInPrice"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Guest Buy-In Price (cents)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          {...field} 
+                          placeholder="e.g., 50000 for $500.00" 
+                          data-testid="input-buyin-price" 
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Enter the price in cents (e.g., 50000 = $500.00)
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <FormField
                 control={form.control}

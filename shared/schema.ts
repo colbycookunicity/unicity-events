@@ -82,6 +82,8 @@ export const events = pgTable("events", {
   endDate: timestamp("end_date").notNull(),
   status: text("status").notNull().default("draft"),
   capacity: integer("capacity"),
+  // Guest policy: not_allowed, allowed_free, allowed_paid
+  guestPolicy: text("guest_policy").notNull().default("not_allowed"),
   buyInPrice: integer("buy_in_price"),
   requiresQualification: boolean("requires_qualification").default(false),
   qualificationStartDate: timestamp("qualification_start_date"),
