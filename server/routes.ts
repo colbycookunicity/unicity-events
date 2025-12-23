@@ -886,6 +886,9 @@ export async function registerRoutes(
         endDate: req.body.endDate ? new Date(req.body.endDate) : undefined,
         qualificationStartDate: req.body.qualificationStartDate ? new Date(req.body.qualificationStartDate) : undefined,
         qualificationEndDate: req.body.qualificationEndDate ? new Date(req.body.qualificationEndDate) : undefined,
+        // Provide defaults for CMS fields that have database defaults but are required by Zod
+        registrationLayout: req.body.registrationLayout || "standard",
+        requiresVerification: req.body.requiresVerification !== undefined ? req.body.requiresVerification : true,
         createdBy: req.user!.id,
       });
       const event = await storage.createEvent(data);
@@ -893,6 +896,7 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Create event error:", error);
       if (error instanceof z.ZodError) {
+        console.error("Zod validation errors:", JSON.stringify(error.errors, null, 2));
         return res.status(400).json({ error: "Invalid event data", details: error.errors });
       }
       res.status(500).json({ error: "Failed to create event" });
