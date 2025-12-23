@@ -634,6 +634,8 @@ export const insertEventSchema = createInsertSchema(events).omit({
   id: true,
   createdAt: true,
   lastModified: true,
+}).extend({
+  formTemplateId: z.string().uuid().nullable().optional(),
 });
 
 export const insertRegistrationSchema = createInsertSchema(registrations).omit({

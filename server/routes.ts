@@ -795,6 +795,30 @@ export async function registerRoutes(
     }
   });
 
+  // Form Templates Routes
+  app.get("/api/form-templates", async (req, res) => {
+    try {
+      const templates = await storage.getFormTemplates();
+      res.json(templates);
+    } catch (error) {
+      console.error("Get form templates error:", error);
+      res.status(500).json({ error: "Failed to get form templates" });
+    }
+  });
+
+  app.get("/api/form-templates/:id", async (req, res) => {
+    try {
+      const template = await storage.getFormTemplate(req.params.id);
+      if (!template) {
+        return res.status(404).json({ error: "Form template not found" });
+      }
+      res.json(template);
+    } catch (error) {
+      console.error("Get form template error:", error);
+      res.status(500).json({ error: "Failed to get form template" });
+    }
+  });
+
   // Events Routes
   app.get("/api/events", async (req, res) => {
     try {
@@ -861,6 +885,16 @@ export async function registerRoutes(
       if (event.status !== "published") {
         return res.status(404).json({ error: "Event not available" });
       }
+      
+      // Get form fields: use template if set, otherwise use event's custom formFields
+      let effectiveFormFields = event.formFields;
+      if ((event as any).formTemplateId) {
+        const template = await storage.getFormTemplate((event as any).formTemplateId);
+        if (template) {
+          effectiveFormFields = template.fields;
+        }
+      }
+      
       // Return public-safe event data including registration and qualification settings
       res.json({
         id: event.id,
@@ -874,7 +908,7 @@ export async function registerRoutes(
         endDate: event.endDate,
         capacity: event.capacity,
         buyInPrice: event.buyInPrice,
-        formFields: event.formFields,
+        formFields: effectiveFormFields,
         registrationLayout: event.registrationLayout,
         requiresVerification: event.requiresVerification,
         requiresQualification: event.requiresQualification,
@@ -892,6 +926,9 @@ export async function registerRoutes(
       // Normalize slug: empty/whitespace -> null
       const normalizedSlug = req.body.slug?.trim() || null;
       
+      // Normalize formTemplateId: empty/whitespace -> null
+      const normalizedFormTemplateId = req.body.formTemplateId?.trim() || null;
+      
       // Handle guest policy and buy-in price validation
       const guestPolicy = req.body.guestPolicy || "not_allowed";
       let buyInPrice = req.body.buyInPrice;
@@ -906,6 +943,7 @@ export async function registerRoutes(
       const eventData: Record<string, unknown> = {
         ...req.body,
         slug: normalizedSlug,
+        formTemplateId: normalizedFormTemplateId,
         startDate: req.body.startDate ? new Date(req.body.startDate) : undefined,
         endDate: req.body.endDate ? new Date(req.body.endDate) : undefined,
         qualificationStartDate: req.body.qualificationStartDate ? new Date(req.body.qualificationStartDate) : undefined,
@@ -944,6 +982,11 @@ export async function registerRoutes(
         ? (req.body.slug?.trim() || null) 
         : undefined;
       
+      // Normalize formTemplateId: empty/whitespace -> null
+      const normalizedFormTemplateId = req.body.formTemplateId !== undefined
+        ? (req.body.formTemplateId?.trim() || null)
+        : undefined;
+      
       // Build updates object carefully, excluding undefined values
       const updates: Record<string, unknown> = {};
       
@@ -968,6 +1011,7 @@ export async function registerRoutes(
       if (req.body.registrationLayout !== undefined) updates.registrationLayout = req.body.registrationLayout;
       if (req.body.requiresVerification !== undefined) updates.requiresVerification = req.body.requiresVerification;
       if (req.body.formFields !== undefined) updates.formFields = req.body.formFields;
+      if (normalizedFormTemplateId !== undefined) updates.formTemplateId = normalizedFormTemplateId;
       if (normalizedSlug !== undefined) updates.slug = normalizedSlug;
       
       // Handle dates

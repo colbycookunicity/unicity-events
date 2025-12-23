@@ -18,6 +18,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Skeleton } from "@/components/ui/skeleton";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useTranslation } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -55,7 +56,18 @@ const eventFormSchema = z.object({
   qualificationStartDate: z.string().optional(),
   qualificationEndDate: z.string().optional(),
   slug: z.string().regex(/^[a-z0-9-]+$/, "Only lowercase letters, numbers, and hyphens allowed").min(3).max(50).optional().or(z.literal("")),
+  formTemplateId: z.string().optional(),
 });
+
+// Form template type
+interface FormTemplate {
+  id: string;
+  key: string;
+  name: string;
+  nameEs?: string;
+  description?: string;
+  fields: unknown[];
+}
 
 type EventFormData = z.infer<typeof eventFormSchema>;
 
@@ -89,7 +101,13 @@ export default function EventFormPage() {
       qualificationStartDate: "",
       qualificationEndDate: "",
       slug: "",
+      formTemplateId: "",
     },
+  });
+
+  // Query form templates
+  const { data: formTemplates = [] } = useQuery<FormTemplate[]>({
+    queryKey: ["/api/form-templates"],
   });
 
   useEffect(() => {
@@ -110,6 +128,7 @@ export default function EventFormPage() {
         qualificationStartDate: formatDateForInput(event.qualificationStartDate),
         qualificationEndDate: formatDateForInput(event.qualificationEndDate),
         slug: event.slug || "",
+        formTemplateId: (event as any).formTemplateId || "",
       });
     }
   }, [event, form]);
@@ -157,6 +176,23 @@ export default function EventFormPage() {
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
+
+  // Delete event state and mutation
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("DELETE", `/api/events/${params.id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      toast({ title: "Event Deleted", description: "The event and all associated data have been permanently deleted." });
+      setLocation("/admin/events");
+    },
+    onError: () => {
+      toast({ title: t("error"), description: "Failed to delete event", variant: "destructive" });
+    },
+  });
 
   // Guest Allowance Rules state and queries
   const [isRulesOpen, setIsRulesOpen] = useState(false);
@@ -526,6 +562,53 @@ export default function EventFormPage() {
                   />
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Registration Form</CardTitle>
+              <CardDescription>Choose which form template attendees will fill out</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <FormField
+                control={form.control}
+                name="formTemplateId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Form Template</FormLabel>
+                    <Select 
+                      onValueChange={(value) => field.onChange(value === "none" ? "" : value)} 
+                      value={field.value || "none"}
+                    >
+                      <FormControl>
+                        <SelectTrigger data-testid="select-form-template" className="max-w-md">
+                          <SelectValue placeholder="Select a form template" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">No template (custom form)</SelectItem>
+                        {formTemplates.map((template) => (
+                          <SelectItem key={template.id} value={template.id}>
+                            {template.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      {field.value && field.value !== "none" ? (
+                        (() => {
+                          const selected = formTemplates.find(t => t.id === field.value);
+                          return selected?.description || "Selected template will be used for registration";
+                        })()
+                      ) : (
+                        "Select a predefined template or use custom form fields"
+                      )}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </CardContent>
           </Card>
 
@@ -962,14 +1045,57 @@ export default function EventFormPage() {
             </Card>
           )}
 
-          <div className="flex justify-end gap-4">
-            <Button type="button" variant="outline" onClick={() => setLocation("/admin/events")} data-testid="button-cancel">
-              {t("cancel")}
-            </Button>
-            <Button type="submit" disabled={isPending} data-testid="button-save-event">
-              {isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {t("save")}
-            </Button>
+          <div className="flex justify-between gap-4">
+            {isEditing ? (
+              <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+                <AlertDialogTrigger asChild>
+                  <Button type="button" variant="destructive" data-testid="button-delete-event">
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Event
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete Event Permanently?</AlertDialogTitle>
+                    <AlertDialogDescription className="space-y-2">
+                      <p>This action cannot be undone. Deleting this event will permanently remove:</p>
+                      <ul className="list-disc list-inside text-sm space-y-1">
+                        <li>All attendee registrations</li>
+                        <li>All guest information</li>
+                        <li>All flight records</li>
+                        <li>All reimbursement data</li>
+                        <li>All qualified registrant lists</li>
+                        <li>All CMS page content</li>
+                      </ul>
+                      <p className="font-medium mt-2">Consider changing the status to "Archived" instead if you want to preserve the data.</p>
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => deleteMutation.mutate()}
+                      disabled={deleteMutation.isPending}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      data-testid="button-confirm-delete"
+                    >
+                      {deleteMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                      Yes, Delete Permanently
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            ) : (
+              <div />
+            )}
+            <div className="flex gap-4">
+              <Button type="button" variant="outline" onClick={() => setLocation("/admin/events")} data-testid="button-cancel">
+                {t("cancel")}
+              </Button>
+              <Button type="submit" disabled={isPending} data-testid="button-save-event">
+                {isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                {t("save")}
+              </Button>
+            </div>
           </div>
         </form>
       </Form>
