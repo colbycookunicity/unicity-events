@@ -179,6 +179,7 @@ export default function RegistrationPage() {
   const [otpCode, setOtpCode] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
   const [verifiedProfile, setVerifiedProfile] = useState<VerifiedProfile | null>(null);
+  const [verifiedByHydra, setVerifiedByHydra] = useState(false);
   const [isQualified, setIsQualified] = useState(true);
   const [qualificationMessage, setQualificationMessage] = useState("");
 
@@ -321,6 +322,7 @@ export default function RegistrationPage() {
           
           if (data.success && data.verified) {
             setVerifiedProfile(data.profile);
+            setVerifiedByHydra(data.verifiedByHydra || false);
             setTokenConsumed(true);
             setVerificationStep("form");
             
@@ -426,6 +428,7 @@ export default function RegistrationPage() {
       
       if (data.verified) {
         setVerifiedProfile(data.profile);
+        setVerifiedByHydra(data.verifiedByHydra || false);
         setIsQualified(data.isQualified);
         setQualificationMessage(data.qualificationMessage || "");
         
@@ -490,6 +493,7 @@ export default function RegistrationPage() {
         dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth).toISOString() : null,
         passportExpiration: data.passportExpiration ? new Date(data.passportExpiration).toISOString() : null,
         formData: Object.keys(customFormData).length > 0 ? customFormData : undefined,
+        verifiedByHydra,
       });
     },
     onSuccess: () => {

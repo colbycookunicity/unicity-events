@@ -166,6 +166,8 @@ export const registrations = pgTable("registrations", {
   // Check-in
   checkedInAt: timestamp("checked_in_at"),
   checkedInBy: varchar("checked_in_by").references(() => users.id),
+  // Verification source
+  verifiedByHydra: boolean("verified_by_hydra").default(false),
   // Timestamps
   registeredAt: timestamp("registered_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

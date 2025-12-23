@@ -421,10 +421,12 @@ export async function registerRoutes(
       let customerId: number | undefined;
       let bearerToken: string | undefined;
       let customerData: any = null;
+      let verifiedByHydra = false;
 
       // For development only, accept test code "123456"
       if (process.env.NODE_ENV !== "production" && code === "123456") {
         isValid = true;
+        verifiedByHydra = true; // Dev mode counts as Hydra verified
         // Mock customer data for development
         customerData = {
           id: { unicity: "12345678" },
@@ -451,6 +453,7 @@ export async function registerRoutes(
         
         if (response.ok && data.success) {
           isValid = true;
+          verifiedByHydra = true;
           customerId = data.customer?.id;
           bearerToken = data.token;
           customerData = data.customer;
@@ -606,6 +609,7 @@ export async function registerRoutes(
       res.json({ 
         success: true, 
         verified: true,
+        verifiedByHydra,
         profile,
         isQualified,
         qualificationMessage,
@@ -1255,6 +1259,7 @@ export async function registerRoutes(
         termsAccepted: req.body.termsAccepted,
         termsAcceptedAt: req.body.termsAccepted ? new Date() : null,
         termsAcceptedIp: req.body.termsAccepted ? String(clientIp) : null,
+        verifiedByHydra: req.body.verifiedByHydra || false,
         registeredAt: new Date(),
       });
 
