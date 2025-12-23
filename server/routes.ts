@@ -156,15 +156,26 @@ export async function registerRoutes(
         return res.json({ success: true, message: "OTP sent successfully", devCode });
       }
 
+      console.log("Calling Hydra API for admin OTP:", `${HYDRA_API_BASE}/otp/generate`, "email:", email);
       const response = await fetch(`${HYDRA_API_BASE}/otp/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
 
-      const data = await response.json();
+      const responseText = await response.text();
+      console.log("Hydra admin OTP generate response status:", response.status, "body:", responseText);
+      
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseErr) {
+        console.error("Failed to parse Hydra response as JSON:", responseText);
+        return res.status(500).json({ error: "Invalid response from verification service" });
+      }
       
       if (!response.ok || !data.success) {
+        console.log("Hydra admin OTP generate failed:", data);
         return res.status(400).json({ error: data.data?.message || "Failed to send OTP" });
       }
 
@@ -174,15 +185,6 @@ export async function registerRoutes(
         verified: false,
         expiresAt: new Date(data.data.expires_at),
       });
-
-      // Send OTP via Iterable (optional - Hydra already sends it, but you can customize)
-      // if (process.env.ITERABLE_API_KEY) {
-      //   try {
-      //     await iterableService.sendOTPEmail(email, data.data.metadata?.otp_code, 'en');
-      //   } catch (err) {
-      //     console.error('Failed to send Iterable email:', err);
-      //   }
-      // }
 
       res.json({ success: true, message: "OTP sent successfully" });
     } catch (error) {
@@ -335,15 +337,26 @@ export async function registerRoutes(
       }
 
       // Production: Call Hydra API
+      console.log("Calling Hydra API for registration OTP:", `${HYDRA_API_BASE}/otp/generate`, "email:", email);
       const response = await fetch(`${HYDRA_API_BASE}/otp/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
 
-      const data = await response.json();
+      const responseText = await response.text();
+      console.log("Hydra OTP generate response status:", response.status, "body:", responseText);
+      
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseErr) {
+        console.error("Failed to parse Hydra response as JSON:", responseText);
+        return res.status(500).json({ error: "Invalid response from verification service" });
+      }
       
       if (!response.ok || !data.success) {
+        console.log("Hydra OTP generate failed:", data);
         return res.status(400).json({ error: data.data?.message || "Failed to send verification code" });
       }
 
@@ -357,7 +370,7 @@ export async function registerRoutes(
       res.json({ success: true, message: "Verification code sent" });
     } catch (error) {
       console.error("Registration OTP generate error:", error);
-      res.status(500).json({ error: "Failed to send verification code" });
+      res.status(500).json({ error: "Failed to send verification code. Please try again." });
     }
   });
 
