@@ -1,24 +1,59 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Plus, Search, Calendar, MapPin, Users } from "lucide-react";
+import { Plus, Search, Calendar, MapPin, Users, MoreHorizontal, Archive, Trash2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTranslation } from "@/lib/i18n";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
 import type { EventWithStats } from "@shared/schema";
 
 export default function EventsPage() {
   const { t, language } = useTranslation();
+  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [eventToDelete, setEventToDelete] = useState<EventWithStats | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const { data: events, isLoading } = useQuery<EventWithStats[]>({
     queryKey: ["/api/events"],
+  });
+
+  const archiveMutation = useMutation({
+    mutationFn: async (eventId: string) => {
+      return apiRequest("PATCH", `/api/events/${eventId}`, { status: "archived" });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      toast({ title: t("success"), description: "Event archived successfully" });
+    },
+    onError: () => {
+      toast({ title: t("error"), description: "Failed to archive event", variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (eventId: string) => {
+      return apiRequest("DELETE", `/api/events/${eventId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      setShowDeleteConfirm(false);
+      setEventToDelete(null);
+      toast({ title: "Event Deleted", description: "The event and all associated data have been permanently deleted." });
+    },
+    onError: () => {
+      toast({ title: t("error"), description: "Failed to delete event", variant: "destructive" });
+    },
   });
 
   const filteredEvents = events?.filter((event) => {
@@ -127,50 +162,110 @@ export default function EventsPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredEvents?.map((event) => (
-            <Link key={event.id} href={`/admin/events/${event.id}`}>
-              <Card className="hover-elevate cursor-pointer h-full" data-testid={`card-event-${event.id}`}>
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <CardTitle className="text-lg font-medium line-clamp-2">
-                      {getEventName(event)}
-                    </CardTitle>
+            <Card key={event.id} className="hover-elevate h-full relative" data-testid={`card-event-${event.id}`}>
+              <Link href={`/admin/events/${event.id}`} className="absolute inset-0 z-0" />
+              <CardHeader className="pb-3 relative z-10 pointer-events-none">
+                <div className="flex items-start justify-between gap-2">
+                  <CardTitle className="text-lg font-medium line-clamp-2">
+                    {getEventName(event)}
+                  </CardTitle>
+                  <div className="flex items-center gap-2 pointer-events-auto">
                     <StatusBadge status={event.status} type="event" />
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`button-event-menu-${event.id}`}>
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {event.status !== "archived" && (
+                          <DropdownMenuItem
+                            onClick={() => archiveMutation.mutate(event.id)}
+                            data-testid={`action-archive-${event.id}`}
+                          >
+                            <Archive className="h-4 w-4 mr-2" />
+                            Archive
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-destructive"
+                          onClick={() => { setEventToDelete(event); setShowDeleteConfirm(true); }}
+                          data-testid={`action-delete-${event.id}`}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
-                  {event.startDate && (
-                    <CardDescription className="flex items-center gap-1.5">
-                      <Calendar className="h-3.5 w-3.5" />
-                      {format(new Date(event.startDate), "MMM d, yyyy")}
-                      {event.endDate && event.endDate !== event.startDate && (
-                        <> - {format(new Date(event.endDate), "MMM d, yyyy")}</>
-                      )}
-                    </CardDescription>
-                  )}
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {getEventDescription(event) && (
-                    <p className="text-sm text-muted-foreground line-clamp-2">
-                      {getEventDescription(event)}
-                    </p>
-                  )}
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                    {event.location && (
-                      <span className="flex items-center gap-1.5">
-                        <MapPin className="h-3.5 w-3.5" />
-                        {event.location}
-                      </span>
+                </div>
+                {event.startDate && (
+                  <CardDescription className="flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5" />
+                    {format(new Date(event.startDate), "MMM d, yyyy")}
+                    {event.endDate && event.endDate !== event.startDate && (
+                      <> - {format(new Date(event.endDate), "MMM d, yyyy")}</>
                     )}
+                  </CardDescription>
+                )}
+              </CardHeader>
+              <CardContent className="space-y-3 relative z-10 pointer-events-none">
+                {getEventDescription(event) && (
+                  <p className="text-sm text-muted-foreground line-clamp-2">
+                    {getEventDescription(event)}
+                  </p>
+                )}
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  {event.location && (
                     <span className="flex items-center gap-1.5">
-                      <Users className="h-3.5 w-3.5" />
-                      {event.totalRegistrations ?? 0}
-                      {event.capacity && ` / ${event.capacity}`}
+                      <MapPin className="h-3.5 w-3.5" />
+                      {event.location}
                     </span>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
+                  )}
+                  <span className="flex items-center gap-1.5">
+                    <Users className="h-3.5 w-3.5" />
+                    {event.totalRegistrations ?? 0}
+                    {event.capacity && ` / ${event.capacity}`}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Event Permanently?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>This action cannot be undone. Deleting <strong>{eventToDelete?.name}</strong> will permanently remove:</p>
+              <ul className="list-disc list-inside text-sm space-y-1">
+                <li>All attendee registrations ({eventToDelete?.totalRegistrations ?? 0} registrations)</li>
+                <li>All guest information</li>
+                <li>All flight records</li>
+                <li>All reimbursement data</li>
+                <li>All qualified registrant lists</li>
+                <li>All CMS page content</li>
+              </ul>
+              <p className="font-medium mt-2">Consider archiving instead if you want to preserve the data.</p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => eventToDelete && deleteMutation.mutate(eventToDelete.id)}
+              disabled={deleteMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete"
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Yes, Delete Permanently"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

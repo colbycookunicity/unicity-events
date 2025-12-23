@@ -177,23 +177,6 @@ export default function EventFormPage() {
 
   const isPending = createMutation.isPending || updateMutation.isPending;
 
-  // Delete event state and mutation
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  
-  const deleteMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest("DELETE", `/api/events/${params.id}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
-      toast({ title: "Event Deleted", description: "The event and all associated data have been permanently deleted." });
-      setLocation("/admin/events");
-    },
-    onError: () => {
-      toast({ title: t("error"), description: "Failed to delete event", variant: "destructive" });
-    },
-  });
-
   // Guest Allowance Rules state and queries
   const [isRulesOpen, setIsRulesOpen] = useState(false);
   const [showRuleDialog, setShowRuleDialog] = useState(false);
@@ -1045,57 +1028,14 @@ export default function EventFormPage() {
             </Card>
           )}
 
-          <div className="flex justify-between gap-4">
-            {isEditing ? (
-              <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-                <AlertDialogTrigger asChild>
-                  <Button type="button" variant="destructive" data-testid="button-delete-event">
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete Event
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete Event Permanently?</AlertDialogTitle>
-                    <AlertDialogDescription className="space-y-2">
-                      <p>This action cannot be undone. Deleting this event will permanently remove:</p>
-                      <ul className="list-disc list-inside text-sm space-y-1">
-                        <li>All attendee registrations</li>
-                        <li>All guest information</li>
-                        <li>All flight records</li>
-                        <li>All reimbursement data</li>
-                        <li>All qualified registrant lists</li>
-                        <li>All CMS page content</li>
-                      </ul>
-                      <p className="font-medium mt-2">Consider changing the status to "Archived" instead if you want to preserve the data.</p>
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={() => deleteMutation.mutate()}
-                      disabled={deleteMutation.isPending}
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                      data-testid="button-confirm-delete"
-                    >
-                      {deleteMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                      Yes, Delete Permanently
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            ) : (
-              <div />
-            )}
-            <div className="flex gap-4">
-              <Button type="button" variant="outline" onClick={() => setLocation("/admin/events")} data-testid="button-cancel">
-                {t("cancel")}
-              </Button>
-              <Button type="submit" disabled={isPending} data-testid="button-save-event">
-                {isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                {t("save")}
-              </Button>
-            </div>
+          <div className="flex justify-end gap-4">
+            <Button type="button" variant="outline" onClick={() => setLocation("/admin/events")} data-testid="button-cancel">
+              {t("cancel")}
+            </Button>
+            <Button type="submit" disabled={isPending} data-testid="button-save-event">
+              {isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {t("save")}
+            </Button>
           </div>
         </form>
       </Form>
