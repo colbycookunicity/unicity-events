@@ -24,6 +24,10 @@ export type RegistrationStatus = typeof registrationStatusEnum[number];
 export const swagStatusEnum = ["pending", "picked_up"] as const;
 export type SwagStatus = typeof swagStatusEnum[number];
 
+// Guest policy enum (event-level setting)
+export const guestPolicyEnum = ["not_allowed", "allowed_free", "allowed_paid", "allowed_mixed"] as const;
+export type GuestPolicy = typeof guestPolicyEnum[number];
+
 // Reimbursement status enum
 export const reimbursementStatusEnum = ["pending", "processing", "completed"] as const;
 export type ReimbursementStatus = typeof reimbursementStatusEnum[number];
@@ -156,6 +160,9 @@ export const guests = pgTable("guests", {
   dietaryRestrictions: text("dietary_restrictions"),
   swagStatus: text("swag_status").default("pending"),
   checkedInAt: timestamp("checked_in_at"),
+  // Guest allowance tracking for mixed policy
+  isComplimentary: boolean("is_complimentary").default(false), // True if guest is free (from allowance)
+  amountPaidCents: integer("amount_paid_cents"), // Actual amount paid (0 for complimentary)
   // Payment info
   paymentStatus: text("payment_status").default("pending"),
   paymentIntentId: text("payment_intent_id"),
@@ -433,6 +440,23 @@ export const eventPageSections = pgTable("event_page_sections", {
   lastModified: timestamp("last_modified").defaultNow().notNull(),
 });
 
+// Guest Allowance Rules table - Defines guest allowance tiers for mixed policy events
+export const guestAllowanceRules = pgTable("guest_allowance_rules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  eventId: varchar("event_id").references(() => events.id).notNull(),
+  name: text("name").notNull(), // e.g., "Gold Tier", "Standard"
+  nameEs: text("name_es"),
+  description: text("description"),
+  descriptionEs: text("description_es"),
+  freeGuestCount: integer("free_guest_count").notNull().default(0), // Number of complimentary guests
+  maxPaidGuests: integer("max_paid_guests").default(0), // Max additional paid guests (0 = unlimited)
+  paidGuestPriceCents: integer("paid_guest_price_cents"), // Price per additional guest in cents
+  isDefault: boolean("is_default").default(false), // Default rule for qualifiers without specific assignment
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  lastModified: timestamp("last_modified").defaultNow().notNull(),
+});
+
 // Qualified Registrants table - Pre-approved users allowed to register for an event
 export const qualifiedRegistrants = pgTable("qualified_registrants", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -441,6 +465,11 @@ export const qualifiedRegistrants = pgTable("qualified_registrants", {
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   unicityId: text("unicity_id"),
+  // Guest allowance fields for mixed policy
+  guestAllowanceRuleId: varchar("guest_allowance_rule_id").references(() => guestAllowanceRules.id),
+  freeGuestOverride: integer("free_guest_override"), // Override free guest count (null = use rule)
+  maxPaidGuestOverride: integer("max_paid_guest_override"), // Override max paid guests (null = use rule)
+  guestPriceOverride: integer("guest_price_override"), // Override price in cents (null = use rule)
   importedAt: timestamp("imported_at").defaultNow().notNull(),
   importedBy: varchar("imported_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -460,6 +489,8 @@ export const eventsRelations = relations(events, ({ one, many }) => ({
   }),
   registrations: many(registrations),
   swagItems: many(swagItems),
+  guestAllowanceRules: many(guestAllowanceRules),
+  qualifiedRegistrants: many(qualifiedRegistrants),
 }));
 
 export const registrationsRelations = relations(registrations, ({ one, many }) => ({
@@ -545,6 +576,29 @@ export const eventPageSectionsRelations = relations(eventPageSections, ({ one })
   }),
 }));
 
+export const guestAllowanceRulesRelations = relations(guestAllowanceRules, ({ one, many }) => ({
+  event: one(events, {
+    fields: [guestAllowanceRules.eventId],
+    references: [events.id],
+  }),
+  qualifiedRegistrants: many(qualifiedRegistrants),
+}));
+
+export const qualifiedRegistrantsRelations = relations(qualifiedRegistrants, ({ one }) => ({
+  event: one(events, {
+    fields: [qualifiedRegistrants.eventId],
+    references: [events.id],
+  }),
+  guestAllowanceRule: one(guestAllowanceRules, {
+    fields: [qualifiedRegistrants.guestAllowanceRuleId],
+    references: [guestAllowanceRules.id],
+  }),
+  importedByUser: one(users, {
+    fields: [qualifiedRegistrants.importedBy],
+    references: [users.id],
+  }),
+}));
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -611,6 +665,12 @@ export const insertQualifiedRegistrantSchema = createInsertSchema(qualifiedRegis
   lastModified: true,
 });
 
+export const insertGuestAllowanceRuleSchema = createInsertSchema(guestAllowanceRules).omit({
+  id: true,
+  createdAt: true,
+  lastModified: true,
+});
+
 export const insertEventPageSchema = createInsertSchema(eventPages).omit({
   id: true,
   createdAt: true,
@@ -656,6 +716,9 @@ export type SwagAssignment = typeof swagAssignments.$inferSelect;
 
 export type InsertQualifiedRegistrant = z.infer<typeof insertQualifiedRegistrantSchema>;
 export type QualifiedRegistrant = typeof qualifiedRegistrants.$inferSelect;
+
+export type InsertGuestAllowanceRule = z.infer<typeof insertGuestAllowanceRuleSchema>;
+export type GuestAllowanceRule = typeof guestAllowanceRules.$inferSelect;
 
 export type InsertEventPage = z.infer<typeof insertEventPageSchema>;
 export type EventPage = typeof eventPages.$inferSelect;
