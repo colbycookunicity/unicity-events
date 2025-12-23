@@ -65,7 +65,7 @@ shared/           # Shared code between client/server
 
 3. **Bilingual Support**: All user-facing content supports English and Spanish with `_es` suffixed fields and a language toggle component.
 
-4. **Role-Based Access**: Four distinct roles control feature access in admin interface, enforced at both API and UI levels.
+4. **Role-Based Access**: Four distinct roles control feature access in admin interface, enforced at both API and UI levels. Event-level access control allows admins to assign event managers to specific events, ensuring managers only see events they created or were assigned to.
 
 5. **Object Storage**: Google Cloud Storage integration for file uploads (receipts, event images) via Replit's sidecar endpoint.
 
