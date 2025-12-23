@@ -456,9 +456,36 @@ export async function registerRoutes(
           customerData = data.customer;
         } else {
           console.log("Hydra validation failed - response.ok:", response.ok, "data.success:", data.success);
-          // Return the actual error message from Hydra
           const errorMessage = data.message || data.data?.message || "Invalid verification code";
-          return res.status(400).json({ error: errorMessage });
+          
+          // Special case: "Customer not found" means OTP was valid but no customer account exists
+          // For qualified registrants, we should still allow them to proceed
+          if (errorMessage.toLowerCase().includes("customer not found") && eventId) {
+            console.log("Customer not found in Hydra, checking qualified list for eventId:", eventId);
+            const event = await storage.getEventByIdOrSlug(eventId);
+            if (event) {
+              const qualifiedRegistrant = await storage.getQualifiedRegistrantByEmail(event.id, email);
+              if (qualifiedRegistrant) {
+                console.log("User is in qualified list, allowing verification:", qualifiedRegistrant);
+                isValid = true;
+                // Use qualifier data as customer data
+                customerData = {
+                  id: { unicity: qualifiedRegistrant.unicityId },
+                  humanName: { 
+                    firstName: qualifiedRegistrant.firstName || "", 
+                    lastName: qualifiedRegistrant.lastName || "" 
+                  },
+                  email: email,
+                };
+              } else {
+                return res.status(400).json({ error: errorMessage });
+              }
+            } else {
+              return res.status(400).json({ error: errorMessage });
+            }
+          } else {
+            return res.status(400).json({ error: errorMessage });
+          }
         }
       }
 

@@ -12,7 +12,14 @@ export function getAuthHeaders(): HeadersInit {
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
+    // Try to parse JSON error response for better messages
+    try {
+      const json = JSON.parse(text);
+      throw new Error(json.error || json.message || `${res.status}: ${text}`);
+    } catch (parseError) {
+      // If not JSON, use the raw text
+      throw new Error(`${res.status}: ${text}`);
+    }
   }
 }
 
