@@ -4,7 +4,8 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowLeft, Loader2, Copy, ExternalLink, Check, FileEdit } from "lucide-react";
+import { ArrowLeft, Loader2, Copy, ExternalLink, Check, FileEdit, Clock } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -313,8 +314,14 @@ export default function EventFormPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Date & Time</CardTitle>
-              <CardDescription>When does the event take place</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                Date & Time
+                <Badge variant="outline" className="text-xs font-normal">
+                  <Clock className="mr-1 h-3 w-3" />
+                  Eastern Time (ET)
+                </Badge>
+              </CardTitle>
+              <CardDescription>All times are in Eastern Time (EST/EDT). Times will be displayed to attendees in ET.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid gap-6 md:grid-cols-2">
@@ -342,7 +349,7 @@ export default function EventFormPage() {
                               </FormControl>
                             </div>
                             <div className="space-y-1.5">
-                              <span className="text-xs text-muted-foreground">Time</span>
+                              <span className="text-xs text-muted-foreground">Time (ET)</span>
                               <FormControl>
                                 <Input 
                                   type="time" 
@@ -384,7 +391,7 @@ export default function EventFormPage() {
                               </FormControl>
                             </div>
                             <div className="space-y-1.5">
-                              <span className="text-xs text-muted-foreground">Time</span>
+                              <span className="text-xs text-muted-foreground">Time (ET)</span>
                               <FormControl>
                                 <Input 
                                   type="time" 
