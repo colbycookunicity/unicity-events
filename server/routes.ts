@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertEventSchema, insertRegistrationSchema, insertGuestSchema, insertFlightSchema, insertReimbursementSchema, insertSwagItemSchema, insertSwagAssignmentSchema, insertQualifiedRegistrantSchema } from "@shared/schema";
+import { insertEventSchema, insertRegistrationSchema, insertGuestSchema, insertFlightSchema, insertReimbursementSchema, insertSwagItemSchema, insertSwagAssignmentSchema, insertQualifiedRegistrantSchema, insertUserSchema, userRoleEnum } from "@shared/schema";
 import { z } from "zod";
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
@@ -673,6 +673,103 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Stats error:", error);
       res.status(500).json({ error: "Failed to get stats" });
+    }
+  });
+
+  // User Management Routes (Admin only)
+  app.get("/api/admin/users", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      if (req.user?.role !== "admin") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+      const users = await storage.getAllUsers();
+      res.json(users);
+    } catch (error) {
+      console.error("Get users error:", error);
+      res.status(500).json({ error: "Failed to get users" });
+    }
+  });
+
+  app.post("/api/admin/users", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      if (req.user?.role !== "admin") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+      
+      const parsed = insertUserSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid user data", details: parsed.error.errors });
+      }
+
+      // Check if user already exists
+      const existing = await storage.getUserByEmail(parsed.data.email);
+      if (existing) {
+        return res.status(400).json({ error: "A user with this email already exists" });
+      }
+
+      // Validate role
+      if (parsed.data.role && !userRoleEnum.includes(parsed.data.role as any)) {
+        return res.status(400).json({ error: "Invalid role" });
+      }
+
+      const user = await storage.createUser(parsed.data);
+      res.status(201).json(user);
+    } catch (error) {
+      console.error("Create user error:", error);
+      res.status(500).json({ error: "Failed to create user" });
+    }
+  });
+
+  app.patch("/api/admin/users/:id", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      if (req.user?.role !== "admin") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+
+      const { id } = req.params;
+      
+      // Prevent self-demotion from admin
+      if (id === req.user.id && req.body.role && req.body.role !== "admin") {
+        return res.status(400).json({ error: "You cannot change your own role" });
+      }
+
+      // Validate role if provided
+      if (req.body.role && !userRoleEnum.includes(req.body.role)) {
+        return res.status(400).json({ error: "Invalid role" });
+      }
+
+      const user = await storage.updateUser(id, req.body);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.json(user);
+    } catch (error) {
+      console.error("Update user error:", error);
+      res.status(500).json({ error: "Failed to update user" });
+    }
+  });
+
+  app.delete("/api/admin/users/:id", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      if (req.user?.role !== "admin") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+
+      const { id } = req.params;
+      
+      // Prevent self-deletion
+      if (id === req.user.id) {
+        return res.status(400).json({ error: "You cannot delete your own account" });
+      }
+
+      const success = await storage.deleteUser(id);
+      if (!success) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete user error:", error);
+      res.status(500).json({ error: "Failed to delete user" });
     }
   });
 
