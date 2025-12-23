@@ -1,6 +1,7 @@
 import {
   users, events, registrations, guests, flights, reimbursements, otpSessions, authSessions,
   swagItems, swagAssignments, qualifiedRegistrants, eventPages, eventPageSections, guestAllowanceRules,
+  formTemplates,
   type User, type InsertUser,
   type Event, type InsertEvent,
   type Registration, type InsertRegistration,
@@ -15,6 +16,7 @@ import {
   type EventPage, type InsertEventPage,
   type EventPageSection, type InsertEventPageSection,
   type GuestAllowanceRule, type InsertGuestAllowanceRule,
+  type FormTemplate,
   type EventWithStats, type RegistrationWithDetails,
   type SwagItemWithStats, type SwagAssignmentWithDetails,
 } from "@shared/schema";
@@ -106,6 +108,11 @@ export interface IStorage {
   updateSwagAssignment(id: string, data: Partial<InsertSwagAssignment>): Promise<SwagAssignment | undefined>;
   deleteSwagAssignment(id: string): Promise<boolean>;
   markSwagReceived(id: string, receivedBy: string): Promise<SwagAssignment | undefined>;
+
+  // Form Templates
+  getFormTemplates(): Promise<FormTemplate[]>;
+  getFormTemplate(id: string): Promise<FormTemplate | undefined>;
+  getFormTemplateByKey(key: string): Promise<FormTemplate | undefined>;
 
   // Qualified Registrants
   getQualifiedRegistrantsByEvent(eventId: string): Promise<QualifiedRegistrant[]>;
@@ -587,6 +594,21 @@ export class DatabaseStorage implements IStorage {
       .where(eq(swagAssignments.id, id))
       .returning();
     return updated || undefined;
+  }
+
+  // Form Templates
+  async getFormTemplates(): Promise<FormTemplate[]> {
+    return db.select().from(formTemplates).orderBy(formTemplates.name);
+  }
+
+  async getFormTemplate(id: string): Promise<FormTemplate | undefined> {
+    const [template] = await db.select().from(formTemplates).where(eq(formTemplates.id, id));
+    return template || undefined;
+  }
+
+  async getFormTemplateByKey(key: string): Promise<FormTemplate | undefined> {
+    const [template] = await db.select().from(formTemplates).where(eq(formTemplates.key, key));
+    return template || undefined;
   }
 
   // Qualified Registrants

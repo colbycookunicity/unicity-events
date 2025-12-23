@@ -45,6 +45,28 @@ export const users = pgTable("users", {
   lastModified: timestamp("last_modified").defaultNow().notNull(),
 });
 
+// Form Templates table - predefined registration form configurations
+export const formTemplates = pgTable("form_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").notNull().unique(), // e.g., "success_trip", "method"
+  name: text("name").notNull(), // Display name: "Success Trip", "Method"
+  nameEs: text("name_es"), // Spanish display name
+  description: text("description"),
+  descriptionEs: text("description_es"),
+  fields: jsonb("fields").notNull(), // Array of form field definitions
+  isDefault: boolean("is_default").default(false), // If true, used when no template specified
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  lastModified: timestamp("last_modified").defaultNow().notNull(),
+});
+
+export const insertFormTemplateSchema = createInsertSchema(formTemplates).omit({
+  id: true,
+  createdAt: true,
+  lastModified: true,
+});
+export type InsertFormTemplate = z.infer<typeof insertFormTemplateSchema>;
+export type FormTemplate = typeof formTemplates.$inferSelect;
+
 // Registration page layout options
 export const registrationLayoutEnum = ["standard", "split", "hero-background"] as const;
 export type RegistrationLayout = typeof registrationLayoutEnum[number];
@@ -92,7 +114,9 @@ export const events = pgTable("events", {
   requiresQualification: boolean("requires_qualification").default(false),
   qualificationStartDate: timestamp("qualification_start_date"),
   qualificationEndDate: timestamp("qualification_end_date"),
-  formFields: jsonb("form_fields"),
+  // Form template reference - if set, uses template fields; if null, uses formFields
+  formTemplateId: varchar("form_template_id").references(() => formTemplates.id),
+  formFields: jsonb("form_fields"), // Custom fields override or standalone (when no template)
   /** @deprecated Use registrationLayout and requiresVerification columns + CMS sections instead */
   registrationSettings: jsonb("registration_settings").$type<RegistrationSettings>(),
   // CMS cutover columns (replace registrationSettings)
