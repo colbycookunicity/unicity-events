@@ -7,7 +7,7 @@ async function runMigrations() {
 
   console.log('Pushing schema to database...');
   
-  execSync('npx drizzle-kit push', { 
+  execSync('npx drizzle-kit push --force', { 
     stdio: 'inherit',
     env: { ...process.env }
   });

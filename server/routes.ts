@@ -13,22 +13,31 @@ const HYDRA_API_BASE = process.env.NODE_ENV === "production"
   ? "https://hydra.unicity.net/v6"
   : "https://hydraqa.unicity.net/v6-test";
 
-// Whitelist of admin email addresses (case-insensitive)
-const ADMIN_EMAILS = [
+// Fallback admin emails for initial setup (used only if no users exist in database)
+const FALLBACK_ADMIN_EMAILS = [
   "colby.cook@unicity.com",
   "biani.gonzalez@unicity.com",
   "ashley.milliken@unicity.com",
   "william.hall@unicity.com",
 ];
 
-// Check if email is in admin whitelist (exact match only, no plus aliases)
-function isAdminEmail(email: string): boolean {
+// Check if email is an authorized admin (database-driven with fallback)
+async function isAdminEmail(email: string): Promise<boolean> {
   const normalized = email.toLowerCase().trim();
   // Reject any email with a plus sign - these are aliases
   if (normalized.includes('+')) {
     return false;
   }
-  return ADMIN_EMAILS.includes(normalized);
+  
+  // Check if user exists in the database
+  const user = await storage.getUserByEmail(normalized);
+  if (user) {
+    return true; // User exists in database, they're authorized
+  }
+  
+  // Fallback: Check hardcoded list (for bootstrapping first admin)
+  // This allows initial admins to log in before they're in the database
+  return FALLBACK_ADMIN_EMAILS.includes(normalized);
 }
 
 interface AuthenticatedRequest extends Request {
@@ -139,7 +148,7 @@ export async function registerRoutes(
       }
 
       // Only allow whitelisted admin emails to log in (exact match, no plus aliases)
-      if (!isAdminEmail(email)) {
+      if (!(await isAdminEmail(email))) {
         return res.status(403).json({ error: "Access denied. This login is for authorized administrators only." });
       }
 
@@ -257,7 +266,7 @@ export async function registerRoutes(
       
       if (!user) {
         // Only whitelisted emails get admin role (exact match, no plus aliases)
-        const role = isAdminEmail(email) ? "admin" : "readonly";
+        const role = await isAdminEmail(email) ? "admin" : "readonly";
         user = await storage.createUser({
           email,
           name: email.split("@")[0],
@@ -266,7 +275,7 @@ export async function registerRoutes(
         });
       } else {
         // Verify and correct role on each login to prevent unauthorized admin access
-        const expectedRole = isAdminEmail(email) ? "admin" : "readonly";
+        const expectedRole = await isAdminEmail(email) ? "admin" : "readonly";
         if (user.role === "admin" && expectedRole !== "admin") {
           // Demote user who shouldn't be admin
           await storage.updateUser(user.id, { role: "readonly" });
