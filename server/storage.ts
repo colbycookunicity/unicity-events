@@ -1,6 +1,6 @@
 import {
   users, events, registrations, guests, flights, reimbursements, otpSessions, authSessions,
-  swagItems, swagAssignments, qualifiedRegistrants, eventPages, eventPageSections,
+  swagItems, swagAssignments, qualifiedRegistrants, eventPages, eventPageSections, guestAllowanceRules,
   type User, type InsertUser,
   type Event, type InsertEvent,
   type Registration, type InsertRegistration,
@@ -14,6 +14,7 @@ import {
   type QualifiedRegistrant, type InsertQualifiedRegistrant,
   type EventPage, type InsertEventPage,
   type EventPageSection, type InsertEventPageSection,
+  type GuestAllowanceRule, type InsertGuestAllowanceRule,
   type EventWithStats, type RegistrationWithDetails,
   type SwagItemWithStats, type SwagAssignmentWithDetails,
 } from "@shared/schema";
@@ -131,6 +132,15 @@ export interface IStorage {
   updateEventPageSection(id: string, data: Partial<InsertEventPageSection>): Promise<EventPageSection | undefined>;
   deleteEventPageSection(id: string): Promise<boolean>;
   reorderEventPageSections(pageId: string, sectionIds: string[]): Promise<void>;
+
+  // Guest Allowance Rules
+  getGuestAllowanceRulesByEvent(eventId: string): Promise<GuestAllowanceRule[]>;
+  getGuestAllowanceRule(id: string): Promise<GuestAllowanceRule | undefined>;
+  getDefaultGuestAllowanceRule(eventId: string): Promise<GuestAllowanceRule | undefined>;
+  createGuestAllowanceRule(rule: InsertGuestAllowanceRule): Promise<GuestAllowanceRule>;
+  updateGuestAllowanceRule(id: string, data: Partial<InsertGuestAllowanceRule>): Promise<GuestAllowanceRule | undefined>;
+  deleteGuestAllowanceRule(id: string): Promise<boolean>;
+  setDefaultGuestAllowanceRule(eventId: string, ruleId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -769,6 +779,62 @@ export class DatabaseStorage implements IStorage {
           eq(eventPageSections.pageId, pageId)
         ));
     }
+  }
+
+  // Guest Allowance Rules
+  async getGuestAllowanceRulesByEvent(eventId: string): Promise<GuestAllowanceRule[]> {
+    return db.select().from(guestAllowanceRules)
+      .where(eq(guestAllowanceRules.eventId, eventId))
+      .orderBy(guestAllowanceRules.sortOrder);
+  }
+
+  async getGuestAllowanceRule(id: string): Promise<GuestAllowanceRule | undefined> {
+    const [rule] = await db.select().from(guestAllowanceRules).where(eq(guestAllowanceRules.id, id));
+    return rule || undefined;
+  }
+
+  async getDefaultGuestAllowanceRule(eventId: string): Promise<GuestAllowanceRule | undefined> {
+    const [rule] = await db.select().from(guestAllowanceRules)
+      .where(and(
+        eq(guestAllowanceRules.eventId, eventId),
+        eq(guestAllowanceRules.isDefault, true)
+      ));
+    return rule || undefined;
+  }
+
+  async createGuestAllowanceRule(rule: InsertGuestAllowanceRule): Promise<GuestAllowanceRule> {
+    const [created] = await db.insert(guestAllowanceRules).values(rule).returning();
+    return created;
+  }
+
+  async updateGuestAllowanceRule(id: string, data: Partial<InsertGuestAllowanceRule>): Promise<GuestAllowanceRule | undefined> {
+    const [updated] = await db.update(guestAllowanceRules)
+      .set({ ...data, lastModified: new Date() })
+      .where(eq(guestAllowanceRules.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteGuestAllowanceRule(id: string): Promise<boolean> {
+    // First, remove rule assignments from qualified registrants
+    await db.update(qualifiedRegistrants)
+      .set({ guestAllowanceRuleId: null })
+      .where(eq(qualifiedRegistrants.guestAllowanceRuleId, id));
+    
+    await db.delete(guestAllowanceRules).where(eq(guestAllowanceRules.id, id));
+    return true;
+  }
+
+  async setDefaultGuestAllowanceRule(eventId: string, ruleId: string): Promise<void> {
+    // First, unset all defaults for this event
+    await db.update(guestAllowanceRules)
+      .set({ isDefault: false, lastModified: new Date() })
+      .where(eq(guestAllowanceRules.eventId, eventId));
+    
+    // Then set the new default
+    await db.update(guestAllowanceRules)
+      .set({ isDefault: true, lastModified: new Date() })
+      .where(eq(guestAllowanceRules.id, ruleId));
   }
 }
 

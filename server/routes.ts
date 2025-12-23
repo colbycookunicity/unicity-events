@@ -1831,6 +1831,148 @@ export async function registerRoutes(
   });
 
   // ========================================
+  // Guest Allowance Rules Routes
+  // ========================================
+
+  // Get all guest allowance rules for an event
+  app.get("/api/events/:eventId/guest-rules", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const rules = await storage.getGuestAllowanceRulesByEvent(req.params.eventId);
+      res.json(rules);
+    } catch (error) {
+      console.error("Error fetching guest allowance rules:", error);
+      res.status(500).json({ error: "Failed to fetch guest allowance rules" });
+    }
+  });
+
+  // Get a single guest allowance rule
+  app.get("/api/guest-rules/:id", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const rule = await storage.getGuestAllowanceRule(req.params.id);
+      if (!rule) {
+        return res.status(404).json({ error: "Guest allowance rule not found" });
+      }
+      res.json(rule);
+    } catch (error) {
+      console.error("Error fetching guest allowance rule:", error);
+      res.status(500).json({ error: "Failed to fetch guest allowance rule" });
+    }
+  });
+
+  // Create a guest allowance rule
+  app.post("/api/events/:eventId/guest-rules", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const { name, nameEs, description, descriptionEs, freeGuestCount, maxPaidGuests, paidGuestPriceCents, isDefault } = req.body;
+      
+      if (!name) {
+        return res.status(400).json({ error: "Rule name is required" });
+      }
+      
+      // If this is set as default, first unset any existing default for this event
+      if (isDefault) {
+        const existingDefault = await storage.getDefaultGuestAllowanceRule(req.params.eventId);
+        if (existingDefault) {
+          await storage.updateGuestAllowanceRule(existingDefault.id, { isDefault: false });
+        }
+      }
+      
+      const rule = await storage.createGuestAllowanceRule({
+        eventId: req.params.eventId,
+        name,
+        nameEs,
+        description,
+        descriptionEs,
+        freeGuestCount: freeGuestCount || 0,
+        maxPaidGuests: maxPaidGuests || 0,
+        paidGuestPriceCents: paidGuestPriceCents || null,
+        isDefault: isDefault || false,
+      });
+      
+      res.status(201).json(rule);
+    } catch (error) {
+      console.error("Error creating guest allowance rule:", error);
+      res.status(500).json({ error: "Failed to create guest allowance rule" });
+    }
+  });
+
+  // Update a guest allowance rule
+  app.patch("/api/guest-rules/:id", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const existingRule = await storage.getGuestAllowanceRule(req.params.id);
+      if (!existingRule) {
+        return res.status(404).json({ error: "Guest allowance rule not found" });
+      }
+      
+      // If setting this as default, unset other defaults first
+      if (req.body.isDefault && !existingRule.isDefault) {
+        await storage.setDefaultGuestAllowanceRule(existingRule.eventId, req.params.id);
+      }
+      
+      const rule = await storage.updateGuestAllowanceRule(req.params.id, req.body);
+      res.json(rule);
+    } catch (error) {
+      console.error("Error updating guest allowance rule:", error);
+      res.status(500).json({ error: "Failed to update guest allowance rule" });
+    }
+  });
+
+  // Delete a guest allowance rule
+  app.delete("/api/guest-rules/:id", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      await storage.deleteGuestAllowanceRule(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting guest allowance rule:", error);
+      res.status(500).json({ error: "Failed to delete guest allowance rule" });
+    }
+  });
+
+  // Assign a guest allowance rule to a qualifier
+  app.patch("/api/qualifiers/:id/guest-rule", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const { guestAllowanceRuleId, freeGuestOverride, maxPaidGuestOverride, guestPriceOverride } = req.body;
+      
+      const qualifier = await storage.updateQualifiedRegistrant(req.params.id, {
+        guestAllowanceRuleId,
+        freeGuestOverride,
+        maxPaidGuestOverride,
+        guestPriceOverride,
+      });
+      
+      if (!qualifier) {
+        return res.status(404).json({ error: "Qualified registrant not found" });
+      }
+      
+      res.json(qualifier);
+    } catch (error) {
+      console.error("Error assigning guest allowance rule:", error);
+      res.status(500).json({ error: "Failed to assign guest allowance rule" });
+    }
+  });
+
+  // Bulk assign guest allowance rule to multiple qualifiers
+  app.post("/api/events/:eventId/qualifiers/bulk-assign-rule", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const { qualifierIds, guestAllowanceRuleId } = req.body;
+      
+      if (!Array.isArray(qualifierIds) || qualifierIds.length === 0) {
+        return res.status(400).json({ error: "qualifierIds must be a non-empty array" });
+      }
+      
+      const results = await Promise.all(
+        qualifierIds.map(id => 
+          storage.updateQualifiedRegistrant(id, { guestAllowanceRuleId })
+        )
+      );
+      
+      res.json({ updated: results.filter(r => r !== undefined).length });
+    } catch (error) {
+      console.error("Error bulk assigning guest allowance rules:", error);
+      res.status(500).json({ error: "Failed to bulk assign guest allowance rules" });
+    }
+  });
+
+  // ========================================
   // Event Page Routes (Visual CMS)
   // ========================================
 
