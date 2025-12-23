@@ -333,12 +333,13 @@ export async function registerRoutes(
         
         // Check if user is qualified for this event (or already registered)
         if (event.requiresQualification) {
-          const qualifier = await storage.getQualifiedRegistrantByEmail(event.id, email.toLowerCase().trim());
-          const existingRegistration = await storage.getRegistrationByEmailAndEvent(email.toLowerCase().trim(), event.id);
+          const normalizedEmail = email.toLowerCase().trim();
+          const qualifier = await storage.getQualifiedRegistrantByEmail(event.id, normalizedEmail);
+          const existingRegistration = await storage.getRegistrationByEmail(event.id, normalizedEmail);
           
           if (!qualifier && !existingRegistration) {
             return res.status(403).json({ 
-              error: "You are not qualified for this event. If you believe this is an error, please contact americasevent@unicity.com" 
+              error: `You are not qualified for this event. The email "${normalizedEmail}" was not found in the qualified list. If you believe this is an error, please contact americasevent@unicity.com` 
             });
           }
         }
