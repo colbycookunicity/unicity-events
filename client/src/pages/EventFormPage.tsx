@@ -300,7 +300,7 @@ export default function EventFormPage() {
 
   // Get all users with event_manager role for assignment dropdown
   const { data: allUsers = [] } = useQuery<User[]>({
-    queryKey: ["/api/users"],
+    queryKey: ["/api/admin/users"],
     enabled: !!isEditing && isAdmin,
   });
 

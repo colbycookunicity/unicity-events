@@ -345,7 +345,6 @@ export default function SettingsPage() {
                         type="email"
                         placeholder="john@unicity.com" 
                         {...field}
-                        disabled={!!editingUser}
                         data-testid="input-user-email"
                       />
                     </FormControl>
