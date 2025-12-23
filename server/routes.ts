@@ -247,6 +247,10 @@ export async function registerRoutes(
           isValid = true;
           customerId = data.customer?.id;
           bearerToken = data.token;
+        } else {
+          // Return the actual error message from Hydra
+          const errorMessage = data.message || data.data?.message || "Invalid verification code";
+          return res.status(400).json({ error: errorMessage });
         }
       }
 
@@ -452,6 +456,9 @@ export async function registerRoutes(
           customerData = data.customer;
         } else {
           console.log("Hydra validation failed - response.ok:", response.ok, "data.success:", data.success);
+          // Return the actual error message from Hydra
+          const errorMessage = data.message || data.data?.message || "Invalid verification code";
+          return res.status(400).json({ error: errorMessage });
         }
       }
 
