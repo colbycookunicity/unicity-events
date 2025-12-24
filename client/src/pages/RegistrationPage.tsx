@@ -480,6 +480,7 @@ export default function RegistrationPage() {
   }, [skipVerification, event, requiresVerification]);
 
   // Check for existing verified session on page load (for refresh persistence)
+  // Also checks attendee token from /my-events authentication
   const [isCheckingSession, setIsCheckingSession] = useState(false);
   useEffect(() => {
     const checkExistingSession = async () => {
@@ -488,7 +489,39 @@ export default function RegistrationPage() {
         return;
       }
       
-      // Check sessionStorage for a previously verified email
+      // First check for attendee token from /my-events page (localStorage)
+      const attendeeToken = localStorage.getItem("attendeeAuthToken");
+      const attendeeEmail = localStorage.getItem("attendeeEmail");
+      
+      if (attendeeToken && attendeeEmail) {
+        setIsCheckingSession(true);
+        try {
+          // Validate the attendee session is still valid
+          const res = await fetch("/api/attendee/events", {
+            headers: { Authorization: `Bearer ${attendeeToken}` },
+          });
+          
+          if (res.ok) {
+            // Attendee session is valid - skip verification
+            setVerificationEmail(attendeeEmail);
+            setVerifiedProfile({
+              unicityId: "",
+              email: attendeeEmail,
+              firstName: "",
+              lastName: "",
+              phone: "",
+            });
+            setVerificationStep("form");
+            setIsCheckingSession(false);
+            return;
+          }
+        } catch (error) {
+          console.error("Failed to validate attendee session:", error);
+        }
+        setIsCheckingSession(false);
+      }
+      
+      // Check sessionStorage for a previously verified email (fallback)
       const storedEmail = sessionStorage.getItem(`reg_verified_email_${params.eventId}`);
       if (!storedEmail) {
         return;
@@ -508,6 +541,7 @@ export default function RegistrationPage() {
             email: data.email,
             firstName: "",
             lastName: "",
+            phone: "",
           });
           setVerificationStep("form");
         } else {
