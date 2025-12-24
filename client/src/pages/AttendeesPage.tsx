@@ -130,6 +130,8 @@ export default function AttendeesPage() {
   const [editingQualifier, setEditingQualifier] = useState<QualifiedRegistrant | null>(null);
   const [qualifierDeleteDialogOpen, setQualifierDeleteDialogOpen] = useState(false);
   const [qualifierToDelete, setQualifierToDelete] = useState<QualifiedRegistrant | null>(null);
+  const [registrationDeleteDialogOpen, setRegistrationDeleteDialogOpen] = useState(false);
+  const [registrationToDelete, setRegistrationToDelete] = useState<Registration | null>(null);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [registrationToMove, setRegistrationToMove] = useState<Registration | null>(null);
   const [targetEventId, setTargetEventId] = useState<string>("");
@@ -496,6 +498,32 @@ export default function AttendeesPage() {
     },
     onError: () => {
       toast({ title: t("error"), description: "Failed to remove qualifier", variant: "destructive" });
+    },
+  });
+
+  const deleteRegistrationMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/registrations/${id}`);
+    },
+    onSuccess: () => {
+      // Invalidate all registration-related queries
+      queryClient.invalidateQueries({ queryKey: ["/api/registrations"] });
+      // Invalidate event-specific registrations query
+      if (eventFilter !== "all") {
+        queryClient.invalidateQueries({ queryKey: ["/api/registrations", { eventId: eventFilter }] });
+        queryClient.invalidateQueries({ queryKey: [`/api/events/${eventFilter}/qualifiers`] });
+      }
+      // Close the drawer if we deleted the currently selected attendee
+      if (selectedAttendee?.id === registrationToDelete?.id) {
+        setDrawerOpen(false);
+        setSelectedAttendee(null);
+      }
+      setRegistrationDeleteDialogOpen(false);
+      setRegistrationToDelete(null);
+      toast({ title: t("success"), description: "Registration deleted successfully" });
+    },
+    onError: () => {
+      toast({ title: t("error"), description: "Failed to delete registration", variant: "destructive" });
     },
   });
 
@@ -1198,7 +1226,15 @@ export default function AttendeesPage() {
                   <ArrowRightLeft className="h-4 w-4 mr-2" />
                   Move to Event
                 </DropdownMenuItem>
-                <DropdownMenuItem className="text-destructive" data-testid={`action-delete-${person.id}`}>
+                <DropdownMenuItem 
+                  className="text-destructive" 
+                  data-testid={`action-delete-${person.id}`}
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    setRegistrationToDelete(reg);
+                    setRegistrationDeleteDialogOpen(true);
+                  }}
+                >
                   <Trash2 className="h-4 w-4 mr-2" />
                   {t("delete")}
                 </DropdownMenuItem>
@@ -2064,6 +2100,29 @@ export default function AttendeesPage() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Registration Confirmation Dialog */}
+      <AlertDialog open={registrationDeleteDialogOpen} onOpenChange={setRegistrationDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Registration</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the registration for {registrationToDelete?.firstName} {registrationToDelete?.lastName} ({registrationToDelete?.email})? 
+              This will permanently remove their registration and all associated data. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => registrationToDelete && deleteRegistrationMutation.mutate(registrationToDelete.id)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteRegistrationMutation.isPending}
+            >
+              {deleteRegistrationMutation.isPending ? "Deleting..." : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

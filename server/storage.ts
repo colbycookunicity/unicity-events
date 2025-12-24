@@ -261,7 +261,46 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteEvent(id: string): Promise<boolean> {
-    const result = await db.delete(events).where(eq(events.id, id));
+    // Get all registrations for this event to delete their related data
+    const eventRegistrations = await db.select({ id: registrations.id }).from(registrations).where(eq(registrations.eventId, id));
+    
+    // Delete all registration-related data (guests, flights, reimbursements)
+    for (const reg of eventRegistrations) {
+      await db.delete(guests).where(eq(guests.registrationId, reg.id));
+      await db.delete(flights).where(eq(flights.registrationId, reg.id));
+      await db.delete(reimbursements).where(eq(reimbursements.registrationId, reg.id));
+    }
+    
+    // Delete registrations
+    await db.delete(registrations).where(eq(registrations.eventId, id));
+    
+    // Delete qualified registrants
+    await db.delete(qualifiedRegistrants).where(eq(qualifiedRegistrants.eventId, id));
+    
+    // Delete swag assignments for this event's swag items
+    const eventSwagItems = await db.select({ id: swagItems.id }).from(swagItems).where(eq(swagItems.eventId, id));
+    for (const item of eventSwagItems) {
+      await db.delete(swagAssignments).where(eq(swagAssignments.swagItemId, item.id));
+    }
+    
+    // Delete swag items
+    await db.delete(swagItems).where(eq(swagItems.eventId, id));
+    
+    // Delete guest allowance rules
+    await db.delete(guestAllowanceRules).where(eq(guestAllowanceRules.eventId, id));
+    
+    // Delete event manager assignments
+    await db.delete(eventManagerAssignments).where(eq(eventManagerAssignments.eventId, id));
+    
+    // Delete event pages and sections (eventPages has ON DELETE CASCADE for sections)
+    const pages = await db.select({ id: eventPages.id }).from(eventPages).where(eq(eventPages.eventId, id));
+    for (const page of pages) {
+      await db.delete(eventPageSections).where(eq(eventPageSections.pageId, page.id));
+    }
+    await db.delete(eventPages).where(eq(eventPages.eventId, id));
+    
+    // Finally delete the event
+    await db.delete(events).where(eq(events.id, id));
     return true;
   }
 
@@ -346,6 +385,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteRegistration(id: string): Promise<boolean> {
+    // Delete related data first (cascade)
+    await db.delete(guests).where(eq(guests.registrationId, id));
+    await db.delete(flights).where(eq(flights.registrationId, id));
+    await db.delete(reimbursements).where(eq(reimbursements.registrationId, id));
+    // Then delete the registration
     await db.delete(registrations).where(eq(registrations.id, id));
     return true;
   }
