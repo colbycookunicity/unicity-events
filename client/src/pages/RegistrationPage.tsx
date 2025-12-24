@@ -778,15 +778,24 @@ export default function RegistrationPage() {
         existingRegistrationId, // Include existing ID for updates
       };
       
-      // Use PUT for updates, POST for new registrations
+      // Use PUT for updates if we have an existing ID, otherwise POST (which handles UPSERT)
       if (existingRegistrationId) {
         return apiRequest("PUT", `/api/events/${params.eventId}/register/${existingRegistrationId}`, payload);
       }
+      // POST endpoint now uses UPSERT pattern - never returns duplicate error
       return apiRequest("POST", `/api/events/${params.eventId}/register`, payload);
     },
-    onSuccess: () => {
+    onSuccess: async (response) => {
       setIsSuccess(true);
-      const successMessage = existingRegistrationId
+      // Check if the response indicates an update vs create
+      let wasUpdated = existingRegistrationId ? true : false;
+      try {
+        const result = await response.json();
+        if (result.wasUpdated) wasUpdated = true;
+      } catch {
+        // Ignore JSON parse errors
+      }
+      const successMessage = wasUpdated
         ? (language === "es" ? "Registro actualizado exitosamente" : "Registration updated successfully")
         : t("registrationSuccess");
       toast({ title: t("success"), description: successMessage });
@@ -892,6 +901,10 @@ export default function RegistrationPage() {
   };
 
   const getCtaLabel = () => {
+    // Show "Update Registration" when editing an existing registration
+    if (existingRegistrationId) {
+      return language === "es" ? "Actualizar Registro" : "Update Registration";
+    }
     if (formSectionContent) {
       if (language === "es" && formSectionContent.submitButtonLabelEs) {
         return formSectionContent.submitButtonLabelEs;

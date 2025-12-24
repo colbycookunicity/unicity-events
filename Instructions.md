@@ -521,3 +521,69 @@ To test the changes:
 4. Select "Other / Allergies" and verify the text field appears
 5. Select another option and verify the text field disappears
 6. Submit a registration and verify data appears in admin Attendees page
+
+---
+
+# Returning User Registration Fix (December 2024)
+
+## Problem Statement
+Returning users who had already registered for an event were receiving a "You are already registered for this event" error when trying to submit their registration again. This prevented them from updating their registration details.
+
+## Root Cause Analysis
+1. The POST `/api/events/:eventIdOrSlug/register` endpoint was checking for existing registrations and returning a 400 error if one existed
+2. The client-side relied on fetching the existing registration ID before submission, but this could fail if:
+   - The OTP session expired (15-minute window)
+   - The page was refreshed without session persistence
+   - Race conditions prevented the ID from being set
+
+## Solution: UPSERT Pattern
+Implemented a server-side UPSERT pattern that eliminates the duplicate error entirely:
+
+### Backend Changes (server/routes.ts)
+1. Modified POST `/api/events/:eventIdOrSlug/register` to use UPSERT logic:
+   - Check if registration exists for email+eventId combination
+   - If exists: UPDATE the existing registration with new data
+   - If not exists: CREATE a new registration
+   - Return `wasUpdated: true` flag when updating to allow client to show appropriate message
+
+2. The PUT endpoint remains for explicit updates when the client knows the registration ID
+
+3. `lastModified` timestamp is automatically updated on every edit via `storage.updateRegistration()`
+
+### Frontend Changes (client/src/pages/RegistrationPage.tsx)
+1. Updated `getCtaLabel()` to show "Update Registration" / "Actualizar Registro" when `existingRegistrationId` is set
+2. Updated `onSuccess` handler to detect `wasUpdated` flag and show appropriate success message
+3. Session persistence via sessionStorage allows verification to survive page refreshes
+
+## Data Flow
+1. User enters email and verifies via OTP
+2. After verification, client attempts to fetch existing registration via POST `/api/register/existing`
+3. If found, form is pre-filled and `existingRegistrationId` is set
+4. On submit:
+   - If `existingRegistrationId` is set: Use PUT endpoint
+   - Otherwise: Use POST endpoint (which handles UPSERT automatically)
+5. Either way, no duplicate error is thrown
+
+## Uniqueness Enforcement
+- Registrations are unique by `eventId` + `email` (normalized to lowercase)
+- The UPSERT pattern uses `getRegistrationByEmail(eventId, email)` to check existence
+
+## Timestamps
+- `createdAt`: Set once on initial creation
+- `lastModified`: Updated on every edit (in `storage.updateRegistration()`)
+- `registeredAt`: Set once on initial creation
+- `termsAcceptedAt`: Updated when terms are re-accepted
+
+## Assumptions
+1. A user is identified by their email address (normalized to lowercase)
+2. One registration per email per event is the business rule
+3. Re-submitting registration is a valid use case for updating information
+4. The OTP session provides sufficient security for the 15-minute window
+
+## Testing
+Verified with: colby.cook+method@unicity.com
+- Fresh registration works
+- Page refresh within 15-min window maintains verification
+- Re-submitting updates existing registration without error
+- Form shows "Update Registration" when editing existing registration
+- `lastModified` timestamp is refreshed on every edit
