@@ -4,7 +4,6 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLanguage } from "@/lib/i18n";
 import { useTheme } from "@/components/ThemeProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { LanguageToggle } from "@/components/LanguageToggle";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,7 +40,7 @@ const ATTENDEE_TOKEN_KEY = "attendeeAuthToken";
 const ATTENDEE_EMAIL_KEY = "attendeeEmail";
 
 export default function AttendeeEventsPage() {
-  const { language } = useLanguage();
+  const { language, setLanguage } = useLanguage();
   const t = (en: string, es: string) => (language === "es" ? es : en);
   const { theme } = useTheme();
   const { toast } = useToast();
@@ -183,27 +182,48 @@ export default function AttendeeEventsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto flex items-center justify-between gap-4 p-4">
-          <img 
-            src={unicityLogo} 
-            alt="Unicity" 
-            className="h-8 object-contain"
-            data-testid="img-attendee-logo"
-          />
-          <div className="flex items-center gap-2">
-            <LanguageToggle />
-            <ThemeToggle />
+      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 py-3">
+        <div className="container mx-auto flex items-center justify-between gap-6">
+          {/* Left: Logo */}
+          <div className="shrink-0">
+            <img 
+              src={unicityLogo} 
+              alt="Unicity" 
+              className="h-6 w-auto"
+              data-testid="img-attendee-logo"
+            />
+          </div>
+          {/* Right: Actions */}
+          <div className="flex items-center gap-2 shrink-0">
             {step === "events" && (
               <Button 
                 variant="ghost" 
                 size="icon"
                 onClick={() => logoutMutation.mutate()}
+                className="text-muted-foreground"
                 data-testid="button-attendee-logout"
               >
                 <LogOut className="h-4 w-4" />
               </Button>
             )}
+            <ThemeToggle />
+            <div className="flex items-center gap-1 text-sm font-medium">
+              <button
+                onClick={() => setLanguage("en")}
+                className={language === "en" ? "text-foreground font-semibold" : "text-muted-foreground hover:text-foreground"}
+                data-testid="button-language-en"
+              >
+                EN
+              </button>
+              <span className="text-muted-foreground">/</span>
+              <button
+                onClick={() => setLanguage("es")}
+                className={language === "es" ? "text-foreground font-semibold" : "text-muted-foreground hover:text-foreground"}
+                data-testid="button-language-es"
+              >
+                ES
+              </button>
+            </div>
           </div>
         </div>
       </header>
