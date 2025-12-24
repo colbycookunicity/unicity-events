@@ -255,6 +255,15 @@ export const authSessions = pgTable("auth_sessions", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Attendee Sessions table - for attendee portal access (separate from admin auth)
+export const attendeeSessions = pgTable("attendee_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  token: text("token").notNull().unique(),
+  email: text("email").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Swag Items table - Event-specific swag catalog
 export const swagItems = pgTable("swag_items", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -709,6 +718,12 @@ export const insertAuthSessionSchema = createInsertSchema(authSessions).omit({
   createdAt: true,
 });
 
+export const insertAttendeeSessionSchema = createInsertSchema(attendeeSessions).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertAttendeeSession = z.infer<typeof insertAttendeeSessionSchema>;
+
 export const insertSwagItemSchema = createInsertSchema(swagItems).omit({
   id: true,
   createdAt: true,
@@ -770,6 +785,7 @@ export type OtpSession = typeof otpSessions.$inferSelect;
 
 export type InsertAuthSession = z.infer<typeof insertAuthSessionSchema>;
 export type AuthSession = typeof authSessions.$inferSelect;
+export type AttendeeSession = typeof attendeeSessions.$inferSelect;
 
 export type InsertSwagItem = z.infer<typeof insertSwagItemSchema>;
 export type SwagItem = typeof swagItems.$inferSelect;

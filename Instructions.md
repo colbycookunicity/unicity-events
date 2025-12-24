@@ -1,3 +1,110 @@
+# Attendee Portal Implementation Plan
+
+## Overview
+
+Added a dedicated attendee entry point at `/my-events` where users qualified for events can see and manage their registrations without affecting admin login or existing event registration pages.
+
+## Authentication Flows (Unchanged vs New)
+
+### Existing Flows (Unchanged)
+1. **Admin Login at `/`** (events.unicity.com)
+   - Uses OTP verification via Hydra API
+   - Checks admin whitelist + database users
+   - Creates admin auth session (`auth_sessions` table)
+   - Routes to `/admin` dashboard
+
+2. **Public Event Registration at `/register/:eventSlug`**
+   - Event-scoped OTP verification
+   - Session stored in `otp_sessions` with `registrationEventId` in customerData
+   - No persistent session - scoped to single event
+
+### New Flow: Attendee Portal at `/my-events`
+- **Purpose**: Let qualified users see ALL events they're eligible for
+- **OTP Login**: Uses Hydra API (same as registration)
+- **Session Type**: Creates `attendee_sessions` (NOT admin sessions)
+- **Data Source**: Queries `qualified_registrants` and `registrations` tables
+- **No Admin Access**: Attendee tokens cannot access admin routes
+
+## Database Changes
+
+### New Table: `attendee_sessions`
+```sql
+CREATE TABLE attendee_sessions (
+  id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+  token TEXT NOT NULL UNIQUE,
+  email TEXT NOT NULL,
+  expires_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW() NOT NULL
+);
+```
+
+## API Endpoints
+
+### POST `/api/attendee/otp/generate`
+- Input: `{ email: string }`
+- Validates user has at least one qualifying event
+- Sends OTP via Hydra (or dev mode: 123456)
+- Returns: `{ success: true, message: string }`
+
+### POST `/api/attendee/otp/validate`
+- Input: `{ email: string, code: string }`
+- Validates OTP with Hydra
+- Creates attendee session (24-hour expiry)
+- Returns: `{ success: true, token: string, email: string, expiresAt: string }`
+
+### GET `/api/attendee/events`
+- Requires: `Authorization: Bearer <attendee_token>`
+- Returns: `{ email: string, events: AttendeeEvent[] }`
+- Each event includes: id, slug, name, location, dates, registrationStatus, lastUpdated
+
+### POST `/api/attendee/logout`
+- Requires: `Authorization: Bearer <attendee_token>`
+- Deletes attendee session
+
+## Frontend Components
+
+### `AttendeeEventsPage.tsx`
+- Three-step flow: Email → OTP → Events Dashboard
+- Stores attendee token in localStorage (key: `attendeeAuthToken`)
+- Displays event cards with:
+  - Event name (bilingual)
+  - Date and location
+  - Status badge ("Registered" or "Qualified")
+  - Last updated timestamp
+  - Action button → links to `/register/:eventSlug`
+
+## Routing
+
+```typescript
+// In PublicRouter
+<Route path="/my-events" component={AttendeeEventsPage} />
+```
+
+## Security Boundaries
+
+1. **Admin tokens** (`auth_sessions`) grant access to `/admin/*` routes
+2. **Attendee tokens** (`attendee_sessions`) only work with `/api/attendee/*` endpoints
+3. **Registration OTP sessions** are event-scoped and temporary
+4. **Email normalization**: All lookups use `toLowerCase().trim()`
+
+## Testing Instructions
+
+1. Visit `/my-events`
+2. Enter a qualified email (e.g., `colby.cook+method@unicity.com` in production)
+3. In dev mode, use code `123456`
+4. Verify events list shows with correct status
+5. Click "View/Edit" or "Register" to navigate to event registration
+6. Confirm admin login at `/` still works independently
+
+## Assumptions & Notes
+
+- Users must be in `qualified_registrants` OR have an existing `registration` to see events
+- Session expiry is 24 hours for attendee portal
+- Event hero images are displayed if available
+- Logout clears localStorage token
+
+---
+
 # Registration Pages System Overhaul
 
 ## Root Cause Analysis

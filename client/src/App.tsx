@@ -31,6 +31,7 @@ import LandingEditorPage from "@/pages/LandingEditorPage";
 import EventListPage from "@/pages/EventListPage";
 import SettingsPage from "@/pages/SettingsPage";
 import ReportsPage from "@/pages/ReportsPage";
+import AttendeeEventsPage from "@/pages/AttendeeEventsPage";
 
 function AdminLayout({ children }: { children: React.ReactNode }) {
   const { theme } = useTheme();
@@ -100,6 +101,7 @@ function PublicRouter() {
       <Route path="/register/:eventId" component={RegistrationPage} />
       <Route path="/register">{() => <EventListPage />}</Route>
       <Route path="/events/:slug" component={EventLandingPage} />
+      <Route path="/my-events" component={AttendeeEventsPage} />
       <Route path="/my-dashboard" component={UserDashboard} />
       <Route path="/" component={PublicLoginPage} />
       <Route component={NotFound} />

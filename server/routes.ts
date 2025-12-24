@@ -1103,6 +1103,195 @@ export async function registerRoutes(
     }
   });
 
+  // =====================================================
+  // ATTENDEE PORTAL ENDPOINTS (separate from admin auth)
+  // =====================================================
+
+  // Attendee OTP generate (for /my-events login)
+  app.post("/api/attendee/otp/generate", async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+
+      const normalizedEmail = email.toLowerCase().trim();
+
+      // Check if user has any qualifying events or existing registrations
+      const qualifyingEvents = await storage.getQualifyingEventsForEmail(normalizedEmail);
+      if (qualifyingEvents.length === 0) {
+        return res.status(403).json({ 
+          error: "No events found for this email. You must be qualified for at least one event to access the attendee portal." 
+        });
+      }
+
+      // For development, simulate OTP
+      if (process.env.NODE_ENV !== "production") {
+        const devCode = "123456";
+        await storage.createOtpSession({
+          email: normalizedEmail,
+          validationId: `dev-attendee-${Date.now()}`,
+          verified: false,
+          expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 min
+          customerData: { attendeePortal: true },
+        });
+        console.log(`[DEV] Attendee OTP for ${normalizedEmail}: ${devCode}`);
+        return res.json({ success: true, message: "Verification code sent (dev mode: 123456)" });
+      }
+
+      // Production: Send OTP via Hydra
+      const response = await fetch(`${HYDRA_API_BASE}/otp/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: normalizedEmail }),
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        console.error("Hydra OTP generate error:", data);
+        return res.status(500).json({ error: data.message || "Failed to send verification code" });
+      }
+
+      await storage.createOtpSession({
+        email: normalizedEmail,
+        validationId: data.validation_id,
+        verified: false,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        customerData: { attendeePortal: true },
+      });
+
+      res.json({ success: true, message: "Verification code sent to your email" });
+    } catch (error) {
+      console.error("Attendee OTP generate error:", error);
+      res.status(500).json({ error: "Failed to send verification code" });
+    }
+  });
+
+  // Attendee OTP validate (creates attendee session, not admin session)
+  app.post("/api/attendee/otp/validate", async (req, res) => {
+    try {
+      const { email, code } = req.body;
+      if (!email || !code) {
+        return res.status(400).json({ error: "Email and code are required" });
+      }
+
+      const normalizedEmail = email.toLowerCase().trim();
+      
+      // Security: Fetch only attendee portal sessions (isolated from admin/registration flows)
+      const session = await storage.getOtpSessionForAttendeePortal(normalizedEmail);
+      
+      if (!session) {
+        return res.status(400).json({ error: "No pending verification. Please request a new code from the attendee portal." });
+      }
+      if (session.verified) {
+        return res.status(400).json({ error: "Code already used. Please request a new code." });
+      }
+
+      let isValid = false;
+
+      // Dev mode: accept 123456
+      if (process.env.NODE_ENV !== "production" && code === "123456") {
+        isValid = true;
+      } else {
+        // Validate with Hydra
+        const response = await fetch(`${HYDRA_API_BASE}/otp/magic-link`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            email: normalizedEmail, 
+            code,
+            validation_id: session.validationId 
+          }),
+        });
+        const data = await response.json();
+        if (response.ok && data.success) {
+          isValid = true;
+        } else if (data.message?.toLowerCase().includes("customer not found")) {
+          // OTP was valid but no Hydra account - still allow for qualified users
+          isValid = true;
+        }
+      }
+
+      if (!isValid) {
+        return res.status(400).json({ error: "Invalid verification code" });
+      }
+
+      // Delete the OTP session to prevent reuse (security: one-time use)
+      await storage.deleteOtpSession(session.id);
+
+      // Create attendee session (NOT admin session)
+      const attendeeSession = await storage.createAttendeeSession(normalizedEmail);
+
+      res.json({ 
+        success: true, 
+        token: attendeeSession.token,
+        email: normalizedEmail,
+        expiresAt: attendeeSession.expiresAt,
+      });
+    } catch (error) {
+      console.error("Attendee OTP validate error:", error);
+      res.status(500).json({ error: "Failed to verify code" });
+    }
+  });
+
+  // Get attendee's qualifying events (requires attendee token)
+  app.get("/api/attendee/events", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      const token = authHeader?.split(" ")[1];
+      if (!token) {
+        return res.status(401).json({ error: "Attendee token required" });
+      }
+
+      const session = await storage.getAttendeeSessionByToken(token);
+      if (!session) {
+        return res.status(401).json({ error: "Invalid or expired attendee session" });
+      }
+
+      const qualifyingEvents = await storage.getQualifyingEventsForEmail(session.email);
+
+      // Transform to client-friendly format
+      const events = qualifyingEvents.map(({ event, registration, qualifiedRegistrant }) => ({
+        id: event.id,
+        slug: event.slug,
+        name: event.name,
+        nameEs: event.nameEs,
+        location: event.location,
+        startDate: event.startDate,
+        endDate: event.endDate,
+        heroImageUrl: event.heroImageUrl,
+        registrationStatus: registration ? "registered" : "not_registered",
+        registrationId: registration?.id || null,
+        lastUpdated: registration?.lastModified || null,
+        qualifiedSince: qualifiedRegistrant?.createdAt || null,
+      }));
+
+      res.json({ email: session.email, events });
+    } catch (error) {
+      console.error("Get attendee events error:", error);
+      res.status(500).json({ error: "Failed to get events" });
+    }
+  });
+
+  // Attendee logout
+  app.post("/api/attendee/logout", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      const token = authHeader?.split(" ")[1];
+      if (token) {
+        await storage.deleteAttendeeSession(token);
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Attendee logout error:", error);
+      res.status(500).json({ error: "Failed to logout" });
+    }
+  });
+
+  // =====================================================
+  // END ATTENDEE PORTAL ENDPOINTS
+  // =====================================================
+
   app.get("/api/events/:id", async (req, res) => {
     try {
       const event = await storage.getEvent(req.params.id);

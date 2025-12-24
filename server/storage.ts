@@ -1,5 +1,5 @@
 import {
-  users, events, registrations, guests, flights, reimbursements, otpSessions, authSessions,
+  users, events, registrations, guests, flights, reimbursements, otpSessions, authSessions, attendeeSessions,
   swagItems, swagAssignments, qualifiedRegistrants, eventPages, eventPageSections, guestAllowanceRules,
   formTemplates, eventManagerAssignments,
   type User, type InsertUser,
@@ -76,6 +76,7 @@ export interface IStorage {
 
   // OTP Sessions
   getOtpSession(email: string): Promise<OtpSession | undefined>;
+  getOtpSessionForAttendeePortal(email: string): Promise<OtpSession | undefined>;
   getOtpSessionByRedirectToken(token: string): Promise<OtpSession | undefined>;
   createOtpSession(session: InsertOtpSession): Promise<OtpSession>;
   updateOtpSession(id: string, data: Partial<OtpSession>): Promise<OtpSession | undefined>;
@@ -85,6 +86,11 @@ export interface IStorage {
   getAuthSession(token: string): Promise<AuthSession | undefined>;
   createAuthSession(session: InsertAuthSession): Promise<AuthSession>;
   deleteAuthSession(token: string): Promise<boolean>;
+
+  // Attendee Sessions
+  createAttendeeSession(email: string): Promise<{ token: string; expiresAt: Date }>;
+  getAttendeeSessionByToken(token: string): Promise<{ email: string; expiresAt: Date } | undefined>;
+  deleteAttendeeSession(token: string): Promise<boolean>;
 
   // Stats
   getDashboardStats(): Promise<{
@@ -422,6 +428,19 @@ export class DatabaseStorage implements IStorage {
     return session || undefined;
   }
 
+  async getOtpSessionForAttendeePortal(email: string): Promise<OtpSession | undefined> {
+    const sessions = await db.select().from(otpSessions)
+      .where(and(eq(otpSessions.email, email), gte(otpSessions.expiresAt, new Date())))
+      .orderBy(desc(otpSessions.createdAt));
+    
+    // Find the most recent session with attendeePortal flag set
+    const attendeeSession = sessions.find(s => {
+      const data = s.customerData as any;
+      return data?.attendeePortal === true;
+    });
+    return attendeeSession || undefined;
+  }
+
   async createOtpSession(session: InsertOtpSession): Promise<OtpSession> {
     const [newSession] = await db.insert(otpSessions).values(session).returning();
     return newSession;
@@ -457,6 +476,31 @@ export class DatabaseStorage implements IStorage {
 
   async deleteAuthSession(token: string): Promise<boolean> {
     await db.delete(authSessions).where(eq(authSessions.token, token));
+    return true;
+  }
+
+  // Attendee Sessions
+  async createAttendeeSession(email: string): Promise<{ token: string; expiresAt: Date }> {
+    const token = crypto.randomUUID();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    await db.insert(attendeeSessions).values({
+      token,
+      email: email.toLowerCase().trim(),
+      expiresAt,
+    });
+    return { token, expiresAt };
+  }
+
+  async getAttendeeSessionByToken(token: string): Promise<{ email: string; expiresAt: Date } | undefined> {
+    const [session] = await db.select()
+      .from(attendeeSessions)
+      .where(and(eq(attendeeSessions.token, token), gte(attendeeSessions.expiresAt, new Date())));
+    if (!session) return undefined;
+    return { email: session.email, expiresAt: session.expiresAt };
+  }
+
+  async deleteAttendeeSession(token: string): Promise<boolean> {
+    await db.delete(attendeeSessions).where(eq(attendeeSessions.token, token));
     return true;
   }
 
