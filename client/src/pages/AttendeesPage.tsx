@@ -499,12 +499,17 @@ export default function AttendeesPage() {
   });
 
   const deleteQualifierMutation = useMutation({
-    mutationFn: async (id: string) => {
-      if (eventFilter === "all") throw new Error("Cannot delete qualifier without selecting an event");
+    mutationFn: async ({ id, eventId }: { id: string; eventId: string }) => {
       await apiRequest("DELETE", `/api/qualifiers/${id}`);
+      return { eventId };
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/events/${eventFilter}/qualifiers`] });
+    onSuccess: (data) => {
+      // Invalidate the specific event's qualifiers cache
+      queryClient.invalidateQueries({ queryKey: [`/api/events/${data.eventId}/qualifiers`] });
+      // Also invalidate the global qualifiers list if viewing all events
+      if (eventFilter === "all") {
+        queryClient.invalidateQueries({ queryKey: ["/api/qualifiers"] });
+      }
       setQualifierDeleteDialogOpen(false);
       setQualifierToDelete(null);
       toast({ title: t("success"), description: "Qualifier removed successfully" });
@@ -2128,7 +2133,7 @@ export default function AttendeesPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction 
-              onClick={() => qualifierToDelete && deleteQualifierMutation.mutate(qualifierToDelete.id)}
+              onClick={() => qualifierToDelete && deleteQualifierMutation.mutate({ id: qualifierToDelete.id, eventId: qualifierToDelete.eventId })}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Remove
