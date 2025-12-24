@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, CheckCircle, Calendar, MapPin, ExternalLink, Mail, ShieldCheck, AlertCircle } from "lucide-react";
+import { Loader2, CheckCircle, Calendar, MapPin, ExternalLink, Mail, ShieldCheck, AlertCircle, LogOut } from "lucide-react";
 import PhoneInput, { isPossiblePhoneNumber } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1098,6 +1098,15 @@ export default function RegistrationPage() {
     }
   };
 
+  // Logout handler - clears attendee auth and resets to verification step
+  const handleLogout = () => {
+    localStorage.removeItem("attendeeAuthToken");
+    setVerifiedProfile(null);
+    setVerificationStep("email");
+    setVerificationEmail("");
+    setOtpCode("");
+  };
+
   // Define renderHeader early so it can be used in success sections
   const renderHeader = () => (
     <header className="bg-card border-b border sticky top-0 z-20">
@@ -1109,6 +1118,18 @@ export default function RegistrationPage() {
           data-testid="img-header-logo"
         />
         <div className="flex items-center gap-2">
+          {verifiedProfile && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleLogout}
+              className="text-muted-foreground"
+              data-testid="button-logout"
+            >
+              <LogOut className="h-4 w-4 mr-1" />
+              {language === "es" ? "Salir" : "Logout"}
+            </Button>
+          )}
           <ThemeToggle />
           <div className="flex items-center gap-1 text-sm font-medium">
             <button
@@ -2235,6 +2256,18 @@ export default function RegistrationPage() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
+                  {verifiedProfile && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleLogout}
+                      className="text-muted-foreground"
+                      data-testid="button-logout"
+                    >
+                      <LogOut className="h-4 w-4 mr-1" />
+                      {language === "es" ? "Salir" : "Logout"}
+                    </Button>
+                  )}
                   <ThemeToggle />
                   <div className="flex items-center gap-1 text-sm font-medium">
                     <button
