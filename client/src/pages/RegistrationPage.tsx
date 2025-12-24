@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -306,6 +306,8 @@ export default function RegistrationPage() {
   const [isLoadingExisting, setIsLoadingExisting] = useState(false);
   // Track which email+event combination we loaded data for (security: prevents cross-user/cross-event data leakage)
   const [loadedForKey, setLoadedForKey] = useState<string | null>(null);
+  // Ref to prevent duplicate fetch calls during React concurrent mode/strict mode re-renders
+  const fetchingExistingRef = useRef<string | null>(null);
   
   // Skip verification if URL params provide identity (pre-qualified link)
   const skipVerification = Boolean(prePopulatedUnicityId && prePopulatedEmail);
@@ -736,91 +738,170 @@ export default function RegistrationPage() {
     },
   });
 
-  // Fetch existing registration when verification completes
+  // Helper to populate form with registration data
+  const populateFormWithRegistration = (reg: any) => {
+    setExistingRegistrationId(reg.id);
+    
+    if (reg.unicityId) form.setValue("unicityId", reg.unicityId);
+    if (reg.email) form.setValue("email", reg.email);
+    if (reg.firstName) form.setValue("firstName", reg.firstName);
+    if (reg.lastName) form.setValue("lastName", reg.lastName);
+    if (reg.phone) form.setValue("phone", reg.phone);
+    if (reg.gender) form.setValue("gender", reg.gender);
+    if (reg.dateOfBirth) {
+      const date = new Date(reg.dateOfBirth);
+      form.setValue("dateOfBirth", date.toISOString().split('T')[0]);
+    }
+    if (reg.passportNumber) form.setValue("passportNumber", reg.passportNumber);
+    if (reg.passportCountry) form.setValue("passportCountry", reg.passportCountry);
+    if (reg.passportExpiration) {
+      const date = new Date(reg.passportExpiration);
+      form.setValue("passportExpiration", date.toISOString().split('T')[0]);
+    }
+    if (reg.emergencyContact) form.setValue("emergencyContact", reg.emergencyContact);
+    if (reg.emergencyContactPhone) form.setValue("emergencyContactPhone", reg.emergencyContactPhone);
+    if (reg.shirtSize) form.setValue("shirtSize", reg.shirtSize);
+    if (reg.pantSize) form.setValue("pantSize", reg.pantSize);
+    if (reg.dietaryRestrictions && Array.isArray(reg.dietaryRestrictions)) {
+      form.setValue("dietaryRestrictions", reg.dietaryRestrictions);
+    }
+    if (reg.adaAccommodations !== undefined) form.setValue("adaAccommodations", reg.adaAccommodations);
+    if (reg.roomType) form.setValue("roomType", reg.roomType);
+    
+    if (reg.formData && typeof reg.formData === 'object') {
+      setCustomFormData(reg.formData as Record<string, any>);
+    }
+    
+    toast({
+      title: language === "es" ? "Datos cargados" : "Data Loaded",
+      description: language === "es" 
+        ? "Su registro anterior ha sido cargado. Puede actualizarlo si lo desea." 
+        : "Your previous registration has been loaded. You can update it if needed.",
+    });
+  };
+
+  // Helper to reset to email verification when session expires
+  const resetToEmailVerification = (showExpiredMessage = true) => {
+    setVerificationStep("email");
+    setVerifiedProfile(null);
+    setVerificationEmail("");
+    setOtpCode("");
+    setExistingRegistrationId(null);
+    setCustomFormData({});
+    setLoadedForKey(null);
+    fetchingExistingRef.current = null;
+    
+    if (showExpiredMessage) {
+      toast({
+        title: language === "es" ? "Sesión expirada" : "Session Expired",
+        description: language === "es" 
+          ? "Por favor verifique su email nuevamente." 
+          : "Please verify your email again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Fetch existing registration when verification completes or when returning with attendee token
   useEffect(() => {
     const fetchExistingRegistration = async () => {
-      const email = verifiedProfile?.email || verificationEmail || prePopulatedEmail;
-      if (!email || !params.eventId || !event) return;
-      // Only fetch when we're on the form step
-      if (verificationStep !== "form" || isLoadingExisting) return;
+      if (!params.eventId || !event) return;
       
-      // Create a key combining email + event to track what we've loaded
+      // Create a key combining event + source to track what we've loaded
+      const attendeeToken = localStorage.getItem("attendeeAuthToken");
+      const attendeeEmail = localStorage.getItem("attendeeEmail");
+      const email = verifiedProfile?.email || verificationEmail || prePopulatedEmail || attendeeEmail;
+      
+      if (!email) return;
+      
       const currentKey = `${email.toLowerCase()}:${params.eventId}`;
       
-      // Reset state if email+event changed (different user/event)
-      if (loadedForKey && loadedForKey !== currentKey) {
-        setExistingRegistrationId(null);
-        setCustomFormData({});
-        setLoadedForKey(null);
-        return; // Will re-trigger on next render after state update
+      // Don't re-fetch if already fetching or already loaded for this key
+      if (fetchingExistingRef.current === currentKey || loadedForKey === currentKey) return;
+      
+      // Strategy 1: Use attendee token (for returning users)
+      if (attendeeToken && attendeeEmail) {
+        fetchingExistingRef.current = currentKey;
+        setIsLoadingExisting(true);
+        
+        try {
+          const res = await fetch(`/api/attendee/registration/${params.eventId}`, {
+            headers: { Authorization: `Bearer ${attendeeToken}` },
+          });
+          
+          if (res.ok) {
+            const data = await res.json();
+            setLoadedForKey(currentKey);
+            
+            // If we're on email step but have valid token, skip to form
+            if (verificationStep === "email") {
+              setVerificationEmail(attendeeEmail);
+              setVerificationStep("form");
+            }
+            
+            if (data.success && data.exists && data.registration) {
+              populateFormWithRegistration(data.registration);
+            }
+            setIsLoadingExisting(false);
+            return;
+          } else if (res.status === 401 || res.status === 403) {
+            // Token expired - clear it and redirect to email verification
+            localStorage.removeItem("attendeeAuthToken");
+            localStorage.removeItem("attendeeEmail");
+            fetchingExistingRef.current = null;
+            setIsLoadingExisting(false);
+            resetToEmailVerification(true);
+            return;
+          }
+        } catch (error) {
+          console.error("Failed to fetch with attendee token:", error);
+        }
+        
+        setIsLoadingExisting(false);
+        fetchingExistingRef.current = null;
       }
       
-      // Don't re-fetch if we already loaded for this email+event
-      if (loadedForKey === currentKey) return;
-      
-      setIsLoadingExisting(true);
-      try {
-        const res = await apiRequest("POST", "/api/register/existing", {
-          email,
-          eventId: params.eventId,
-        });
-        const data = await res.json();
+      // Strategy 2: Use OTP session (for users who just verified)
+      if (verificationStep === "form") {
+        fetchingExistingRef.current = currentKey;
+        setIsLoadingExisting(true);
         
-        // Mark that we've loaded for this email+event (even if no registration found)
-        setLoadedForKey(currentKey);
-        
-        if (data.success && data.exists && data.registration) {
-          const reg = data.registration;
-          setExistingRegistrationId(reg.id);
-          
-          // Populate form with existing data
-          if (reg.unicityId) form.setValue("unicityId", reg.unicityId);
-          if (reg.email) form.setValue("email", reg.email);
-          if (reg.firstName) form.setValue("firstName", reg.firstName);
-          if (reg.lastName) form.setValue("lastName", reg.lastName);
-          if (reg.phone) form.setValue("phone", reg.phone);
-          if (reg.gender) form.setValue("gender", reg.gender);
-          if (reg.dateOfBirth) {
-            const date = new Date(reg.dateOfBirth);
-            form.setValue("dateOfBirth", date.toISOString().split('T')[0]);
-          }
-          if (reg.passportNumber) form.setValue("passportNumber", reg.passportNumber);
-          if (reg.passportCountry) form.setValue("passportCountry", reg.passportCountry);
-          if (reg.passportExpiration) {
-            const date = new Date(reg.passportExpiration);
-            form.setValue("passportExpiration", date.toISOString().split('T')[0]);
-          }
-          if (reg.emergencyContact) form.setValue("emergencyContact", reg.emergencyContact);
-          if (reg.emergencyContactPhone) form.setValue("emergencyContactPhone", reg.emergencyContactPhone);
-          if (reg.shirtSize) form.setValue("shirtSize", reg.shirtSize);
-          if (reg.pantSize) form.setValue("pantSize", reg.pantSize);
-          if (reg.dietaryRestrictions && Array.isArray(reg.dietaryRestrictions)) {
-            form.setValue("dietaryRestrictions", reg.dietaryRestrictions);
-          }
-          if (reg.adaAccommodations !== undefined) form.setValue("adaAccommodations", reg.adaAccommodations);
-          if (reg.roomType) form.setValue("roomType", reg.roomType);
-          
-          // Populate custom form data
-          if (reg.formData && typeof reg.formData === 'object') {
-            setCustomFormData(reg.formData as Record<string, any>);
-          }
-          
-          toast({
-            title: language === "es" ? "Datos cargados" : "Data Loaded",
-            description: language === "es" 
-              ? "Su registro anterior ha sido cargado. Puede actualizarlo si lo desea." 
-              : "Your previous registration has been loaded. You can update it if needed.",
+        try {
+          const res = await fetch("/api/register/existing", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, eventId: params.eventId }),
           });
+          
+          if (res.ok) {
+            const data = await res.json();
+            setLoadedForKey(currentKey);
+            
+            if (data.success && data.exists && data.registration) {
+              populateFormWithRegistration(data.registration);
+            }
+          } else if (res.status === 403) {
+            // OTP session expired - redirect to email verification
+            fetchingExistingRef.current = null;
+            setLoadedForKey(currentKey); // Prevent retry
+            resetToEmailVerification(true);
+            setIsLoadingExisting(false);
+            return;
+          } else {
+            // Other error - mark as loaded to prevent retry
+            setLoadedForKey(currentKey);
+          }
+        } catch (error) {
+          console.error("Failed to fetch existing registration:", error);
+          setLoadedForKey(currentKey);
         }
-      } catch (error) {
-        console.error("Failed to fetch existing registration:", error);
-      } finally {
+        
         setIsLoadingExisting(false);
       }
     };
     
     fetchExistingRegistration();
-  }, [verificationStep, verifiedProfile, verificationEmail, prePopulatedEmail, params.eventId, event, form, language, toast, isLoadingExisting, loadedForKey]);
+  }, [verificationStep, verifiedProfile, verificationEmail, prePopulatedEmail, params.eventId, event, loadedForKey]);
 
   const registerMutation = useMutation({
     mutationFn: async (data: RegistrationFormData) => {
@@ -831,12 +912,34 @@ export default function RegistrationPage() {
         passportExpiration: data.passportExpiration ? new Date(data.passportExpiration).toISOString() : null,
         formData: Object.keys(customFormData).length > 0 ? customFormData : undefined,
         verifiedByHydra,
-        existingRegistrationId, // Include existing ID for updates
+        existingRegistrationId,
       };
       
-      // Use PUT for updates if we have an existing ID, otherwise POST (which handles UPSERT)
+      // For PUT updates, include attendee token in Authorization header
       if (existingRegistrationId) {
-        return apiRequest("PUT", `/api/events/${params.eventId}/register/${existingRegistrationId}`, payload);
+        const attendeeToken = localStorage.getItem("attendeeAuthToken");
+        const headers: HeadersInit = {
+          "Content-Type": "application/json",
+        };
+        if (attendeeToken) {
+          headers["Authorization"] = `Bearer ${attendeeToken}`;
+        }
+        const res = await fetch(`/api/events/${params.eventId}/register/${existingRegistrationId}`, {
+          method: "PUT",
+          headers,
+          body: JSON.stringify(payload),
+          credentials: "include",
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          try {
+            const json = JSON.parse(text);
+            throw new Error(json.error || json.message || `${res.status}: ${text}`);
+          } catch {
+            throw new Error(`${res.status}: ${text}`);
+          }
+        }
+        return res;
       }
       // POST endpoint now uses UPSERT pattern - never returns duplicate error
       return apiRequest("POST", `/api/events/${params.eventId}/register`, payload);

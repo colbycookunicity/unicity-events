@@ -1273,6 +1273,68 @@ export async function registerRoutes(
     }
   });
 
+  // Get attendee's registration for a specific event (requires attendee token)
+  // This is used by returning users to load their existing registration data
+  app.get("/api/attendee/registration/:eventIdOrSlug", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      const token = authHeader?.split(" ")[1];
+      if (!token) {
+        return res.status(401).json({ error: "Attendee token required" });
+      }
+
+      const session = await storage.getAttendeeSessionByToken(token);
+      if (!session) {
+        return res.status(401).json({ error: "Invalid or expired attendee session" });
+      }
+
+      // Get the event by ID or slug
+      const event = await storage.getEventByIdOrSlug(req.params.eventIdOrSlug);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      // Get existing registration with full details
+      const registration = await storage.getRegistrationWithDetailsByEmail(event.id, session.email);
+      
+      if (!registration) {
+        return res.json({ success: true, exists: false });
+      }
+
+      // Return registration data
+      res.json({
+        success: true,
+        exists: true,
+        registration: {
+          id: registration.id,
+          eventId: registration.eventId,
+          email: registration.email,
+          firstName: registration.firstName,
+          lastName: registration.lastName,
+          unicityId: registration.unicityId,
+          phone: registration.phone,
+          gender: registration.gender,
+          dateOfBirth: registration.dateOfBirth,
+          passportNumber: registration.passportNumber,
+          passportCountry: registration.passportCountry,
+          passportExpiration: registration.passportExpiration,
+          emergencyContact: registration.emergencyContact,
+          emergencyContactPhone: registration.emergencyContactPhone,
+          shirtSize: registration.shirtSize,
+          pantSize: registration.pantSize,
+          dietaryRestrictions: registration.dietaryRestrictions,
+          adaAccommodations: registration.adaAccommodations,
+          roomType: registration.roomType,
+          formData: registration.formData,
+          status: registration.status,
+        },
+      });
+    } catch (error) {
+      console.error("Get attendee registration error:", error);
+      res.status(500).json({ error: "Failed to get registration" });
+    }
+  });
+
   // Attendee logout
   app.post("/api/attendee/logout", async (req, res) => {
     try {
@@ -1656,30 +1718,43 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Event not found" });
       }
 
-      // Security: Verify there's a valid, verified OTP session for this email+event
       const email = req.body.email;
       if (!email) {
         return res.status(400).json({ error: "Email is required" });
       }
-      
-      const session = await storage.getOtpSession(email);
-      if (!session || !session.verified) {
+
+      // Security: Check for either attendee token OR OTP session
+      let isAuthenticated = false;
+      let authenticatedEmail: string | null = null;
+
+      // Strategy 1: Check attendee token (from Authorization header)
+      const authHeader = req.headers.authorization;
+      const attendeeToken = authHeader?.split(" ")[1];
+      if (attendeeToken) {
+        const attendeeSession = await storage.getAttendeeSessionByToken(attendeeToken);
+        if (attendeeSession && attendeeSession.email.toLowerCase() === email.toLowerCase()) {
+          isAuthenticated = true;
+          authenticatedEmail = attendeeSession.email;
+        }
+      }
+
+      // Strategy 2: Check OTP session (for users who just verified)
+      if (!isAuthenticated) {
+        const session = await storage.getOtpSession(email);
+        if (session && session.verified) {
+          const verifiedAt = session.verifiedAt ? new Date(session.verifiedAt) : null;
+          if (verifiedAt && (Date.now() - verifiedAt.getTime()) <= 15 * 60 * 1000) {
+            const sessionEventId = (session.customerData as any)?.registrationEventId;
+            if (sessionEventId && (sessionEventId === req.params.eventIdOrSlug || sessionEventId === event.id)) {
+              isAuthenticated = true;
+              authenticatedEmail = email;
+            }
+          }
+        }
+      }
+
+      if (!isAuthenticated) {
         return res.status(403).json({ error: "Email not verified. Please complete OTP verification first." });
-      }
-
-      // Check session hasn't expired (15-minute window)
-      const verifiedAt = session.verifiedAt ? new Date(session.verifiedAt) : null;
-      if (!verifiedAt || (Date.now() - verifiedAt.getTime()) > 15 * 60 * 1000) {
-        return res.status(403).json({ error: "Session expired. Please verify again." });
-      }
-
-      // Validate event scope - session MUST be scoped to the requested event
-      const sessionEventId = (session.customerData as any)?.registrationEventId;
-      if (!sessionEventId) {
-        return res.status(403).json({ error: "Session is not scoped to an event. Please verify again for this event." });
-      }
-      if (sessionEventId !== req.params.eventIdOrSlug && sessionEventId !== event.id) {
-        return res.status(403).json({ error: "Session is not valid for this event. Please verify again." });
       }
 
       // Verify the registration exists and belongs to this event
