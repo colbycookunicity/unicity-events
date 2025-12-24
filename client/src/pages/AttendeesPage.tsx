@@ -30,6 +30,19 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
 import type { Registration, Event, SwagAssignmentWithDetails, QualifiedRegistrant, GuestAllowanceRule, FormTemplate } from "@shared/schema";
 
+// Helper to format date-only fields without timezone shift
+// Parses the date string and formats using UTC to avoid off-by-one errors
+function formatDateOnly(dateValue: string | Date | null | undefined, formatStr: string = "MMM d, yyyy"): string {
+  if (!dateValue) return "-";
+  const dateStr = typeof dateValue === 'string' ? dateValue : dateValue.toISOString();
+  // Extract just the date portion (YYYY-MM-DD) and parse at noon UTC to avoid timezone issues
+  const datePart = dateStr.split('T')[0];
+  const [year, month, day] = datePart.split('-').map(Number);
+  // Create date at noon UTC to avoid any timezone boundary issues
+  const utcDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  return format(utcDate, formatStr);
+}
+
 type UnifiedPerson = {
   type: "registration" | "qualifier";
   id: string;
@@ -857,7 +870,7 @@ export default function AttendeesPage() {
               value = reg?.gender || "";
               break;
             case "dateOfBirth":
-              value = reg?.dateOfBirth ? format(new Date(reg.dateOfBirth), "yyyy-MM-dd") : "";
+              value = reg?.dateOfBirth ? formatDateOnly(reg.dateOfBirth, "yyyy-MM-dd") : "";
               break;
             case "status":
               value = reg?.status || "Not Registered";
@@ -881,7 +894,7 @@ export default function AttendeesPage() {
               value = reg?.passportCountry || "";
               break;
             case "passportExpiration":
-              value = reg?.passportExpiration ? format(new Date(reg.passportExpiration), "yyyy-MM-dd") : "";
+              value = reg?.passportExpiration ? formatDateOnly(reg.passportExpiration, "yyyy-MM-dd") : "";
               break;
             case "emergencyContact":
               value = reg?.emergencyContact || "";
@@ -963,7 +976,7 @@ export default function AttendeesPage() {
               value = reg?.gender || "";
               break;
             case "dateOfBirth":
-              value = reg?.dateOfBirth ? format(new Date(reg.dateOfBirth), "yyyy-MM-dd") : "";
+              value = reg?.dateOfBirth ? formatDateOnly(reg.dateOfBirth, "yyyy-MM-dd") : "";
               break;
             case "status":
               value = reg?.status || "Not Registered";
@@ -987,7 +1000,7 @@ export default function AttendeesPage() {
               value = reg?.passportCountry || "";
               break;
             case "passportExpiration":
-              value = reg?.passportExpiration ? format(new Date(reg.passportExpiration), "yyyy-MM-dd") : "";
+              value = reg?.passportExpiration ? formatDateOnly(reg.passportExpiration, "yyyy-MM-dd") : "";
               break;
             case "emergencyContact":
               value = reg?.emergencyContact || "";
@@ -1118,7 +1131,7 @@ export default function AttendeesPage() {
       case "gender":
         return <span className="text-muted-foreground capitalize whitespace-nowrap">{reg?.gender || "-"}</span>;
       case "dateOfBirth":
-        return <span className="text-muted-foreground whitespace-nowrap">{reg?.dateOfBirth ? format(new Date(reg.dateOfBirth), "MMM d, yyyy") : "-"}</span>;
+        return <span className="text-muted-foreground whitespace-nowrap">{formatDateOnly(reg?.dateOfBirth)}</span>;
       case "status":
         return person.isRegistered && reg ? (
           <StatusBadge status={reg.status} />
@@ -1138,7 +1151,7 @@ export default function AttendeesPage() {
       case "passportCountry":
         return <span className="text-muted-foreground whitespace-nowrap">{reg?.passportCountry || "-"}</span>;
       case "passportExpiration":
-        return <span className="text-muted-foreground whitespace-nowrap">{reg?.passportExpiration ? format(new Date(reg.passportExpiration), "MMM d, yyyy") : "-"}</span>;
+        return <span className="text-muted-foreground whitespace-nowrap">{formatDateOnly(reg?.passportExpiration)}</span>;
       case "emergencyContact":
         return <span className="text-muted-foreground whitespace-nowrap">{reg?.emergencyContact || "-"}</span>;
       case "emergencyContactPhone":
@@ -1624,11 +1637,7 @@ export default function AttendeesPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Date of Birth</span>
-                    <span>
-                      {selectedAttendee.dateOfBirth 
-                        ? format(new Date(selectedAttendee.dateOfBirth), "MMM d, yyyy") 
-                        : "-"}
-                    </span>
+                    <span>{formatDateOnly(selectedAttendee.dateOfBirth)}</span>
                   </div>
                 </div>
               </div>
@@ -1648,11 +1657,7 @@ export default function AttendeesPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Expiration</span>
-                    <span>
-                      {selectedAttendee.passportExpiration 
-                        ? format(new Date(selectedAttendee.passportExpiration), "MMM d, yyyy") 
-                        : "-"}
-                    </span>
+                    <span>{formatDateOnly(selectedAttendee.passportExpiration)}</span>
                   </div>
                 </div>
               </div>
@@ -1700,7 +1705,17 @@ export default function AttendeesPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">ADA Accommodations</span>
-                    <span>{selectedAttendee.adaAccommodations ? "Yes" : "No"}</span>
+                    <div className="text-right">
+                      <span>{selectedAttendee.adaAccommodations ? "Yes" : "No"}</span>
+                      {selectedAttendee.adaAccommodations && (selectedAttendee as any).adaAccommodationsAt && (
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {format(new Date((selectedAttendee as any).adaAccommodationsAt), "MMM d, yyyy h:mm a")}
+                          {(selectedAttendee as any).adaAccommodationsIp && (
+                            <span className="ml-1">({(selectedAttendee as any).adaAccommodationsIp})</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1841,7 +1856,7 @@ export default function AttendeesPage() {
                   <Label>Date of Birth</Label>
                   <Input 
                     type="date"
-                    value={editForm.dateOfBirth ? format(new Date(editForm.dateOfBirth), "yyyy-MM-dd") : ""} 
+                    value={editForm.dateOfBirth ? formatDateOnly(editForm.dateOfBirth, "yyyy-MM-dd") : ""} 
                     onChange={(e) => handleFormChange("dateOfBirth", e.target.value)}
                     data-testid="edit-dateOfBirth"
                   />
@@ -1872,7 +1887,7 @@ export default function AttendeesPage() {
                   <Label>Passport Expiration</Label>
                   <Input 
                     type="date"
-                    value={editForm.passportExpiration ? format(new Date(editForm.passportExpiration), "yyyy-MM-dd") : ""} 
+                    value={editForm.passportExpiration ? formatDateOnly(editForm.passportExpiration, "yyyy-MM-dd") : ""} 
                     onChange={(e) => handleFormChange("passportExpiration", e.target.value)}
                     data-testid="edit-passportExpiration"
                   />

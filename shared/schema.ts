@@ -156,6 +156,8 @@ export const registrations = pgTable("registrations", {
   // Dietary & accommodations
   dietaryRestrictions: text("dietary_restrictions").array(),
   adaAccommodations: boolean("ada_accommodations").default(false),
+  adaAccommodationsAt: timestamp("ada_accommodations_at"),
+  adaAccommodationsIp: text("ada_accommodations_ip"),
   roomType: text("room_type"),
   // Custom form data for event-specific fields
   formData: jsonb("form_data"),

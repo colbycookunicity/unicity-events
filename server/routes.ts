@@ -1633,7 +1633,14 @@ export async function registerRoutes(
         if (req.body.shirtSize !== undefined) updateData.shirtSize = req.body.shirtSize;
         if (req.body.pantSize !== undefined) updateData.pantSize = req.body.pantSize;
         if (req.body.dietaryRestrictions !== undefined) updateData.dietaryRestrictions = Array.isArray(req.body.dietaryRestrictions) ? req.body.dietaryRestrictions : [];
-        if (req.body.adaAccommodations !== undefined) updateData.adaAccommodations = req.body.adaAccommodations;
+        if (req.body.adaAccommodations !== undefined) {
+          updateData.adaAccommodations = req.body.adaAccommodations;
+          // Track timestamp and IP when ADA accommodations is newly set to true
+          if (req.body.adaAccommodations && !existingReg.adaAccommodations) {
+            updateData.adaAccommodationsAt = new Date();
+            updateData.adaAccommodationsIp = String(clientIp);
+          }
+        }
         if (req.body.roomType !== undefined) updateData.roomType = req.body.roomType;
         if (req.body.language !== undefined) updateData.language = req.body.language;
         if (req.body.formData !== undefined) updateData.formData = req.body.formData;
@@ -1675,6 +1682,8 @@ export async function registerRoutes(
         pantSize: req.body.pantSize,
         dietaryRestrictions: req.body.dietaryRestrictions || [],
         adaAccommodations: req.body.adaAccommodations || false,
+        adaAccommodationsAt: req.body.adaAccommodations ? new Date() : null,
+        adaAccommodationsIp: req.body.adaAccommodations ? String(clientIp) : null,
         roomType: req.body.roomType,
         language: req.body.language || "en",
         status: "registered",
@@ -1790,6 +1799,8 @@ export async function registerRoutes(
         pantSize: req.body.pantSize,
         dietaryRestrictions: req.body.dietaryRestrictions || [],
         adaAccommodations: req.body.adaAccommodations || false,
+        adaAccommodationsAt: req.body.adaAccommodations && !existingReg.adaAccommodations ? new Date() : existingReg.adaAccommodationsAt,
+        adaAccommodationsIp: req.body.adaAccommodations && !existingReg.adaAccommodations ? String(clientIp) : existingReg.adaAccommodationsIp,
         roomType: req.body.roomType,
         language: req.body.language || "en",
         formData: req.body.formData,
