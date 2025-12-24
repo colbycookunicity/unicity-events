@@ -479,6 +479,52 @@ export default function RegistrationPage() {
     }
   }, [skipVerification, event, requiresVerification]);
 
+  // Check for existing verified session on page load (for refresh persistence)
+  const [isCheckingSession, setIsCheckingSession] = useState(false);
+  useEffect(() => {
+    const checkExistingSession = async () => {
+      // Skip if already verified, consuming token, or no event
+      if (verificationStep !== "email" || isConsumingToken || tokenConsumed || skipVerification || !params.eventId) {
+        return;
+      }
+      
+      // Check sessionStorage for a previously verified email
+      const storedEmail = sessionStorage.getItem(`reg_verified_email_${params.eventId}`);
+      if (!storedEmail) {
+        return;
+      }
+
+      setIsCheckingSession(true);
+      try {
+        // Validate the session is still valid with the server
+        const res = await fetch(`/api/register/session-status?email=${encodeURIComponent(storedEmail)}&eventId=${encodeURIComponent(params.eventId)}`);
+        const data = await res.json();
+        
+        if (data.verified && data.email) {
+          // Session is still valid - restore verified state
+          setVerificationEmail(data.email);
+          setVerifiedProfile({
+            unicityId: "",
+            email: data.email,
+            firstName: "",
+            lastName: "",
+          });
+          setVerificationStep("form");
+        } else {
+          // Session expired - clear stored email
+          sessionStorage.removeItem(`reg_verified_email_${params.eventId}`);
+        }
+      } catch (error) {
+        console.error("Failed to check session status:", error);
+        sessionStorage.removeItem(`reg_verified_email_${params.eventId}`);
+      } finally {
+        setIsCheckingSession(false);
+      }
+    };
+
+    checkExistingSession();
+  }, [params.eventId, verificationStep, isConsumingToken, tokenConsumed, skipVerification]);
+
   // Reset existing registration state when verification email or event changes (security: prevents cross-user/cross-event data leakage)
   useEffect(() => {
     const currentEmail = verifiedProfile?.email || verificationEmail || prePopulatedEmail;
@@ -580,6 +626,12 @@ export default function RegistrationPage() {
         }
         
         setVerificationStep("form");
+        
+        // Store verified email in sessionStorage for page refresh persistence
+        if (params.eventId) {
+          sessionStorage.setItem(`reg_verified_email_${params.eventId}`, data.profile.email);
+        }
+        
         toast({
           title: language === "es" ? "Verificado" : "Verified",
           description: language === "es" ? "Su identidad ha sido verificada" : "Your identity has been verified",

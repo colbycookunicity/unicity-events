@@ -317,6 +317,39 @@ export async function registerRoutes(
     res.json({ success: true });
   });
 
+  // Check registration session status (for page refresh persistence)
+  app.get("/api/register/session-status", async (req, res) => {
+    try {
+      const { email, eventId } = req.query;
+      if (!email || !eventId || typeof email !== "string" || typeof eventId !== "string") {
+        return res.json({ verified: false });
+      }
+
+      const session = await storage.getOtpSession(email);
+      if (!session || !session.verified) {
+        return res.json({ verified: false });
+      }
+
+      // Check session hasn't expired (15-minute window)
+      const verifiedAt = session.verifiedAt ? new Date(session.verifiedAt) : null;
+      if (!verifiedAt || (Date.now() - verifiedAt.getTime()) > 15 * 60 * 1000) {
+        return res.json({ verified: false });
+      }
+
+      // Validate event scope
+      const sessionEventId = (session.customerData as any)?.registrationEventId;
+      if (!sessionEventId || sessionEventId !== eventId) {
+        return res.json({ verified: false });
+      }
+
+      // Return verified status with email
+      res.json({ verified: true, email: session.email });
+    } catch (error) {
+      console.error("Session status error:", error);
+      res.json({ verified: false });
+    }
+  });
+
   // Public Registration OTP (for distributor verification - no admin whitelist)
   app.post("/api/register/otp/generate", async (req, res) => {
     try {
