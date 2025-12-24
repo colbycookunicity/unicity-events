@@ -15,6 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LanguageToggle } from "@/components/LanguageToggle";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import unicityLogoDark from "@/assets/unicity-logo-dark.png";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useTranslation, useLanguage } from "@/lib/i18n";
@@ -1240,10 +1241,10 @@ export default function RegistrationPage() {
   const renderVerificationStep = () => {
     if (verificationStep === "email") {
       return (
-        <Card className="bg-slate-800 border-slate-700">
+        <Card>
           <CardHeader className="text-center">
-            <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
-              <Mail className="w-6 h-6 text-slate-700" />
+            <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+              <Mail className="w-6 h-6 text-muted-foreground" />
             </div>
             <CardTitle className="text-slate-900">
               {language === "es" 
@@ -1283,7 +1284,7 @@ export default function RegistrationPage() {
 
     if (verificationStep === "otp") {
       return (
-        <Card className="bg-slate-800 border-slate-700">
+        <Card>
           <CardHeader className="text-center">
             <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
               <ShieldCheck className="w-6 h-6 text-slate-700" />
@@ -1401,10 +1402,10 @@ export default function RegistrationPage() {
   };
 
   const renderFormCard = () => (
-    <Card className="bg-slate-800 border-slate-700">
+    <Card>
       <CardHeader>
-        <CardTitle className="text-white">{getCtaLabel()}</CardTitle>
-        <CardDescription className="text-slate-400">
+        <CardTitle>{getCtaLabel()}</CardTitle>
+        <CardDescription>
           {language === "es"
             ? "Complete el formulario a continuacion para registrarse en el evento"
             : "Fill out the form below to register for the event"}
@@ -1415,7 +1416,7 @@ export default function RegistrationPage() {
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             {/* Personal Information Section */}
             <div className="space-y-4">
-              <h3 className="text-lg font-medium border-b border-slate-600 pb-2 text-white">
+              <h3 className="text-lg font-medium border-b pb-2">
                 {language === "es" ? "Informacion Personal" : "Personal Information"}
               </h3>
               
@@ -1597,7 +1598,7 @@ export default function RegistrationPage() {
             {/* Passport Information Section - only if passport fields in template */}
             {hasTemplateField(event?.formFields as any[], 'passportNumber') && (
               <div className="space-y-4">
-                <h3 className="text-lg font-medium border-b border-slate-600 pb-2 text-white">
+                <h3 className="text-lg font-medium border-b pb-2">
                   {language === "es" ? "Informacion del Pasaporte" : "Passport Information"}
                 </h3>
 
@@ -1654,7 +1655,7 @@ export default function RegistrationPage() {
             {/* Emergency Contact Section - only if emergency contact fields in template */}
             {hasTemplateField(event?.formFields as any[], 'emergencyContact') && (
               <div className="space-y-4">
-                <h3 className="text-lg font-medium border-b border-slate-600 pb-2 text-white">
+                <h3 className="text-lg font-medium border-b pb-2">
                   {language === "es" ? "Contacto de Emergencia" : "Emergency Contact"}
                 </h3>
 
@@ -1699,7 +1700,7 @@ export default function RegistrationPage() {
             {/* Apparel Section - only if apparel fields in template */}
             {(hasTemplateField(event?.formFields as any[], 'shirtSize') || hasTemplateField(event?.formFields as any[], 'pantSize')) && (
               <div className="space-y-4">
-                <h3 className="text-lg font-medium border-b border-slate-600 pb-2 text-white">
+                <h3 className="text-lg font-medium border-b pb-2">
                   {language === "es" ? "Tallas de Ropa" : "Apparel Sizes"}
                 </h3>
 
@@ -1765,7 +1766,7 @@ export default function RegistrationPage() {
               hasTemplateField(event?.formFields as any[], 'adaAccommodations') || 
               hasTemplateField(event?.formFields as any[], 'roomType')) && (
               <div className="space-y-4">
-                <h3 className="text-lg font-medium border-b border-slate-600 pb-2 text-white">
+                <h3 className="text-lg font-medium border-b pb-2">
                   {language === "es" ? "Preferencias" : "Preferences"}
                 </h3>
 
@@ -1869,7 +1870,7 @@ export default function RegistrationPage() {
               
               return (
                 <div className="space-y-4">
-                  <h3 className="text-lg font-medium border-b border-slate-600 pb-2 text-white">
+                  <h3 className="text-lg font-medium border-b pb-2">
                     {language === "es" ? "Informacion Adicional" : "Additional Information"}
                   </h3>
                   {customFields.map((field) => {
@@ -2165,7 +2166,7 @@ export default function RegistrationPage() {
   // Uses natural page scrolling - no nested scroll containers
   if (layout === "split") {
     return (
-      <div className="min-h-screen bg-slate-900">
+      <div className="min-h-screen bg-background">
         {/* Mobile: stacked layout, Desktop: side-by-side */}
         <div className="flex flex-col lg:flex-row lg:min-h-screen">
           {/* Left side - Hero image (full width on mobile, 40% on desktop) */}
@@ -2209,9 +2210,9 @@ export default function RegistrationPage() {
           {/* Right side - Form content (scrolls with page) */}
           <div className="flex-1 lg:w-[60%]">
             {/* Header with date, location, and controls */}
-            <div className="bg-slate-800 border-b border-slate-700 px-6 py-4">
+            <div className="bg-muted/50 border-b px-6 py-4">
               <div className="flex items-center justify-between gap-4 flex-wrap max-w-xl mx-auto">
-                <div className="flex items-center gap-4 text-sm text-slate-300 flex-wrap">
+                <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
                   {event?.startDate && (
                     <div className="flex items-center gap-1">
                       <Calendar className="w-4 h-4" />
@@ -2228,31 +2229,34 @@ export default function RegistrationPage() {
                     </div>
                   )}
                 </div>
-                <div className="flex items-center gap-1 text-sm font-medium">
-                  <button
-                    onClick={() => setLanguage("en")}
-                    className={language === "en" ? "text-white font-semibold" : "text-slate-400 hover:text-slate-200"}
-                    data-testid="button-language-en"
-                  >
-                    EN
-                  </button>
-                  <span className="text-slate-500">/</span>
-                  <button
-                    onClick={() => setLanguage("es")}
-                    className={language === "es" ? "text-white font-semibold" : "text-slate-400 hover:text-slate-200"}
-                    data-testid="button-language-es"
-                  >
-                    ES
-                  </button>
+                <div className="flex items-center gap-2">
+                  <ThemeToggle />
+                  <div className="flex items-center gap-1 text-sm font-medium">
+                    <button
+                      onClick={() => setLanguage("en")}
+                      className={language === "en" ? "text-foreground font-semibold" : "text-muted-foreground hover:text-foreground"}
+                      data-testid="button-language-en"
+                    >
+                      EN
+                    </button>
+                    <span className="text-muted-foreground">/</span>
+                    <button
+                      onClick={() => setLanguage("es")}
+                      className={language === "es" ? "text-foreground font-semibold" : "text-muted-foreground hover:text-foreground"}
+                      data-testid="button-language-es"
+                    >
+                      ES
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
             
             {/* Form content - scrolls naturally with page */}
-            <div className="p-6 lg:p-10 bg-slate-900">
+            <div className="p-6 lg:p-10 bg-background">
               <div className="max-w-xl mx-auto">
                 {renderMainContent()}
-                <footer className="mt-8 pb-8 text-center text-sm text-slate-400">
+                <footer className="mt-8 pb-8 text-center text-sm text-muted-foreground">
                   Unicity International
                 </footer>
               </div>
