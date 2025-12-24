@@ -27,7 +27,7 @@ import { useTranslation } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
-import type { Registration, Event, SwagAssignmentWithDetails, QualifiedRegistrant, GuestAllowanceRule } from "@shared/schema";
+import type { Registration, Event, SwagAssignmentWithDetails, QualifiedRegistrant, GuestAllowanceRule, FormTemplate } from "@shared/schema";
 
 type UnifiedPerson = {
   type: "registration" | "qualifier";
@@ -214,6 +214,75 @@ export default function AttendeesPage() {
     events?.find(e => e.id === eventFilter),
     [events, eventFilter]
   );
+
+  const { data: formTemplates } = useQuery<FormTemplate[]>({
+    queryKey: ["/api/form-templates"],
+  });
+
+  // Map form field names to column keys
+  const FIELD_TO_COLUMN_MAP: Record<string, ColumnKey> = {
+    unicityId: "unicityId",
+    email: "email",
+    phone: "phone",
+    gender: "gender",
+    dateOfBirth: "dateOfBirth",
+    shirtSize: "shirtSize",
+    pantSize: "pantSize",
+    roomType: "roomType",
+    passportNumber: "passportNumber",
+    passportCountry: "passportCountry",
+    passportExpiration: "passportExpiration",
+    emergencyContact: "emergencyContact",
+    emergencyContactPhone: "emergencyContactPhone",
+    dietaryRestrictions: "dietaryRestrictions",
+    adaAccommodations: "adaAccommodations",
+  };
+
+  // Get columns relevant to the selected event's form
+  const eventFormFields = useMemo(() => {
+    if (!selectedEvent) return null;
+    
+    // If event uses a template, get fields from template
+    if (selectedEvent.formTemplateId && formTemplates) {
+      const template = formTemplates.find(t => t.id === selectedEvent.formTemplateId);
+      if (template?.fields) {
+        return template.fields as Array<{ name: string; label?: string }>;
+      }
+    }
+    
+    // Otherwise use event's custom formFields
+    if (selectedEvent.formFields && Array.isArray(selectedEvent.formFields)) {
+      return selectedEvent.formFields as Array<{ name: string; label?: string }>;
+    }
+    
+    return null;
+  }, [selectedEvent, formTemplates]);
+
+  // Compute which columns are relevant for this event
+  const relevantColumns = useMemo(() => {
+    // Always include these base columns
+    const alwaysVisible: ColumnKey[] = ["name", "email", "status", "registeredAt", "actions"];
+    
+    // If no event selected or no form fields, show all columns
+    if (!eventFormFields) {
+      return new Set(ALL_COLUMNS.map(c => c.key));
+    }
+    
+    // Get column keys from form fields
+    const formFieldNames = new Set(eventFormFields.map(f => f.name));
+    const relevantFromForm: ColumnKey[] = [];
+    
+    for (const [fieldName, columnKey] of Object.entries(FIELD_TO_COLUMN_MAP)) {
+      if (formFieldNames.has(fieldName)) {
+        relevantFromForm.push(columnKey);
+      }
+    }
+    
+    // Include swagStatus and checkedInAt for all events, lastModified optional
+    const additionalColumns: ColumnKey[] = ["swagStatus", "checkedInAt", "lastModified"];
+    
+    return new Set([...alwaysVisible, ...relevantFromForm, ...additionalColumns]);
+  }, [eventFormFields]);
 
   const { data: guestRules = [] } = useQuery<GuestAllowanceRule[]>({
     queryKey: [`/api/events/${eventFilter}/guest-rules`],
@@ -659,7 +728,7 @@ export default function AttendeesPage() {
   const handleExportCSV = () => {
     if (!filteredPeople?.length) return;
 
-    const exportColumns = ALL_COLUMNS.filter(c => visibleColumns.has(c.key) && c.key !== "actions");
+    const exportColumns = ALL_COLUMNS.filter(c => visibleColumns.has(c.key) && relevantColumns.has(c.key) && c.key !== "actions");
     const headers = exportColumns.map(c => c.label);
     
     const csvContent = [
@@ -935,7 +1004,7 @@ export default function AttendeesPage() {
     }
   };
 
-  const visibleColumnList = ALL_COLUMNS.filter(c => visibleColumns.has(c.key));
+  const visibleColumnList = ALL_COLUMNS.filter(c => visibleColumns.has(c.key) && relevantColumns.has(c.key));
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -1002,7 +1071,7 @@ export default function AttendeesPage() {
                 <Separator />
                 <ScrollArea className="h-[300px] pr-3">
                   <div className="space-y-2">
-                    {ALL_COLUMNS.filter(c => c.key !== "actions").map((col) => (
+                    {ALL_COLUMNS.filter(c => c.key !== "actions" && relevantColumns.has(c.key)).map((col) => (
                       <div key={col.key} className="flex items-center space-x-2">
                         <Checkbox
                           id={`col-${col.key}`}
