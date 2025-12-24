@@ -133,6 +133,8 @@ export default function AttendeesPage() {
     guestAllowanceRuleId: "" as string | null,
   });
   
+  const [selectedPeople, setSelectedPeople] = useState<Set<string>>(new Set());
+  
   const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -156,7 +158,14 @@ export default function AttendeesPage() {
       setQualifierToDelete(null);
       setCsvData([]);
     }
+    // Clear selection when event filter changes
+    setSelectedPeople(new Set());
   }, [eventFilter]);
+
+  // Clear selection when search or filters change
+  useEffect(() => {
+    setSelectedPeople(new Set());
+  }, [searchQuery, statusFilter, registrationStatusFilter, swagFilter]);
 
   const toggleColumn = (key: ColumnKey) => {
     setVisibleColumns(prev => {
@@ -879,6 +888,129 @@ export default function AttendeesPage() {
     toast({ title: t("success"), description: "CSV exported successfully" });
   };
 
+  const handleExportSelectedCSV = () => {
+    if (selectedPeople.size === 0) return;
+
+    const selectedList = filteredPeople.filter(p => selectedPeople.has(p.id));
+    const exportColumns = ALL_COLUMNS.filter(c => effectiveVisibleColumns.has(c.key) && c.key !== "actions");
+    const headers = exportColumns.map(c => c.label);
+    
+    const csvContent = [
+      headers.join(","),
+      ...selectedList.map((person) => {
+        const reg = person.registration;
+        return exportColumns.map(col => {
+          let value = "";
+          switch (col.key) {
+            case "name":
+              value = `${person.firstName} ${person.lastName}`;
+              break;
+            case "unicityId":
+              value = person.unicityId || "";
+              break;
+            case "email":
+              value = person.email;
+              break;
+            case "phone":
+              value = person.phone || "";
+              break;
+            case "gender":
+              value = reg?.gender || "";
+              break;
+            case "dateOfBirth":
+              value = reg?.dateOfBirth ? format(new Date(reg.dateOfBirth), "yyyy-MM-dd") : "";
+              break;
+            case "status":
+              value = reg?.status || "Not Registered";
+              break;
+            case "swagStatus":
+              value = reg?.swagStatus || "pending";
+              break;
+            case "shirtSize":
+              value = reg?.shirtSize || "";
+              break;
+            case "pantSize":
+              value = reg?.pantSize || "";
+              break;
+            case "roomType":
+              value = reg?.roomType || "";
+              break;
+            case "passportNumber":
+              value = reg?.passportNumber || "";
+              break;
+            case "passportCountry":
+              value = reg?.passportCountry || "";
+              break;
+            case "passportExpiration":
+              value = reg?.passportExpiration ? format(new Date(reg.passportExpiration), "yyyy-MM-dd") : "";
+              break;
+            case "emergencyContact":
+              value = reg?.emergencyContact || "";
+              break;
+            case "emergencyContactPhone":
+              value = reg?.emergencyContactPhone || "";
+              break;
+            case "dietaryRestrictions":
+              value = reg?.dietaryRestrictions?.join("; ") || "";
+              break;
+            case "adaAccommodations":
+              value = reg?.adaAccommodations ? "Yes" : "No";
+              break;
+            case "registeredAt":
+              value = reg?.registeredAt ? format(new Date(reg.registeredAt), "yyyy-MM-dd HH:mm") : "";
+              break;
+            case "checkedInAt":
+              value = reg?.checkedInAt ? format(new Date(reg.checkedInAt), "yyyy-MM-dd HH:mm") : "";
+              break;
+            case "lastModified":
+              value = reg?.lastModified ? format(new Date(reg.lastModified), "yyyy-MM-dd HH:mm") : "";
+              break;
+            case "verifiedByHydra":
+              value = reg ? (reg.verifiedByHydra ? "Hydra" : "Qualified List") : "";
+              break;
+            case "event":
+              value = person.eventName || "";
+              break;
+          }
+          return `"${value.toString().replace(/"/g, '""')}"`;
+        }).join(",");
+      }),
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `attendees-selected-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+
+    toast({ title: t("success"), description: `Exported ${selectedList.length} selected attendees` });
+  };
+
+  const toggleSelectPerson = (id: string) => {
+    setSelectedPeople(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedPeople.size === filteredPeople.length) {
+      setSelectedPeople(new Set());
+    } else {
+      setSelectedPeople(new Set(filteredPeople.map(p => p.id)));
+    }
+  };
+
+  const isAllSelected = filteredPeople.length > 0 && selectedPeople.size === filteredPeople.length;
+  const isSomeSelected = selectedPeople.size > 0 && selectedPeople.size < filteredPeople.length;
+
   const SortableHeader = ({ columnKey, children }: { columnKey: string; children: React.ReactNode }) => {
     const isActive = sortConfig?.key === columnKey;
     return (
@@ -1169,10 +1301,29 @@ export default function AttendeesPage() {
               </PopoverContent>
             </Popover>
           )}
-          <Button onClick={handleExportCSV} variant="outline" data-testid="button-export-csv">
-            <Download className="h-4 w-4 mr-2" />
-            {t("export")}
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" data-testid="button-export-csv">
+                <Download className="h-4 w-4 mr-2" />
+                {t("export")}
+                {selectedPeople.size > 0 && (
+                  <Badge variant="secondary" className="ml-2">{selectedPeople.size}</Badge>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleExportCSV} data-testid="button-export-all">
+                Export All ({filteredPeople.length})
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={handleExportSelectedCSV} 
+                disabled={selectedPeople.size === 0}
+                data-testid="button-export-selected"
+              >
+                Export Selected ({selectedPeople.size})
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -1243,6 +1394,15 @@ export default function AttendeesPage() {
           <table className="w-full text-sm">
             <thead className="bg-muted/50 border-b">
               <tr>
+                <th className="px-4 py-3 w-10">
+                  <Checkbox 
+                    checked={isAllSelected}
+                    onCheckedChange={toggleSelectAll}
+                    aria-label="Select all"
+                    data-testid="checkbox-select-all"
+                    className={isSomeSelected ? "data-[state=checked]:bg-primary/50" : ""}
+                  />
+                </th>
                 {visibleColumnList.map((col) => (
                   <th 
                     key={col.key} 
@@ -1261,6 +1421,9 @@ export default function AttendeesPage() {
               {isLoading ? (
                 [...Array(5)].map((_, i) => (
                   <tr key={i} className="animate-pulse">
+                    <td className="px-4 py-3 w-10">
+                      <div className="h-4 w-4 bg-muted rounded" />
+                    </td>
                     {visibleColumnList.map((col) => (
                       <td key={col.key} className="px-4 py-3">
                         <div className="h-4 bg-muted rounded w-3/4" />
@@ -1270,7 +1433,7 @@ export default function AttendeesPage() {
                 ))
               ) : filteredPeople.length === 0 ? (
                 <tr>
-                  <td colSpan={visibleColumnList.length} className="px-4 py-12 text-center text-muted-foreground">
+                  <td colSpan={visibleColumnList.length + 1} className="px-4 py-12 text-center text-muted-foreground">
                     <User className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>No people found</p>
                   </td>
@@ -1279,12 +1442,23 @@ export default function AttendeesPage() {
                 filteredPeople.map((person) => (
                   <tr
                     key={person.id}
-                    onClick={() => person.registration && handleRowClick(person.registration)}
                     className={`hover-elevate ${person.registration ? 'cursor-pointer' : ''}`}
                     data-testid={`row-attendee-${person.id}`}
                   >
+                    <td className="px-4 py-3 w-10" onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selectedPeople.has(person.id)}
+                        onCheckedChange={() => toggleSelectPerson(person.id)}
+                        aria-label={`Select ${person.firstName} ${person.lastName}`}
+                        data-testid={`checkbox-select-${person.id}`}
+                      />
+                    </td>
                     {visibleColumnList.map((col) => (
-                      <td key={col.key} className="px-4 py-3">
+                      <td 
+                        key={col.key} 
+                        className="px-4 py-3"
+                        onClick={() => person.registration && handleRowClick(person.registration)}
+                      >
                         {renderCell(person, col.key)}
                       </td>
                     ))}
