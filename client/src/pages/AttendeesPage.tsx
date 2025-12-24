@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { useSearch } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Search, Download, MoreHorizontal, Mail, Edit, Trash2, User, Shirt, Save, Pencil, ChevronUp, ChevronDown, Settings2, ArrowUpDown, Plus, Upload, Edit2, ArrowRightLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -106,11 +107,18 @@ const STORAGE_KEY = "attendees-visible-columns";
 export default function AttendeesPage() {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const searchParams = useSearch();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [registrationStatusFilter, setRegistrationStatusFilter] = useState<string>("all");
-  const [eventFilter, setEventFilter] = useState<string>("all");
+  
+  // Initialize event filter from URL query parameter if present
+  const initialEventId = useMemo(() => {
+    const params = new URLSearchParams(searchParams);
+    return params.get("event") || "all";
+  }, []);
+  const [eventFilter, setEventFilter] = useState<string>(initialEventId);
   const [swagFilter, setSwagFilter] = useState<string>("all");
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
   const [selectedAttendee, setSelectedAttendee] = useState<Registration | null>(null);

@@ -178,6 +178,12 @@ export default function EventsPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <Link href={`/admin/attendees?event=${event.id}`}>
+                          <DropdownMenuItem data-testid={`action-attendees-${event.id}`}>
+                            <Users className="h-4 w-4 mr-2" />
+                            View Attendees
+                          </DropdownMenuItem>
+                        </Link>
                         {event.status !== "archived" && (
                           <DropdownMenuItem
                             onClick={() => archiveMutation.mutate(event.id)}

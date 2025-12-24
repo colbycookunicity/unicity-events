@@ -388,18 +388,28 @@ export default function EventFormPage() {
 
   return (
     <div className="space-y-6 px-4">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => setLocation("/admin/events")} data-testid="button-back">
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {isEditing ? t("editEvent") : t("createEvent")}
-          </h1>
-          <p className="text-muted-foreground">
-            {isEditing ? "Update event details" : "Create a new event"}
-          </p>
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => setLocation("/admin/events")} data-testid="button-back">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              {isEditing ? t("editEvent") : t("createEvent")}
+            </h1>
+            <p className="text-muted-foreground">
+              {isEditing ? "Update event details" : "Create a new event"}
+            </p>
+          </div>
         </div>
+        {isEditing && params.id && (
+          <Link href={`/admin/attendees?event=${params.id}`}>
+            <Button variant="outline" data-testid="button-view-attendees">
+              <Users className="h-4 w-4 mr-2" />
+              View Attendees
+            </Button>
+          </Link>
+        )}
       </div>
 
       {isEditing && event && (
