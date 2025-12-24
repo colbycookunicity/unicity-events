@@ -324,9 +324,12 @@ export async function registerRoutes(
       if (!email) {
         return res.status(400).json({ error: "Email is required" });
       }
+      if (!eventId) {
+        return res.status(400).json({ error: "Event ID is required for registration verification" });
+      }
 
       // Verify event exists and is published
-      if (eventId) {
+      {
         const event = await storage.getEventByIdOrSlug(eventId);
         if (!event) {
           return res.status(404).json({ error: "Event not found" });
@@ -357,6 +360,8 @@ export async function registerRoutes(
           validationId: `dev-reg-${Date.now()}`,
           verified: false,
           expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+          // Store eventId to scope session to this specific event
+          customerData: eventId ? { registrationEventId: eventId } : null,
         });
         console.log(`DEV MODE: Registration OTP for ${email} is ${devCode}`);
         return res.json({ success: true, message: "Verification code sent", devCode });
@@ -391,6 +396,8 @@ export async function registerRoutes(
         validationId: data.data.validation_id,
         verified: false,
         expiresAt: new Date(data.data.expires_at),
+        // Store eventId to scope session to this specific event
+        customerData: eventId ? { registrationEventId: eventId } : null,
       });
 
       res.json({ success: true, message: "Verification code sent" });
@@ -722,6 +729,85 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Consume token error:", error);
       res.status(500).json({ error: "Failed to consume token" });
+    }
+  });
+
+  // Get existing registration for verified user (called after OTP verification)
+  // Security: Requires a valid, verified OTP session for the email
+  // Note: This endpoint can be called multiple times within the session window for the same email+event
+  app.post("/api/register/existing", async (req, res) => {
+    try {
+      const { email, eventId } = req.body;
+      if (!email || !eventId) {
+        return res.status(400).json({ error: "Email and eventId are required" });
+      }
+
+      // Security check: Verify there's an active verified OTP session for this email
+      const session = await storage.getOtpSession(email);
+      if (!session || !session.verified) {
+        return res.status(403).json({ error: "Email not verified. Please complete OTP verification first." });
+      }
+
+      // Check session hasn't expired (verified sessions are valid for 15 minutes for security)
+      const verifiedAt = session.verifiedAt ? new Date(session.verifiedAt) : null;
+      if (!verifiedAt || (Date.now() - verifiedAt.getTime()) > 15 * 60 * 1000) {
+        return res.status(403).json({ error: "Session expired. Please verify again." });
+      }
+
+      // Security: Validate event scope - session MUST be scoped to the requested event
+      const sessionEventId = (session.customerData as any)?.registrationEventId;
+      if (!sessionEventId) {
+        return res.status(403).json({ error: "Session is not scoped to an event. Please verify again for this event." });
+      }
+      if (sessionEventId !== eventId) {
+        return res.status(403).json({ error: "Session is not valid for this event. Please verify again." });
+      }
+
+      // Get the event by ID or slug
+      const event = await storage.getEventByIdOrSlug(eventId);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      // Get existing registration with full details
+      const registration = await storage.getRegistrationWithDetailsByEmail(event.id, email);
+      
+      if (!registration) {
+        return res.json({ success: true, exists: false });
+      }
+
+      // Return registration data (exclude sensitive nested details like reimbursements)
+      res.json({
+        success: true,
+        exists: true,
+        registration: {
+          id: registration.id,
+          eventId: registration.eventId,
+          email: registration.email,
+          firstName: registration.firstName,
+          lastName: registration.lastName,
+          unicityId: registration.unicityId,
+          phone: registration.phone,
+          gender: registration.gender,
+          dateOfBirth: registration.dateOfBirth,
+          passportNumber: registration.passportNumber,
+          passportCountry: registration.passportCountry,
+          passportExpiration: registration.passportExpiration,
+          emergencyContact: registration.emergencyContact,
+          emergencyContactPhone: registration.emergencyContactPhone,
+          shirtSize: registration.shirtSize,
+          pantSize: registration.pantSize,
+          dietaryRestrictions: registration.dietaryRestrictions,
+          adaAccommodations: registration.adaAccommodations,
+          roomType: registration.roomType,
+          formData: registration.formData,
+          language: registration.language,
+          lastModified: registration.lastModified,
+        },
+      });
+    } catch (error) {
+      console.error("Get existing registration error:", error);
+      res.status(500).json({ error: "Failed to get existing registration" });
     }
   });
 
@@ -1284,6 +1370,92 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Invalid registration data", details: error.errors });
       }
       res.status(500).json({ error: "Failed to register" });
+    }
+  });
+
+  // Public Registration Update (for returning users updating their own registration)
+  app.put("/api/events/:eventIdOrSlug/register/:registrationId", async (req, res) => {
+    try {
+      const event = await storage.getEventByIdOrSlug(req.params.eventIdOrSlug);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      // Security: Verify there's a valid, verified OTP session for this email+event
+      const email = req.body.email;
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+      
+      const session = await storage.getOtpSession(email);
+      if (!session || !session.verified) {
+        return res.status(403).json({ error: "Email not verified. Please complete OTP verification first." });
+      }
+
+      // Check session hasn't expired (15-minute window)
+      const verifiedAt = session.verifiedAt ? new Date(session.verifiedAt) : null;
+      if (!verifiedAt || (Date.now() - verifiedAt.getTime()) > 15 * 60 * 1000) {
+        return res.status(403).json({ error: "Session expired. Please verify again." });
+      }
+
+      // Validate event scope - session MUST be scoped to the requested event
+      const sessionEventId = (session.customerData as any)?.registrationEventId;
+      if (!sessionEventId) {
+        return res.status(403).json({ error: "Session is not scoped to an event. Please verify again for this event." });
+      }
+      if (sessionEventId !== req.params.eventIdOrSlug && sessionEventId !== event.id) {
+        return res.status(403).json({ error: "Session is not valid for this event. Please verify again." });
+      }
+
+      // Verify the registration exists and belongs to this event
+      const existingReg = await storage.getRegistration(req.params.registrationId);
+      if (!existingReg) {
+        return res.status(404).json({ error: "Registration not found" });
+      }
+      if (existingReg.eventId !== event.id) {
+        return res.status(400).json({ error: "Registration does not belong to this event" });
+      }
+
+      // Verify email matches (security check)
+      if (existingReg.email.toLowerCase() !== email.toLowerCase()) {
+        return res.status(403).json({ error: "Email does not match the registration" });
+      }
+
+      const clientIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+
+      // Update the registration
+      const updatedRegistration = await storage.updateRegistration(req.params.registrationId, {
+        firstName: req.body.firstName,
+        lastName: req.body.lastName,
+        phone: req.body.phone,
+        unicityId: req.body.unicityId,
+        gender: req.body.gender,
+        dateOfBirth: req.body.dateOfBirth ? new Date(req.body.dateOfBirth) : null,
+        passportNumber: req.body.passportNumber,
+        passportCountry: req.body.passportCountry,
+        passportExpiration: req.body.passportExpiration ? new Date(req.body.passportExpiration) : null,
+        emergencyContact: req.body.emergencyContact,
+        emergencyContactPhone: req.body.emergencyContactPhone,
+        shirtSize: req.body.shirtSize,
+        pantSize: req.body.pantSize,
+        dietaryRestrictions: req.body.dietaryRestrictions || [],
+        adaAccommodations: req.body.adaAccommodations || false,
+        roomType: req.body.roomType,
+        language: req.body.language || "en",
+        formData: req.body.formData,
+        termsAccepted: req.body.termsAccepted,
+        termsAcceptedAt: req.body.termsAccepted ? new Date() : existingReg.termsAcceptedAt,
+        termsAcceptedIp: req.body.termsAccepted ? String(clientIp) : existingReg.termsAcceptedIp,
+      });
+
+      if (!updatedRegistration) {
+        return res.status(500).json({ error: "Failed to update registration" });
+      }
+
+      res.json(updatedRegistration);
+    } catch (error) {
+      console.error("Registration update error:", error);
+      res.status(500).json({ error: "Failed to update registration" });
     }
   });
 

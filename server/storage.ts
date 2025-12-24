@@ -48,6 +48,7 @@ export interface IStorage {
   getRegistrations(eventId?: string): Promise<Registration[]>;
   getRegistration(id: string): Promise<RegistrationWithDetails | undefined>;
   getRegistrationByEmail(eventId: string, email: string): Promise<Registration | undefined>;
+  getRegistrationWithDetailsByEmail(eventId: string, email: string): Promise<RegistrationWithDetails | undefined>;
   getRecentRegistrations(limit?: number): Promise<Registration[]>;
   getRegistrationsByUser(email: string): Promise<RegistrationWithDetails[]>;
   createRegistration(registration: InsertRegistration): Promise<Registration>;
@@ -286,6 +287,23 @@ export class DatabaseStorage implements IStorage {
     const [reg] = await db.select().from(registrations)
       .where(and(eq(registrations.eventId, eventId), eq(registrations.email, email)));
     return reg || undefined;
+  }
+
+  async getRegistrationWithDetailsByEmail(eventId: string, email: string): Promise<RegistrationWithDetails | undefined> {
+    const [reg] = await db.select().from(registrations)
+      .where(and(eq(registrations.eventId, eventId), eq(registrations.email, email)));
+    if (!reg) return undefined;
+
+    const regGuests = await db.select().from(guests).where(eq(guests.registrationId, reg.id));
+    const regFlights = await db.select().from(flights).where(eq(flights.registrationId, reg.id));
+    const regReimbursements = await db.select().from(reimbursements).where(eq(reimbursements.registrationId, reg.id));
+
+    return {
+      ...reg,
+      guests: regGuests,
+      flights: regFlights,
+      reimbursements: regReimbursements,
+    };
   }
 
   async getRecentRegistrations(limit = 10): Promise<Registration[]> {
