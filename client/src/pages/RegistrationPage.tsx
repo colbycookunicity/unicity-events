@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -73,6 +73,47 @@ type PublicEvent = Event & {
   requiresVerification?: boolean;
 };
 
+// Extended form field type that includes all template field properties
+interface TemplateFormField {
+  name: string;
+  type: string;
+  label: string;
+  labelEs?: string;
+  placeholder?: string;
+  placeholderEs?: string;
+  required?: boolean;
+  locked?: boolean;
+  editable?: boolean;
+  options?: Array<{ value: string; label: string; labelEs?: string }>;
+  waiverUrl?: string;
+  secondaryWaiverUrl?: string;
+}
+
+// Helper to check if a field exists in the template
+const hasTemplateField = (formFields: any[] | undefined, fieldName: string): boolean => {
+  if (!formFields || !Array.isArray(formFields)) return false;
+  return formFields.some((f: TemplateFormField) => f.name === fieldName);
+};
+
+// Helper to get a template field by name
+const getTemplateField = (formFields: any[] | undefined, fieldName: string): TemplateFormField | undefined => {
+  if (!formFields || !Array.isArray(formFields)) return undefined;
+  return formFields.find((f: TemplateFormField) => f.name === fieldName);
+};
+
+// Get fields that are NOT handled by hardcoded sections (for Additional Information)
+const getCustomOnlyFields = (formFields: any[] | undefined): TemplateFormField[] => {
+  if (!formFields || !Array.isArray(formFields)) return [];
+  // These field names are handled by the hardcoded sections
+  const hardcodedFieldNames = new Set([
+    'unicityId', 'email', 'firstName', 'lastName', 'phone',
+    'gender', 'dateOfBirth', 'passportNumber', 'passportCountry', 'passportExpiration',
+    'emergencyContact', 'emergencyContactPhone', 'shirtSize', 'pantSize',
+    'dietaryRestrictions', 'adaAccommodations', 'roomType', 'termsAccepted'
+  ]);
+  return formFields.filter((f: TemplateFormField) => !hardcodedFieldNames.has(f.name));
+};
+
 const genderedShirtSizes = [
   "Womens - XS",
   "Womens - Small",
@@ -133,37 +174,99 @@ const roomTypes = [
   { value: "two-queens", label: "Two Queen Beds", labelEs: "Dos camas Queen" },
 ];
 
-const registrationSchema = z.object({
+// Base schema with always-required fields (core identity)
+const baseRegistrationSchema = z.object({
   unicityId: z.string().min(1, "Distributor ID is required"),
   email: z.string().email("Valid email is required"),
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   phone: z.string().optional(),
-  gender: z.enum(["female", "male"], { required_error: "Gender is required" }),
-  dateOfBirth: z.string().min(1, "Date of birth is required"),
-  passportNumber: z.string().min(1, "Passport number is required"),
-  passportCountry: z.string().min(1, "Passport country is required"),
-  passportExpiration: z.string().min(1, "Passport expiration is required").refine((val) => {
-    const date = new Date(val);
-    return date > new Date();
-  }, "Passport must not be expired"),
-  emergencyContact: z.string().min(1, "Emergency contact name is required"),
-  emergencyContactPhone: z.string().min(1, "Emergency contact phone is required").refine((val) => {
-    if (!val) return false;
-    // Basic check for international phone format (+1234567890)
-    return /^\+[1-9]\d{6,14}$/.test(val.replace(/\s/g, ''));
-  }, "Please enter a valid phone number"),
-  shirtSize: z.string().min(1, "T-shirt size is required"),
-  pantSize: z.string().min(1, "Pant size is required"),
+  gender: z.enum(["female", "male"]).optional(),
+  dateOfBirth: z.string().optional(),
+  passportNumber: z.string().optional(),
+  passportCountry: z.string().optional(),
+  passportExpiration: z.string().optional(),
+  emergencyContact: z.string().optional(),
+  emergencyContactPhone: z.string().optional(),
+  shirtSize: z.string().optional(),
+  pantSize: z.string().optional(),
   dietaryRestrictions: z.array(z.string()).default([]),
   adaAccommodations: z.boolean().default(false),
-  roomType: z.string().min(1, "Room type is required"),
-  termsAccepted: z.literal(true, {
-    errorMap: () => ({ message: "You must accept the event waiver" }),
-  }),
+  roomType: z.string().optional(),
+  termsAccepted: z.boolean().default(false),
 });
 
-type RegistrationFormData = z.infer<typeof registrationSchema>;
+// Function to create schema based on template fields
+const createRegistrationSchema = (formFields: any[] | undefined) => {
+  const hasField = (name: string) => hasTemplateField(formFields, name);
+  
+  let schema = baseRegistrationSchema;
+  
+  // Add required validation only for fields that exist in the template
+  if (hasField('gender')) {
+    schema = schema.extend({
+      gender: z.enum(["female", "male"], { required_error: "Gender is required" }),
+    });
+  }
+  
+  if (hasField('dateOfBirth')) {
+    schema = schema.extend({
+      dateOfBirth: z.string().min(1, "Date of birth is required"),
+    });
+  }
+  
+  if (hasField('passportNumber')) {
+    schema = schema.extend({
+      passportNumber: z.string().min(1, "Passport number is required"),
+      passportCountry: z.string().min(1, "Passport country is required"),
+      passportExpiration: z.string().min(1, "Passport expiration is required").refine((val) => {
+        const date = new Date(val);
+        return date > new Date();
+      }, "Passport must not be expired"),
+    });
+  }
+  
+  if (hasField('emergencyContact')) {
+    schema = schema.extend({
+      emergencyContact: z.string().min(1, "Emergency contact name is required"),
+      emergencyContactPhone: z.string().min(1, "Emergency contact phone is required").refine((val) => {
+        if (!val) return false;
+        return /^\+[1-9]\d{6,14}$/.test(val.replace(/\s/g, ''));
+      }, "Please enter a valid phone number"),
+    });
+  }
+  
+  if (hasField('shirtSize')) {
+    schema = schema.extend({
+      shirtSize: z.string().min(1, "T-shirt size is required"),
+    });
+  }
+  
+  if (hasField('pantSize')) {
+    schema = schema.extend({
+      pantSize: z.string().min(1, "Pant size is required"),
+    });
+  }
+  
+  if (hasField('roomType')) {
+    schema = schema.extend({
+      roomType: z.string().min(1, "Room type is required"),
+    });
+  }
+  
+  // termsAccepted - check if template has a terms field
+  if (hasField('termsAccepted')) {
+    schema = schema.extend({
+      termsAccepted: z.literal(true, {
+        errorMap: () => ({ message: "You must accept the event waiver" }),
+      }),
+    });
+  }
+  
+  return schema;
+};
+
+type RegistrationFormData = z.infer<typeof baseRegistrationSchema>;
 
 export default function RegistrationPage() {
   useForceLightTheme();
@@ -459,6 +562,11 @@ export default function RegistrationPage() {
     }
   };
 
+  // Create dynamic schema based on event's form fields
+  const registrationSchema = useMemo(() => {
+    return createRegistrationSchema(event?.formFields as any[] | undefined);
+  }, [event?.formFields]);
+
   const form = useForm<RegistrationFormData>({
     resolver: zodResolver(registrationSchema),
     mode: "onSubmit",
@@ -481,7 +589,7 @@ export default function RegistrationPage() {
       dietaryRestrictions: [],
       adaAccommodations: false,
       roomType: "",
-      termsAccepted: false as unknown as true,
+      termsAccepted: false,
     },
   });
 
@@ -510,14 +618,16 @@ export default function RegistrationPage() {
   });
 
   const onSubmit = (data: RegistrationFormData) => {
-    // Validate required custom fields before submission
-    if (event?.formFields && Array.isArray(event.formFields)) {
-      const customFields = event.formFields as CustomFormField[];
+    // Validate required custom fields before submission (only fields shown in Additional Information)
+    const customFields = getCustomOnlyFields(event?.formFields as any[]);
+    if (customFields.length > 0) {
       const missingFields: string[] = [];
       
       for (const field of customFields) {
         if (field.required) {
-          const value = customFormData[field.id];
+          // Use name for template fields, id for custom form builder fields
+          const fieldKey = field.name || (field as any).id;
+          const value = customFormData[fieldKey];
           const isEmpty = value === undefined || value === null || value === "" || 
             (field.type === "checkbox" && value !== true);
           
@@ -1042,146 +1152,14 @@ export default function RegistrationPage() {
                 />
               </div>
 
-              <FormField
-                control={form.control}
-                name="phone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{language === "es" ? "Numero de Celular" : "Mobile Number"}</FormLabel>
-                    <FormControl>
-                      <PhoneInput
-                        international
-                        defaultCountry="US"
-                        value={field.value}
-                        onChange={field.onChange}
-                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-within:ring-1 focus-within:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
-                        data-testid="input-phone"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="grid gap-4 md:grid-cols-2">
+              {/* Phone - only if in template */}
+              {hasTemplateField(event?.formFields as any[], 'phone') && (
                 <FormField
                   control={form.control}
-                  name="gender"
+                  name="phone"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{language === "es" ? "Genero" : "Gender"} *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-gender">
-                            <SelectValue placeholder={language === "es" ? "Seleccionar" : "Select"} />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="female">{language === "es" ? "Femenino" : "Female"}</SelectItem>
-                          <SelectItem value="male">{language === "es" ? "Masculino" : "Male"}</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="dateOfBirth"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{language === "es" ? "Fecha de Nacimiento" : "Date of Birth"} *</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} data-testid="input-dob" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </div>
-
-            {/* Passport Information Section */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium border-b pb-2">
-                {language === "es" ? "Informacion del Pasaporte" : "Passport Information"}
-              </h3>
-
-              <FormField
-                control={form.control}
-                name="passportNumber"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{language === "es" ? "Numero de Pasaporte" : "Passport Number"} *</FormLabel>
-                    <FormControl>
-                      <Input {...field} data-testid="input-passport-number" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="passportCountry"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{language === "es" ? "Pais del Pasaporte" : "Passport Country"} *</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder={language === "es" ? "Ej: Estados Unidos" : "E.g., United States"} data-testid="input-passport-country" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="passportExpiration"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{language === "es" ? "Fecha de Vencimiento" : "Passport Expiration"} *</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="date" 
-                          {...field} 
-                          min={new Date().toISOString().split('T')[0]}
-                          data-testid="input-passport-expiration" 
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </div>
-
-            {/* Emergency Contact Section */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium border-b pb-2">
-                {language === "es" ? "Contacto de Emergencia" : "Emergency Contact"}
-              </h3>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="emergencyContact"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{language === "es" ? "Nombre del Contacto" : "Contact Name"} *</FormLabel>
-                      <FormControl>
-                        <Input {...field} data-testid="input-emergency-contact" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="emergencyContactPhone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{language === "es" ? "Telefono del Contacto" : "Contact Phone"} *</FormLabel>
+                      <FormLabel>{language === "es" ? "Numero de Celular" : "Mobile Number"}</FormLabel>
                       <FormControl>
                         <PhoneInput
                           international
@@ -1189,337 +1167,509 @@ export default function RegistrationPage() {
                           value={field.value}
                           onChange={field.onChange}
                           className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-within:ring-1 focus-within:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
-                          data-testid="input-emergency-phone"
+                          data-testid="input-phone"
                         />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-              </div>
-            </div>
+              )}
 
-            {/* Apparel Section */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium border-b pb-2">
-                {language === "es" ? "Tallas de Ropa" : "Apparel Sizes"}
-              </h3>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="shirtSize"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{language === "es" ? "Talla de Camiseta" : "T-Shirt Size"} *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-shirt-size">
-                            <SelectValue placeholder={language === "es" ? "Seleccionar talla" : "Select size"} />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {genderedShirtSizes.map((size) => (
-                            <SelectItem key={size} value={size}>
-                              {size}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
+              {/* Gender & DOB - only if in template */}
+              {(hasTemplateField(event?.formFields as any[], 'gender') || hasTemplateField(event?.formFields as any[], 'dateOfBirth')) && (
+                <div className="grid gap-4 md:grid-cols-2">
+                  {hasTemplateField(event?.formFields as any[], 'gender') && (
+                    <FormField
+                      control={form.control}
+                      name="gender"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{language === "es" ? "Genero" : "Gender"} *</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-gender">
+                                <SelectValue placeholder={language === "es" ? "Seleccionar" : "Select"} />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="female">{language === "es" ? "Femenino" : "Female"}</SelectItem>
+                              <SelectItem value="male">{language === "es" ? "Masculino" : "Male"}</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   )}
-                />
-                <FormField
-                  control={form.control}
-                  name="pantSize"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{language === "es" ? "Talla de Pantalon" : "Pant Size"} *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-pant-size">
-                            <SelectValue placeholder={language === "es" ? "Seleccionar talla" : "Select size"} />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {genderedPantSizes.map((size) => (
-                            <SelectItem key={size} value={size}>
-                              {size}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
+                  {hasTemplateField(event?.formFields as any[], 'dateOfBirth') && (
+                    <FormField
+                      control={form.control}
+                      name="dateOfBirth"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{language === "es" ? "Fecha de Nacimiento" : "Date of Birth"} *</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} data-testid="input-dob" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   )}
-                />
-              </div>
+                </div>
+              )}
             </div>
 
-            {/* Preferences Section */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium border-b pb-2">
-                {language === "es" ? "Preferencias" : "Preferences"}
-              </h3>
-
-              <FormField
-                control={form.control}
-                name="dietaryRestrictions"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{language === "es" ? "Restricciones Dieteticas" : "Dietary Restrictions"}</FormLabel>
-                    <FormDescription>
-                      {language === "es" 
-                        ? "Seleccione todas las que apliquen" 
-                        : "Select all that apply"}
-                    </FormDescription>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
-                      {dietaryOptions.map((option) => {
-                        const isSelected = (field.value || []).includes(option.value);
-                        return (
-                          <label
-                            key={option.value}
-                            className={`flex items-center space-x-2 rounded-md border p-2 cursor-pointer transition-colors ${
-                              isSelected ? "bg-primary/10 border-primary" : ""
-                            }`}
-                            data-testid={`dietary-option-${option.value}`}
-                          >
-                            <Checkbox 
-                              checked={isSelected}
-                              onCheckedChange={(checked) => {
-                                toggleDietaryRestriction(option.value);
-                              }}
-                            />
-                            <span className="text-sm">{getDietaryLabel(option)}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="adaAccommodations"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{language === "es" ? "Necesita Acomodaciones ADA?" : "ADA Accommodations?"} *</FormLabel>
-                    <Select onValueChange={(v) => field.onChange(v === "yes")} value={field.value ? "yes" : "no"}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-ada">
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="no">{language === "es" ? "No" : "No"}</SelectItem>
-                        <SelectItem value="yes">{language === "es" ? "Si" : "Yes"}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="roomType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{language === "es" ? "Tipo de Habitacion" : "Room Type"} *</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-room-type">
-                          <SelectValue placeholder={language === "es" ? "Seleccionar" : "Select"} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {roomTypes.map((type) => (
-                          <SelectItem key={type.value} value={type.value}>
-                            {getRoomLabel(type)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            {/* Custom Form Fields Section */}
-            {event?.formFields && Array.isArray(event.formFields) && event.formFields.length > 0 && (
+            {/* Passport Information Section - only if passport fields in template */}
+            {hasTemplateField(event?.formFields as any[], 'passportNumber') && (
               <div className="space-y-4">
                 <h3 className="text-lg font-medium border-b pb-2">
-                  {language === "es" ? "Informacion Adicional" : "Additional Information"}
+                  {language === "es" ? "Informacion del Pasaporte" : "Passport Information"}
                 </h3>
-                {(event.formFields as CustomFormField[]).map((field) => {
-                  const fieldLabel = language === "es" && field.labelEs ? field.labelEs : field.label;
-                  const fieldPlaceholder = language === "es" && field.placeholderEs ? field.placeholderEs : field.placeholder;
-                  
-                  return (
-                    <div key={field.id} className="space-y-2">
-                      <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                        {fieldLabel}{field.required && " *"}
-                      </label>
-                      
-                      {field.type === "text" && (
-                        <Input
-                          placeholder={fieldPlaceholder}
-                          value={customFormData[field.id] || ""}
-                          onChange={(e) => setCustomFormData(prev => ({ ...prev, [field.id]: e.target.value }))}
-                          required={field.required}
-                          data-testid={`input-custom-${field.id}`}
-                        />
+
+                <FormField
+                  control={form.control}
+                  name="passportNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{language === "es" ? "Numero de Pasaporte" : "Passport Number"} *</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-passport-number" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="passportCountry"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{language === "es" ? "Pais del Pasaporte" : "Passport Country"} *</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder={language === "es" ? "Ej: Estados Unidos" : "E.g., United States"} data-testid="input-passport-country" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="passportExpiration"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{language === "es" ? "Fecha de Vencimiento" : "Passport Expiration"} *</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="date" 
+                            {...field} 
+                            min={new Date().toISOString().split('T')[0]}
+                            data-testid="input-passport-expiration" 
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Emergency Contact Section - only if emergency contact fields in template */}
+            {hasTemplateField(event?.formFields as any[], 'emergencyContact') && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium border-b pb-2">
+                  {language === "es" ? "Contacto de Emergencia" : "Emergency Contact"}
+                </h3>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="emergencyContact"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{language === "es" ? "Nombre del Contacto" : "Contact Name"} *</FormLabel>
+                        <FormControl>
+                          <Input {...field} data-testid="input-emergency-contact" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="emergencyContactPhone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{language === "es" ? "Telefono del Contacto" : "Contact Phone"} *</FormLabel>
+                        <FormControl>
+                          <PhoneInput
+                            international
+                            defaultCountry="US"
+                            value={field.value}
+                            onChange={field.onChange}
+                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-within:ring-1 focus-within:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+                            data-testid="input-emergency-phone"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Apparel Section - only if apparel fields in template */}
+            {(hasTemplateField(event?.formFields as any[], 'shirtSize') || hasTemplateField(event?.formFields as any[], 'pantSize')) && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium border-b pb-2">
+                  {language === "es" ? "Tallas de Ropa" : "Apparel Sizes"}
+                </h3>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  {hasTemplateField(event?.formFields as any[], 'shirtSize') && (
+                    <FormField
+                      control={form.control}
+                      name="shirtSize"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{language === "es" ? "Talla de Camiseta" : "T-Shirt Size"} *</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-shirt-size">
+                                <SelectValue placeholder={language === "es" ? "Seleccionar talla" : "Select size"} />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {genderedShirtSizes.map((size) => (
+                                <SelectItem key={size} value={size}>
+                                  {size}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
                       )}
-                      
-                      {field.type === "email" && (
-                        <Input
-                          type="email"
-                          placeholder={fieldPlaceholder}
-                          value={customFormData[field.id] || ""}
-                          onChange={(e) => setCustomFormData(prev => ({ ...prev, [field.id]: e.target.value }))}
-                          required={field.required}
-                          data-testid={`input-custom-${field.id}`}
-                        />
+                    />
+                  )}
+                  {hasTemplateField(event?.formFields as any[], 'pantSize') && (
+                    <FormField
+                      control={form.control}
+                      name="pantSize"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{language === "es" ? "Talla de Pantalon" : "Pant Size"} *</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-pant-size">
+                                <SelectValue placeholder={language === "es" ? "Seleccionar talla" : "Select size"} />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {genderedPantSizes.map((size) => (
+                                <SelectItem key={size} value={size}>
+                                  {size}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
                       )}
-                      
-                      {field.type === "phone" && (
-                        <PhoneInput
-                          international
-                          defaultCountry="US"
-                          value={customFormData[field.id] || ""}
-                          onChange={(value) => setCustomFormData(prev => ({ ...prev, [field.id]: value }))}
-                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm"
-                          data-testid={`input-custom-${field.id}`}
-                        />
-                      )}
-                      
-                      {field.type === "number" && (
-                        <Input
-                          type="number"
-                          placeholder={fieldPlaceholder}
-                          value={customFormData[field.id] || ""}
-                          onChange={(e) => setCustomFormData(prev => ({ ...prev, [field.id]: e.target.value }))}
-                          required={field.required}
-                          data-testid={`input-custom-${field.id}`}
-                        />
-                      )}
-                      
-                      {field.type === "date" && (
-                        <Input
-                          type="date"
-                          value={customFormData[field.id] || ""}
-                          onChange={(e) => setCustomFormData(prev => ({ ...prev, [field.id]: e.target.value }))}
-                          required={field.required}
-                          data-testid={`input-custom-${field.id}`}
-                        />
-                      )}
-                      
-                      {field.type === "textarea" && (
-                        <Textarea
-                          placeholder={fieldPlaceholder}
-                          value={customFormData[field.id] || ""}
-                          onChange={(e) => setCustomFormData(prev => ({ ...prev, [field.id]: e.target.value }))}
-                          required={field.required}
-                          data-testid={`input-custom-${field.id}`}
-                        />
-                      )}
-                      
-                      {field.type === "select" && field.options && (
-                        <Select
-                          value={customFormData[field.id] || ""}
-                          onValueChange={(value) => setCustomFormData(prev => ({ ...prev, [field.id]: value }))}
-                        >
-                          <SelectTrigger data-testid={`select-custom-${field.id}`}>
-                            <SelectValue placeholder={fieldPlaceholder || (language === "es" ? "Seleccionar" : "Select")} />
-                          </SelectTrigger>
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Preferences Section - only show if any preference fields in template */}
+            {(hasTemplateField(event?.formFields as any[], 'dietaryRestrictions') || 
+              hasTemplateField(event?.formFields as any[], 'adaAccommodations') || 
+              hasTemplateField(event?.formFields as any[], 'roomType')) && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium border-b pb-2">
+                  {language === "es" ? "Preferencias" : "Preferences"}
+                </h3>
+
+                {hasTemplateField(event?.formFields as any[], 'dietaryRestrictions') && (
+                  <FormField
+                    control={form.control}
+                    name="dietaryRestrictions"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{language === "es" ? "Restricciones Dieteticas" : "Dietary Restrictions"}</FormLabel>
+                        <FormDescription>
+                          {language === "es" 
+                            ? "Seleccione todas las que apliquen" 
+                            : "Select all that apply"}
+                        </FormDescription>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2">
+                          {dietaryOptions.map((option) => {
+                            const isSelected = (field.value || []).includes(option.value);
+                            return (
+                              <label
+                                key={option.value}
+                                className={`flex items-center space-x-2 rounded-md border p-2 cursor-pointer transition-colors ${
+                                  isSelected ? "bg-primary/10 border-primary" : ""
+                                }`}
+                                data-testid={`dietary-option-${option.value}`}
+                              >
+                                <Checkbox 
+                                  checked={isSelected}
+                                  onCheckedChange={(checked) => {
+                                    toggleDietaryRestriction(option.value);
+                                  }}
+                                />
+                                <span className="text-sm">{getDietaryLabel(option)}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                {hasTemplateField(event?.formFields as any[], 'adaAccommodations') && (
+                  <FormField
+                    control={form.control}
+                    name="adaAccommodations"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{language === "es" ? "Necesita Acomodaciones ADA?" : "ADA Accommodations?"} *</FormLabel>
+                        <Select onValueChange={(v) => field.onChange(v === "yes")} value={field.value ? "yes" : "no"}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-ada">
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
                           <SelectContent>
-                            {field.options.map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {language === "es" && option.labelEs ? option.labelEs : option.label}
+                            <SelectItem value="no">{language === "es" ? "No" : "No"}</SelectItem>
+                            <SelectItem value="yes">{language === "es" ? "Si" : "Yes"}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                {hasTemplateField(event?.formFields as any[], 'roomType') && (
+                  <FormField
+                    control={form.control}
+                    name="roomType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{language === "es" ? "Tipo de Habitacion" : "Room Type"} *</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-room-type">
+                              <SelectValue placeholder={language === "es" ? "Seleccionar" : "Select"} />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {roomTypes.map((type) => (
+                              <SelectItem key={type.value} value={type.value}>
+                                {getRoomLabel(type)}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
-                      )}
-                      
-                      {field.type === "checkbox" && (
-                        <div className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`custom-${field.id}`}
-                            checked={customFormData[field.id] || false}
-                            onCheckedChange={(checked) => setCustomFormData(prev => ({ ...prev, [field.id]: checked }))}
-                            data-testid={`checkbox-custom-${field.id}`}
-                          />
-                          <label 
-                            htmlFor={`custom-${field.id}`}
-                            className="text-sm text-muted-foreground cursor-pointer"
-                          >
-                            {fieldPlaceholder || fieldLabel}
-                          </label>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
               </div>
             )}
 
-            {/* Terms Section */}
-            <FormField
-              control={form.control}
-              name="termsAccepted"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                      data-testid="checkbox-terms"
-                    />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel className="cursor-pointer">
-                      {language === "es" ? (
-                        <>
-                          Al marcar esta casilla, acepto todos los terminos descritos en el{" "}
-                          <a 
-                            href="https://drive.google.com/file/d/1yYXgsMzkE0kjVd-7-Bo5LWLH7wNpEyp1/view?usp=sharing"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-primary underline inline-flex items-center gap-1"
-                            onClick={(e) => e.stopPropagation()}
+            {/* Custom Form Fields Section - only show fields not handled by hardcoded sections */}
+            {(() => {
+              const customFields = getCustomOnlyFields(event?.formFields as any[]);
+              if (customFields.length === 0) return null;
+              
+              return (
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium border-b pb-2">
+                    {language === "es" ? "Informacion Adicional" : "Additional Information"}
+                  </h3>
+                  {customFields.map((field) => {
+                    // Use name as the key for template fields, fall back to id for custom form builder
+                    const fieldKey = field.name || (field as any).id;
+                    const fieldLabel = language === "es" && field.labelEs ? field.labelEs : field.label;
+                    const fieldPlaceholder = language === "es" && field.placeholderEs ? field.placeholderEs : field.placeholder;
+                    const isRequired = field.required;
+                  
+                    return (
+                      <div key={fieldKey} className="space-y-2">
+                        <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                          {fieldLabel}{isRequired && " *"}
+                        </label>
+                        
+                        {field.type === "text" && (
+                          <Input
+                            placeholder={fieldPlaceholder}
+                            value={customFormData[fieldKey] || ""}
+                            onChange={(e) => setCustomFormData(prev => ({ ...prev, [fieldKey]: e.target.value }))}
+                            required={isRequired}
+                            data-testid={`input-custom-${fieldKey}`}
+                          />
+                        )}
+                        
+                        {field.type === "email" && (
+                          <Input
+                            type="email"
+                            placeholder={fieldPlaceholder}
+                            value={customFormData[fieldKey] || ""}
+                            onChange={(e) => setCustomFormData(prev => ({ ...prev, [fieldKey]: e.target.value }))}
+                            required={isRequired}
+                            data-testid={`input-custom-${fieldKey}`}
+                          />
+                        )}
+                        
+                        {field.type === "phone" && (
+                          <PhoneInput
+                            international
+                            defaultCountry="US"
+                            value={customFormData[fieldKey] || ""}
+                            onChange={(value) => setCustomFormData(prev => ({ ...prev, [fieldKey]: value }))}
+                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm"
+                            data-testid={`input-custom-${fieldKey}`}
+                          />
+                        )}
+                        
+                        {field.type === "number" && (
+                          <Input
+                            type="number"
+                            placeholder={fieldPlaceholder}
+                            value={customFormData[fieldKey] || ""}
+                            onChange={(e) => setCustomFormData(prev => ({ ...prev, [fieldKey]: e.target.value }))}
+                            required={isRequired}
+                            data-testid={`input-custom-${fieldKey}`}
+                          />
+                        )}
+                        
+                        {field.type === "date" && (
+                          <Input
+                            type="date"
+                            value={customFormData[fieldKey] || ""}
+                            onChange={(e) => setCustomFormData(prev => ({ ...prev, [fieldKey]: e.target.value }))}
+                            required={isRequired}
+                            data-testid={`input-custom-${fieldKey}`}
+                          />
+                        )}
+                        
+                        {field.type === "textarea" && (
+                          <Textarea
+                            placeholder={fieldPlaceholder}
+                            value={customFormData[fieldKey] || ""}
+                            onChange={(e) => setCustomFormData(prev => ({ ...prev, [fieldKey]: e.target.value }))}
+                            required={isRequired}
+                            data-testid={`input-custom-${fieldKey}`}
+                          />
+                        )}
+                        
+                        {field.type === "select" && field.options && (
+                          <Select
+                            value={customFormData[fieldKey] || ""}
+                            onValueChange={(value) => setCustomFormData(prev => ({ ...prev, [fieldKey]: value }))}
                           >
-                            documento de exencion del evento
-                            <ExternalLink className="h-3 w-3" />
-                          </a>
-                          . *
-                        </>
-                      ) : (
-                        <>
-                          By checking this box, I acknowledge and accept all terms outlined in the{" "}
-                          <a 
-                            href="https://drive.google.com/file/d/1yYXgsMzkE0kjVd-7-Bo5LWLH7wNpEyp1/view?usp=sharing"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-primary underline inline-flex items-center gap-1"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            event waiver
-                            <ExternalLink className="h-3 w-3" />
-                          </a>
-                          . *
-                        </>
-                      )}
-                    </FormLabel>
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                            <SelectTrigger data-testid={`select-custom-${fieldKey}`}>
+                              <SelectValue placeholder={fieldPlaceholder || (language === "es" ? "Seleccionar" : "Select")} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {field.options.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {language === "es" && option.labelEs ? option.labelEs : option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                        
+                        {field.type === "checkbox" && (
+                          <div className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`custom-${fieldKey}`}
+                              checked={customFormData[fieldKey] || false}
+                              onCheckedChange={(checked) => setCustomFormData(prev => ({ ...prev, [fieldKey]: checked }))}
+                              data-testid={`checkbox-custom-${fieldKey}`}
+                            />
+                            <label 
+                              htmlFor={`custom-${fieldKey}`}
+                              className="text-sm text-muted-foreground cursor-pointer"
+                            >
+                              {fieldPlaceholder || fieldLabel}
+                            </label>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
+            {/* Terms Section - only if termsAccepted in template */}
+            {hasTemplateField(event?.formFields as any[], 'termsAccepted') && (
+              <FormField
+                control={form.control}
+                name="termsAccepted"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="checkbox-terms"
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel className="cursor-pointer">
+                        {language === "es" ? (
+                          <>
+                            Al marcar esta casilla, acepto todos los terminos descritos en el{" "}
+                            <a 
+                              href="https://drive.google.com/file/d/1yYXgsMzkE0kjVd-7-Bo5LWLH7wNpEyp1/view?usp=sharing"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary underline inline-flex items-center gap-1"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              documento de exencion del evento
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                            . *
+                          </>
+                        ) : (
+                          <>
+                            By checking this box, I acknowledge and accept all terms outlined in the{" "}
+                            <a 
+                              href="https://drive.google.com/file/d/1yYXgsMzkE0kjVd-7-Bo5LWLH7wNpEyp1/view?usp=sharing"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary underline inline-flex items-center gap-1"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              event waiver
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                            . *
+                          </>
+                        )}
+                      </FormLabel>
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <Button
               type="submit"
