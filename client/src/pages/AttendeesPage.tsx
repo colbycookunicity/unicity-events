@@ -201,10 +201,20 @@ export default function AttendeesPage() {
     queryKey: [registrationsUrl],
   });
 
-  const { data: qualifiers } = useQuery<QualifiedRegistrant[]>({
+  // Fetch event-specific qualifiers when an event is selected
+  const { data: eventQualifiers } = useQuery<QualifiedRegistrant[]>({
     queryKey: [`/api/events/${eventFilter}/qualifiers`],
     enabled: eventFilter !== "all",
   });
+
+  // Fetch all qualifiers across all events when "All Events" is selected (admin only)
+  const { data: allQualifiers } = useQuery<(QualifiedRegistrant & { eventName: string })[]>({
+    queryKey: ["/api/qualifiers"],
+    enabled: eventFilter === "all",
+  });
+
+  // Use appropriate qualifiers based on filter
+  const qualifiers = eventFilter === "all" ? allQualifiers : eventQualifiers;
 
   const { data: swagAssignments } = useQuery<SwagAssignmentWithDetails[]>({
     queryKey: [`/api/registrations/${selectedAttendee?.id}/swag-assignments`],
@@ -334,11 +344,22 @@ export default function AttendeesPage() {
     const people: UnifiedPerson[] = [];
     const processedQualifierIds = new Set<string>();
 
+    // Track registered emails/IDs for deduplication when showing all events
+    const registeredEmailEventPairs = new Set<string>();
+    const registeredUnicityIdEventPairs = new Set<string>();
+
     registrations?.forEach(reg => {
-      const matchingQualifier = eventFilter !== "all" ? findMatchingQualifier(reg) : undefined;
+      const matchingQualifier = findMatchingQualifier(reg);
       if (matchingQualifier) {
         processedQualifierIds.add(matchingQualifier.id);
       }
+      
+      // Track registered emails/IDs per event for dedup in "all events" mode
+      registeredEmailEventPairs.add(`${reg.eventId}:${reg.email.toLowerCase()}`);
+      if (reg.unicityId) {
+        registeredUnicityIdEventPairs.add(`${reg.eventId}:${reg.unicityId}`);
+      }
+      
       people.push({
         type: "registration",
         id: reg.id,
@@ -353,9 +374,18 @@ export default function AttendeesPage() {
       });
     });
 
-    if (eventFilter !== "all" && qualifiers) {
+    // Add qualifiers that are not yet registered
+    if (qualifiers) {
       qualifiers.forEach(q => {
-        if (!processedQualifierIds.has(q.id)) {
+        // Check if this qualifier has a matching registration for the same event
+        const emailKey = `${q.eventId}:${q.email.toLowerCase()}`;
+        const unicityIdKey = q.unicityId ? `${q.eventId}:${q.unicityId}` : null;
+        
+        const isRegisteredForThisEvent = 
+          registeredEmailEventPairs.has(emailKey) ||
+          (unicityIdKey && registeredUnicityIdEventPairs.has(unicityIdKey));
+        
+        if (!isRegisteredForThisEvent && !processedQualifierIds.has(q.id)) {
           people.push({
             type: "qualifier",
             id: q.id,
@@ -371,7 +401,7 @@ export default function AttendeesPage() {
     }
 
     return people;
-  }, [registrations, qualifiers, eventFilter, qualifiersByEmail]);
+  }, [registrations, qualifiers, qualifiersByEmail]);
 
   const createQualifierMutation = useMutation({
     mutationFn: async (data: typeof qualifierFormData) => {

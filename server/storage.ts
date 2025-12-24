@@ -116,6 +116,7 @@ export interface IStorage {
   getFormTemplateByKey(key: string): Promise<FormTemplate | undefined>;
 
   // Qualified Registrants
+  getAllQualifiedRegistrants(): Promise<(QualifiedRegistrant & { eventName: string })[]>;
   getQualifiedRegistrantsByEvent(eventId: string): Promise<QualifiedRegistrant[]>;
   getQualifiedRegistrant(id: string): Promise<QualifiedRegistrant | undefined>;
   getQualifiedRegistrantByEmail(eventId: string, email: string): Promise<QualifiedRegistrant | undefined>;
@@ -768,6 +769,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Qualified Registrants
+  async getAllQualifiedRegistrants(): Promise<(QualifiedRegistrant & { eventName: string })[]> {
+    const results = await db.select({
+      qualifier: qualifiedRegistrants,
+      eventName: events.name,
+    })
+      .from(qualifiedRegistrants)
+      .leftJoin(events, eq(qualifiedRegistrants.eventId, events.id))
+      .orderBy(qualifiedRegistrants.lastName, qualifiedRegistrants.firstName);
+    
+    return results.map(r => ({
+      ...r.qualifier,
+      eventName: r.eventName || 'Unknown Event',
+    }));
+  }
+
   async getQualifiedRegistrantsByEvent(eventId: string): Promise<QualifiedRegistrant[]> {
     return db.select().from(qualifiedRegistrants)
       .where(eq(qualifiedRegistrants.eventId, eventId))

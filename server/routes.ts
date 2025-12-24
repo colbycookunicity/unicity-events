@@ -1938,6 +1938,17 @@ export async function registerRoutes(
 
   // ==================== QUALIFIED REGISTRANTS ====================
 
+  // Get all qualified registrants across all events (admin only)
+  app.get("/api/qualifiers", authenticateToken, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const qualifiers = await storage.getAllQualifiedRegistrants();
+      res.json(qualifiers);
+    } catch (error) {
+      console.error("Error fetching all qualified registrants:", error);
+      res.status(500).json({ error: "Failed to fetch qualified registrants" });
+    }
+  });
+
   // Get all qualified registrants for an event
   app.get("/api/events/:eventId/qualifiers", authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
