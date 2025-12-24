@@ -502,7 +502,7 @@ export default function RegistrationPage() {
           });
           
           if (res.ok) {
-            // Attendee session is valid - skip verification
+            // Attendee session is valid - skip verification and populate email
             setVerificationEmail(attendeeEmail);
             setVerifiedProfile({
               unicityId: "",
@@ -511,6 +511,8 @@ export default function RegistrationPage() {
               lastName: "",
               phone: "",
             });
+            // Set the email in the form
+            form.setValue("email", attendeeEmail);
             setVerificationStep("form");
             setIsCheckingSession(false);
             return;
@@ -1359,9 +1361,11 @@ export default function RegistrationPage() {
                     <FormItem>
                       <FormLabel>
                         {t("firstName")} *
-                        <span className="text-xs text-muted-foreground ml-1">
-                          ({language === "es" ? "como en pasaporte" : "as shown on passport"})
-                        </span>
+                        {hasTemplateField(event?.formFields as any[], 'passportNumber') && (
+                          <span className="text-xs text-muted-foreground ml-1">
+                            ({language === "es" ? "como en pasaporte" : "as shown on passport"})
+                          </span>
+                        )}
                       </FormLabel>
                       <FormControl>
                         <Input 
@@ -1380,9 +1384,11 @@ export default function RegistrationPage() {
                     <FormItem>
                       <FormLabel>
                         {t("lastName")} *
-                        <span className="text-xs text-muted-foreground ml-1">
-                          ({language === "es" ? "como en pasaporte" : "as shown on passport"})
-                        </span>
+                        {hasTemplateField(event?.formFields as any[], 'passportNumber') && (
+                          <span className="text-xs text-muted-foreground ml-1">
+                            ({language === "es" ? "como en pasaporte" : "as shown on passport"})
+                          </span>
+                        )}
                       </FormLabel>
                       <FormControl>
                         <Input 
