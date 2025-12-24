@@ -441,28 +441,9 @@ export default function AttendeeEventsPage() {
                           </div>
                         )}
                         <div className="flex-1 min-w-0 space-y-2">
-                          <div className="flex items-start justify-between gap-2 flex-wrap">
-                            <h3 className="font-semibold text-lg" data-testid={`text-event-name-${event.id}`}>
-                              {getEventName(event)}
-                            </h3>
-                            <Badge 
-                              variant={event.registrationStatus === "registered" ? "default" : "secondary"}
-                              className="flex-shrink-0"
-                              data-testid={`badge-status-${event.id}`}
-                            >
-                              {event.registrationStatus === "registered" ? (
-                                <>
-                                  <CheckCircle2 className="h-3 w-3 mr-1" />
-                                  {t("Registered", "Registrado")}
-                                </>
-                              ) : (
-                                <>
-                                  <Clock className="h-3 w-3 mr-1" />
-                                  {t("Qualified", "Calificado")}
-                                </>
-                              )}
-                            </Badge>
-                          </div>
+                          <h3 className="font-semibold text-lg" data-testid={`text-event-name-${event.id}`}>
+                            {getEventName(event)}
+                          </h3>
                           <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
                             <span className="flex items-center gap-1">
                               <Calendar className="h-4 w-4" />
@@ -481,7 +462,23 @@ export default function AttendeeEventsPage() {
                             </p>
                           )}
                         </div>
-                        <div className="flex sm:flex-col items-center gap-2 sm:justify-center">
+                        <div className="flex flex-col items-end gap-2 justify-center shrink-0">
+                          <Badge 
+                            variant={event.registrationStatus === "registered" ? "default" : "secondary"}
+                            data-testid={`badge-status-${event.id}`}
+                          >
+                            {event.registrationStatus === "registered" ? (
+                              <>
+                                <CheckCircle2 className="h-3 w-3 mr-1" />
+                                {t("Registered", "Registrado")}
+                              </>
+                            ) : (
+                              <>
+                                <Clock className="h-3 w-3 mr-1" />
+                                {t("Qualified", "Calificado")}
+                              </>
+                            )}
+                          </Badge>
                           <Link href={`/register/${event.slug || event.id}`}>
                             <Button 
                               variant={event.registrationStatus === "registered" ? "outline" : "default"}
