@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import unicityLogoDark from "@/assets/unicity-logo-dark.png";
+import unicityLogoWhite from "@/assets/unicity-logo-white.png";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useTranslation, useLanguage } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
@@ -2242,7 +2243,7 @@ export default function RegistrationPage() {
                 {/* Left: Logo */}
                 <div className="shrink-0">
                   <img 
-                    src={unicityLogoDark} 
+                    src={unicityLogoWhite} 
                     alt="Unicity" 
                     className="h-6 w-auto"
                     data-testid="img-header-logo"
