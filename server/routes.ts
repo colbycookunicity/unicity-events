@@ -2666,6 +2666,35 @@ export async function registerRoutes(
   // Event Page Routes (Visual CMS)
   // ========================================
 
+  // Get qualifier info (public - for pre-populating registration form)
+  app.get("/api/public/qualifier-info/:eventId", async (req, res) => {
+    try {
+      const email = req.query.email as string;
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+      
+      const event = await storage.getEventByIdOrSlug(req.params.eventId);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+      
+      const qualifier = await storage.getQualifiedRegistrantByEmail(event.id, email);
+      if (!qualifier) {
+        return res.status(404).json({ error: "Qualifier not found" });
+      }
+      
+      res.json({
+        firstName: qualifier.firstName || "",
+        lastName: qualifier.lastName || "",
+        unicityId: qualifier.unicityId || "",
+      });
+    } catch (error) {
+      console.error("Error fetching qualifier info:", error);
+      res.status(500).json({ error: "Failed to fetch qualifier info" });
+    }
+  });
+
   // Get event page with sections (public - for rendering landing pages)
   // Accepts optional ?pageType=login|registration|thank_you query param (defaults to registration)
   app.get("/api/public/event-pages/:eventId", async (req, res) => {

@@ -504,17 +504,37 @@ export default function RegistrationPage() {
           });
           
           if (res.ok) {
-            // Attendee session is valid - skip verification and populate email
+            // Attendee session is valid - fetch qualifier data to get name
+            let firstName = "";
+            let lastName = "";
+            let unicityId = "";
+            
+            try {
+              const qualifierRes = await fetch(`/api/public/qualifier-info/${params.eventId}?email=${encodeURIComponent(attendeeEmail)}`);
+              if (qualifierRes.ok) {
+                const qualifierData = await qualifierRes.json();
+                firstName = qualifierData.firstName || "";
+                lastName = qualifierData.lastName || "";
+                unicityId = qualifierData.unicityId || "";
+              }
+            } catch (e) {
+              console.error("Failed to fetch qualifier info:", e);
+            }
+            
+            // Skip verification and populate form with qualifier data
             setVerificationEmail(attendeeEmail);
             setVerifiedProfile({
-              unicityId: "",
+              unicityId,
               email: attendeeEmail,
-              firstName: "",
-              lastName: "",
+              firstName,
+              lastName,
               phone: "",
             });
-            // Set the email in the form
+            // Set the form values
             form.setValue("email", attendeeEmail);
+            if (firstName) form.setValue("firstName", firstName);
+            if (lastName) form.setValue("lastName", lastName);
+            if (unicityId) form.setValue("unicityId", unicityId);
             setVerificationStep("form");
             setIsCheckingSession(false);
             return;
