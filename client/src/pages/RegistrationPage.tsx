@@ -5,7 +5,6 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Loader2, CheckCircle, Calendar, MapPin, ExternalLink, Mail, ShieldCheck, AlertCircle } from "lucide-react";
-import { useForceLightTheme } from "@/hooks/use-force-light-theme";
 import PhoneInput, { isPossiblePhoneNumber } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -273,7 +272,6 @@ const createRegistrationSchema = (formFields: any[] | undefined) => {
 type RegistrationFormData = z.infer<typeof baseRegistrationSchema>;
 
 export default function RegistrationPage() {
-  useForceLightTheme();
   const { t, language } = useTranslation();
   const { setLanguage } = useLanguage();
   const { toast } = useToast();
