@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useSearch } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Search, Download, MoreHorizontal, Mail, Edit, Trash2, User, Shirt, Save, Pencil, ChevronUp, ChevronDown, Settings2, ArrowUpDown, Plus, Upload, Edit2, ArrowRightLeft } from "lucide-react";
+import { Search, Download, MoreHorizontal, Mail, Edit, Trash2, User, Shirt, Save, Pencil, ChevronUp, ChevronDown, Settings2, ArrowUpDown, Plus, Upload, Edit2, ArrowRightLeft, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PhoneInput from "react-phone-number-input";
@@ -1593,9 +1593,26 @@ export default function AttendeesPage() {
               <div className="space-y-3">
                 <h4 className="font-medium">Contact Information</h4>
                 <div className="grid gap-2 text-sm">
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">Email</span>
-                    <span>{selectedAttendee.email}</span>
+                    <div className="flex items-center gap-1">
+                      <span>{selectedAttendee.email}</span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-muted-foreground"
+                        onClick={() => {
+                          navigator.clipboard.writeText(selectedAttendee.email);
+                          toast({
+                            title: "Copied",
+                            description: "Email copied to clipboard",
+                          });
+                        }}
+                        data-testid="button-copy-email"
+                      >
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                    </div>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Phone</span>
