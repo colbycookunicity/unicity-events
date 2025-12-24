@@ -2235,35 +2235,38 @@ export default function RegistrationPage() {
           
           {/* Right side - Form content (scrolls with page) */}
           <div className="flex-1 lg:w-[60%]">
-            {/* Header with logo, date, location, and controls */}
-            <div className="bg-muted/50 border-b px-6 py-4">
-              <div className="flex items-center justify-between gap-4 flex-wrap max-w-xl mx-auto">
-                <div className="flex items-center gap-4 flex-wrap">
+            {/* Header with logo, date, location, and controls - single row */}
+            <div className="bg-muted/50 border-b px-4 py-3">
+              <div className="flex items-center justify-between gap-6">
+                {/* Left: Logo */}
+                <div className="shrink-0">
                   <img 
                     src={unicityLogoDark} 
                     alt="Unicity" 
                     className="h-6 w-auto"
                     data-testid="img-header-logo"
                   />
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
-                    {event?.startDate && (
-                      <div className="flex items-center gap-1">
-                        <Calendar className="w-4 h-4" />
-                        <span>
-                          {format(parseLocalDate(event.startDate)!, "MMM d, yyyy")}
-                          {event.endDate && ` - ${format(parseLocalDate(event.endDate)!, "MMM d, yyyy")}`}
-                        </span>
-                      </div>
-                    )}
-                    {event?.location && (
-                      <div className="flex items-center gap-1">
-                        <MapPin className="w-4 h-4" />
-                        <span>{event.location}</span>
-                      </div>
-                    )}
-                  </div>
                 </div>
-                <div className="flex items-center gap-2">
+                {/* Center: Date and location */}
+                <div className="flex items-center gap-4 text-sm text-muted-foreground flex-1 min-w-0">
+                  {event?.startDate && (
+                    <div className="flex items-center gap-1 whitespace-nowrap">
+                      <Calendar className="w-4 h-4 shrink-0" />
+                      <span>
+                        {format(parseLocalDate(event.startDate)!, "MMM d, yyyy")}
+                        {event.endDate && ` - ${format(parseLocalDate(event.endDate)!, "MMM d, yyyy")}`}
+                      </span>
+                    </div>
+                  )}
+                  {event?.location && (
+                    <div className="flex items-center gap-1 whitespace-nowrap">
+                      <MapPin className="w-4 h-4 shrink-0" />
+                      <span>{event.location}</span>
+                    </div>
+                  )}
+                </div>
+                {/* Right: Actions */}
+                <div className="flex items-center gap-2 shrink-0">
                   {verifiedProfile && (
                     <Button
                       variant="ghost"
