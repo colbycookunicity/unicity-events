@@ -482,7 +482,7 @@ export default function AttendeeEventsPage() {
                           )}
                         </div>
                         <div className="flex sm:flex-col items-center gap-2 sm:justify-center">
-                          <Link href={`/register/${event.slug}`}>
+                          <Link href={`/register/${event.slug || event.id}`}>
                             <Button 
                               variant={event.registrationStatus === "registered" ? "outline" : "default"}
                               className="gap-1"

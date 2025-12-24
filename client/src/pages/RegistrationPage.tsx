@@ -16,6 +16,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Skeleton } from "@/components/ui/skeleton";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useTheme } from "@/components/ThemeProvider";
 import unicityLogoDark from "@/assets/unicity-logo-dark.png";
 import unicityLogoWhite from "@/assets/unicity-logo-white.png";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
@@ -277,6 +278,7 @@ export default function RegistrationPage() {
   const { t, language } = useTranslation();
   const { setLanguage } = useLanguage();
   const { toast } = useToast();
+  const { theme } = useTheme();
   const params = useParams<{ eventId: string }>();
   const [isSuccess, setIsSuccess] = useState(false);
   
@@ -1113,7 +1115,7 @@ export default function RegistrationPage() {
     <header className="bg-card border-b border sticky top-0 z-20">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
         <img 
-          src={unicityLogoDark} 
+          src={theme === "dark" ? unicityLogoWhite : unicityLogoDark} 
           alt="Unicity" 
           className="h-6 w-auto"
           data-testid="img-header-logo"
@@ -2243,7 +2245,7 @@ export default function RegistrationPage() {
                 {/* Left: Logo */}
                 <div className="shrink-0">
                   <img 
-                    src={unicityLogoWhite} 
+                    src={theme === "dark" ? unicityLogoWhite : unicityLogoDark} 
                     alt="Unicity" 
                     className="h-6 w-auto"
                     data-testid="img-header-logo"
