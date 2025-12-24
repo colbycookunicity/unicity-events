@@ -641,8 +641,8 @@ export default function AttendeesPage() {
 
       const matchesStatus = 
         statusFilter === "all" || 
-        (person.registration && person.registration.status === statusFilter) ||
-        (!person.isRegistered);
+        (statusFilter === "qualified" && !person.isRegistered) ||
+        (person.registration && person.registration.status === statusFilter);
       
       const matchesEvent = eventFilter === "all" || 
         (person.registration && person.registration.eventId === eventFilter) ||
@@ -650,8 +650,7 @@ export default function AttendeesPage() {
       
       const matchesSwag = 
         swagFilter === "all" || 
-        (person.registration && (person.registration.swagStatus || "pending") === swagFilter) ||
-        (!person.isRegistered);
+        (person.registration && (person.registration.swagStatus || "pending") === swagFilter);
 
       return matchesSearch && matchesRegistrationStatus && matchesStatus && matchesEvent && matchesSwag;
     });
@@ -1148,6 +1147,7 @@ export default function AttendeesPage() {
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>
             <SelectItem value="qualified">{t("qualified")}</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
             <SelectItem value="registered">{t("registered")}</SelectItem>
             <SelectItem value="checked_in">{t("checkedIn")}</SelectItem>
             <SelectItem value="not_coming">{t("notComing")}</SelectItem>
