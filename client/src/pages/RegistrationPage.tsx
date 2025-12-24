@@ -2173,7 +2173,7 @@ export default function RegistrationPage() {
             <Card className="mb-6 bg-card border">
               <CardContent className="p-6">
                 <div 
-                  className="prose prose-sm max-w-none text-muted-foreground"
+                  className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground"
                   dangerouslySetInnerHTML={{ __html: getEventDescription() || "" }}
                 />
               </CardContent>
