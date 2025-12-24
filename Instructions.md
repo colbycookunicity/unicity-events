@@ -439,3 +439,85 @@ The existing `swagStatus` field on registrations can be kept for backwards compa
 | Phase 4 | 1 day | Reporting |
 | Phase 5 | 1 day | Polish & testing |
 | **Total** | **5-8 days** | Full MVP |
+
+---
+
+# Method Form - Dietary Preference Field Update (December 2024)
+
+## Overview
+
+Updated the Method form's dietary field from a single free-text input ("Vegetarian or Vegan Options") to a structured radio button group with a conditional text field.
+
+## Changes Made
+
+### 1. Form Template Update (server/migrate.ts)
+
+Replaced the `vegetarianVeganOptions` text field with two new fields:
+
+- **dietaryPreference** (radio button group)
+  - Options: "No dietary restrictions", "Vegetarian", "Vegan", "Other / Allergies"
+  - Required field
+
+- **dietaryNotes** (conditional text input)
+  - Only visible when "Other / Allergies" is selected
+  - Required when visible
+  - Placeholder: "Enter dietary needs or allergies..."
+
+### 2. Registration Page (client/src/pages/RegistrationPage.tsx)
+
+Added support for:
+- `type: "radio"` field rendering with RadioGroup component
+- `conditionalOn` field property for conditional visibility
+- Automatic clearing of conditional field values when parent selection changes
+
+### 3. Admin Views (client/src/pages/AttendeesPage.tsx)
+
+Added columns for:
+- **Dietary Preference**: Displays the selected radio option with human-readable labels
+- **Dietary Notes**: Displays the conditional text field value (only shown when "Other / Allergies" was selected)
+
+Both columns are available in the column selector and CSV exports.
+
+## Data Model
+
+Data is persisted in the registration's `formData` JSON field:
+
+```json
+{
+  "dietaryPreference": "none" | "vegetarian" | "vegan" | "other",
+  "dietaryNotes": "string (only when dietaryPreference is 'other')"
+}
+```
+
+## Backward Compatibility
+
+- Existing registrations with the old `vegetarianVeganOptions` text field remain intact in `formData`
+- New registrations will use the new `dietaryPreference` and `dietaryNotes` fields
+- No data migration required; old data preserved
+
+## Field Behavior
+
+1. When user selects a dietary preference other than "Other / Allergies":
+   - Dietary Notes field is hidden
+   - Any previously entered notes are cleared
+
+2. When user selects "Other / Allergies":
+   - Dietary Notes text field appears
+   - Field is required
+
+## Bilingual Support
+
+Both fields have Spanish translations:
+- "Dietary Preference" -> "Preferencia Alimenticia"
+- "Please specify dietary needs" -> "Por favor especifique sus necesidades dieteticas"
+- All radio options have Spanish labels
+
+## Testing
+
+To test the changes:
+1. Create or edit an event using the Method template
+2. Navigate to the public registration page
+3. Verify the radio button group appears
+4. Select "Other / Allergies" and verify the text field appears
+5. Select another option and verify the text field disappears
+6. Submit a registration and verify data appears in admin Attendees page

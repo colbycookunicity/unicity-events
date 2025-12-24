@@ -59,6 +59,7 @@ type ColumnKey =
   | "status" | "swagStatus" | "shirtSize" | "pantSize" | "roomType"
   | "passportNumber" | "passportCountry" | "passportExpiration"
   | "emergencyContact" | "emergencyContactPhone" | "dietaryRestrictions" | "adaAccommodations"
+  | "dietaryPreference" | "dietaryNotes"
   | "registeredAt" | "checkedInAt" | "lastModified" | "verifiedByHydra" | "event" | "actions";
 
 // Shared columns to show when "All Events" is selected (global view)
@@ -90,6 +91,8 @@ const ALL_COLUMNS: { key: ColumnKey; label: string; defaultVisible: boolean }[] 
   { key: "emergencyContact", label: "Emergency Contact", defaultVisible: false },
   { key: "emergencyContactPhone", label: "Emergency Phone", defaultVisible: false },
   { key: "dietaryRestrictions", label: "Dietary Restrictions", defaultVisible: false },
+  { key: "dietaryPreference", label: "Dietary Preference", defaultVisible: false },
+  { key: "dietaryNotes", label: "Dietary Notes", defaultVisible: false },
   { key: "adaAccommodations", label: "ADA Accommodations", defaultVisible: false },
   { key: "registeredAt", label: "Registered", defaultVisible: true },
   { key: "checkedInAt", label: "Checked In At", defaultVisible: false },
@@ -853,6 +856,12 @@ export default function AttendeesPage() {
             case "dietaryRestrictions":
               value = reg?.dietaryRestrictions?.join("; ") || "";
               break;
+            case "dietaryPreference":
+              value = (reg?.formData as any)?.dietaryPreference || "";
+              break;
+            case "dietaryNotes":
+              value = (reg?.formData as any)?.dietaryNotes || "";
+              break;
             case "adaAccommodations":
               value = reg?.adaAccommodations ? "Yes" : "No";
               break;
@@ -952,6 +961,12 @@ export default function AttendeesPage() {
               break;
             case "dietaryRestrictions":
               value = reg?.dietaryRestrictions?.join("; ") || "";
+              break;
+            case "dietaryPreference":
+              value = (reg?.formData as any)?.dietaryPreference || "";
+              break;
+            case "dietaryNotes":
+              value = (reg?.formData as any)?.dietaryNotes || "";
               break;
             case "adaAccommodations":
               value = reg?.adaAccommodations ? "Yes" : "No";
@@ -1094,6 +1109,13 @@ export default function AttendeesPage() {
         return <span className="text-muted-foreground whitespace-nowrap">{reg?.emergencyContactPhone || "-"}</span>;
       case "dietaryRestrictions":
         return <span className="text-muted-foreground whitespace-nowrap">{reg?.dietaryRestrictions?.join(", ") || "-"}</span>;
+      case "dietaryPreference": {
+        const preference = (reg?.formData as any)?.dietaryPreference;
+        const labels: Record<string, string> = { none: "No restrictions", vegetarian: "Vegetarian", vegan: "Vegan", other: "Other / Allergies" };
+        return <span className="text-muted-foreground whitespace-nowrap">{preference ? (labels[preference] || preference) : "-"}</span>;
+      }
+      case "dietaryNotes":
+        return <span className="text-muted-foreground whitespace-nowrap">{(reg?.formData as any)?.dietaryNotes || "-"}</span>;
       case "adaAccommodations":
         return <span className="text-muted-foreground whitespace-nowrap">{reg?.adaAccommodations ? "Yes" : "No"}</span>;
       case "registeredAt":

@@ -25,17 +25,20 @@ import { format, parseISO } from "date-fns";
 import type { Event, EventPage, EventPageSection, IntroSectionContent, ThankYouSectionContent, HeroSectionContent, FormSectionContent } from "@shared/schema";
 import EventListPage from "./EventListPage";
 import { Textarea } from "@/components/ui/textarea";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 
 // Custom form field type (matches FormBuilder output)
 interface CustomFormField {
   id: string;
-  type: "text" | "email" | "phone" | "select" | "checkbox" | "textarea" | "date" | "number";
+  type: "text" | "email" | "phone" | "select" | "checkbox" | "textarea" | "date" | "number" | "radio";
   label: string;
   labelEs?: string;
   placeholder?: string;
   placeholderEs?: string;
   required: boolean;
   options?: { value: string; label: string; labelEs?: string }[];
+  conditionalOn?: { field: string; value: string };
 }
 
 import { IntroSection, ThankYouSection } from "@/components/landing-sections";
@@ -87,6 +90,7 @@ interface TemplateFormField {
   options?: Array<{ value: string; label: string; labelEs?: string }>;
   waiverUrl?: string;
   secondaryWaiverUrl?: string;
+  conditionalOn?: { field: string; value: string };
 }
 
 // Helper to check if a field exists in the template
@@ -624,15 +628,29 @@ export default function RegistrationPage() {
       const missingFields: string[] = [];
       
       for (const field of customFields) {
-        if (field.required) {
-          // Use name for template fields, id for custom form builder fields
-          const fieldKey = field.name || (field as any).id;
+        const fieldKey = field.name || (field as any).id;
+        const conditionalOn = (field as any).conditionalOn;
+        
+        // Check if this field is conditionally required
+        let isRequired = field.required;
+        if (conditionalOn) {
+          const parentValue = customFormData[conditionalOn.field];
+          // Field is only shown (and required) when parent matches the condition
+          if (parentValue === conditionalOn.value) {
+            isRequired = true; // Conditional fields are required when visible
+          } else {
+            continue; // Skip validation if field is hidden
+          }
+        }
+        
+        if (isRequired) {
           const value = customFormData[fieldKey];
           const isEmpty = value === undefined || value === null || value === "" || 
             (field.type === "checkbox" && value !== true);
           
           if (isEmpty) {
-            missingFields.push(field.label);
+            const fieldLabel = language === "es" && field.labelEs ? field.labelEs : field.label;
+            missingFields.push(fieldLabel);
           }
         }
       }
@@ -1504,7 +1522,18 @@ export default function RegistrationPage() {
                     const fieldKey = field.name || (field as any).id;
                     const fieldLabel = language === "es" && field.labelEs ? field.labelEs : field.label;
                     const fieldPlaceholder = language === "es" && field.placeholderEs ? field.placeholderEs : field.placeholder;
-                    const isRequired = field.required;
+                    
+                    // Check conditional visibility
+                    const conditionalOn = (field as any).conditionalOn;
+                    if (conditionalOn) {
+                      const parentValue = customFormData[conditionalOn.field];
+                      if (parentValue !== conditionalOn.value) {
+                        return null; // Hide field if condition not met
+                      }
+                    }
+                    
+                    // If field has conditionalOn, make it required when visible
+                    const isRequired = conditionalOn ? true : field.required;
                   
                     return (
                       <div key={fieldKey} className="space-y-2">
@@ -1608,6 +1637,44 @@ export default function RegistrationPage() {
                               {fieldPlaceholder || fieldLabel}
                             </label>
                           </div>
+                        )}
+                        
+                        {field.type === "radio" && field.options && (
+                          <RadioGroup
+                            value={customFormData[fieldKey] || ""}
+                            onValueChange={(value) => {
+                              setCustomFormData(prev => {
+                                const newData: Record<string, any> = { ...prev, [fieldKey]: value };
+                                // Clear conditional fields when parent value changes
+                                customFields.forEach((f) => {
+                                  const conditionalField = f as any;
+                                  if (conditionalField.conditionalOn?.field === fieldKey && value !== conditionalField.conditionalOn?.value) {
+                                    const conditionalFieldKey = String(conditionalField.name || conditionalField.id);
+                                    delete newData[conditionalFieldKey];
+                                  }
+                                });
+                                return newData;
+                              });
+                            }}
+                            className="space-y-2"
+                            data-testid={`radio-custom-${fieldKey}`}
+                          >
+                            {field.options.map((option) => (
+                              <div key={option.value} className="flex items-center space-x-2">
+                                <RadioGroupItem 
+                                  value={option.value} 
+                                  id={`${fieldKey}-${option.value}`}
+                                  data-testid={`radio-option-${fieldKey}-${option.value}`}
+                                />
+                                <Label 
+                                  htmlFor={`${fieldKey}-${option.value}`}
+                                  className="cursor-pointer font-normal"
+                                >
+                                  {language === "es" && option.labelEs ? option.labelEs : option.label}
+                                </Label>
+                              </div>
+                            ))}
+                          </RadioGroup>
                         )}
                       </div>
                     );
