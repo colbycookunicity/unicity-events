@@ -58,7 +58,7 @@ type ColumnKey =
   | "status" | "swagStatus" | "shirtSize" | "pantSize" | "roomType"
   | "passportNumber" | "passportCountry" | "passportExpiration"
   | "emergencyContact" | "emergencyContactPhone" | "dietaryRestrictions" | "adaAccommodations"
-  | "registeredAt" | "checkedInAt" | "lastModified" | "actions";
+  | "registeredAt" | "checkedInAt" | "lastModified" | "verifiedByHydra" | "actions";
 
 type SortConfig = {
   key: string;
@@ -87,6 +87,7 @@ const ALL_COLUMNS: { key: ColumnKey; label: string; defaultVisible: boolean }[] 
   { key: "registeredAt", label: "Registered", defaultVisible: true },
   { key: "checkedInAt", label: "Checked In At", defaultVisible: false },
   { key: "lastModified", label: "Last Modified", defaultVisible: false },
+  { key: "verifiedByHydra", label: "Verified by Hydra", defaultVisible: false },
   { key: "actions", label: "Actions", defaultVisible: true },
 ];
 
@@ -278,8 +279,8 @@ export default function AttendeesPage() {
       }
     }
     
-    // Include swagStatus and checkedInAt for all events, lastModified optional
-    const additionalColumns: ColumnKey[] = ["swagStatus", "checkedInAt", "lastModified"];
+    // Include swagStatus, checkedInAt, lastModified, and verifiedByHydra for all events
+    const additionalColumns: ColumnKey[] = ["swagStatus", "checkedInAt", "lastModified", "verifiedByHydra"];
     
     return new Set([...alwaysVisible, ...relevantFromForm, ...additionalColumns]);
   }, [eventFormFields]);
@@ -801,6 +802,9 @@ export default function AttendeesPage() {
             case "lastModified":
               value = reg?.lastModified ? format(new Date(reg.lastModified), "yyyy-MM-dd HH:mm") : "";
               break;
+            case "verifiedByHydra":
+              value = reg ? (reg.verifiedByHydra ? "Hydra" : "Qualified List") : "";
+              break;
           }
           return `"${value.toString().replace(/"/g, '""')}"`;
         }).join(",");
@@ -909,6 +913,11 @@ export default function AttendeesPage() {
         return <span className="text-muted-foreground text-sm whitespace-nowrap">{reg?.checkedInAt ? format(new Date(reg.checkedInAt), "MMM d, h:mm a") : "-"}</span>;
       case "lastModified":
         return <span className="text-muted-foreground text-sm whitespace-nowrap">{reg?.lastModified ? format(new Date(reg.lastModified), "MMM d, h:mm a") : "-"}</span>;
+      case "verifiedByHydra":
+        if (!reg) return <span className="text-muted-foreground">-</span>;
+        return reg.verifiedByHydra 
+          ? <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30">Hydra</Badge>
+          : <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-500/30">Qualified List</Badge>;
       case "actions":
         if (person.isRegistered && reg) {
           return (
