@@ -63,7 +63,7 @@ type ColumnKey =
 
 // Shared columns to show when "All Events" is selected (global view)
 const SHARED_COLUMNS: ColumnKey[] = [
-  "name", "unicityId", "email", "phone", "event", "status", "registeredAt", "swagStatus", "verifiedByHydra", "actions"
+  "name", "unicityId", "email", "phone", "event", "status", "registeredAt", "lastModified", "swagStatus", "verifiedByHydra", "actions"
 ];
 
 type SortConfig = {
