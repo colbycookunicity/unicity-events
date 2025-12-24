@@ -397,7 +397,20 @@ export default function RegistrationPage() {
           setHeroImageUrl(imagePath);
           return;
         }
-        // Otherwise fetch from object storage
+        // If it's already an API path, use it directly (append redirect param for signed URL)
+        if (imagePath.startsWith('/api/objects')) {
+          try {
+            const res = await fetch(`${imagePath}?redirect=false`);
+            if (res.ok) {
+              const data = await res.json();
+              setHeroImageUrl(data.url);
+            }
+          } catch (err) {
+            console.error("Failed to fetch hero image:", err);
+          }
+          return;
+        }
+        // Otherwise construct the full path for object storage
         try {
           const res = await fetch(`/api/objects/public/${imagePath}?redirect=false`);
           if (res.ok) {
