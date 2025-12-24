@@ -1100,7 +1100,7 @@ export default function RegistrationPage() {
 
   // Define renderHeader early so it can be used in success sections
   const renderHeader = () => (
-    <header className="bg-white border-b border-slate-200 sticky top-0 z-20">
+    <header className="bg-card border-b border sticky top-0 z-20">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
         <img 
           src={unicityLogoDark} 
@@ -1108,22 +1108,25 @@ export default function RegistrationPage() {
           className="h-6 w-auto"
           data-testid="img-header-logo"
         />
-        <div className="flex items-center gap-1 text-sm font-medium">
-          <button
-            onClick={() => setLanguage("en")}
-            className={language === "en" ? "text-slate-900 font-semibold" : "text-slate-400 hover:text-slate-600"}
-            data-testid="button-language-en"
-          >
-            EN
-          </button>
-          <span className="text-slate-300">/</span>
-          <button
-            onClick={() => setLanguage("es")}
-            className={language === "es" ? "text-slate-900 font-semibold" : "text-slate-400 hover:text-slate-600"}
-            data-testid="button-language-es"
-          >
-            ES
-          </button>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <div className="flex items-center gap-1 text-sm font-medium">
+            <button
+              onClick={() => setLanguage("en")}
+              className={language === "en" ? "text-foreground font-semibold" : "text-muted-foreground/60 hover:text-muted-foreground"}
+              data-testid="button-language-en"
+            >
+              EN
+            </button>
+            <span className="text-muted-foreground/40">/</span>
+            <button
+              onClick={() => setLanguage("es")}
+              className={language === "es" ? "text-foreground font-semibold" : "text-muted-foreground/60 hover:text-muted-foreground"}
+              data-testid="button-language-es"
+            >
+              ES
+            </button>
+          </div>
         </div>
       </div>
     </header>
@@ -1131,8 +1134,9 @@ export default function RegistrationPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-50">
+      <div className="min-h-screen bg-background">
         <header className="flex items-center justify-end gap-2 p-4">
+          <ThemeToggle />
           <LanguageToggle />
         </header>
         <div className="max-w-2xl mx-auto p-4">
@@ -1171,11 +1175,11 @@ export default function RegistrationPage() {
     if (thankYouSection) {
       const content = thankYouSection.content as ThankYouSectionContent;
       return (
-        <div className="min-h-screen bg-slate-50">
+        <div className="min-h-screen bg-background">
           {renderHeader()}
           <ThankYouSection content={content} />
           <div className="max-w-md mx-auto p-6 text-center">
-            <div className="text-sm text-slate-600">
+            <div className="text-sm text-muted-foreground">
               <p className="font-medium">{eventName}</p>
               {formattedDate && (
                 <p>{format(formattedDate, "MMMM d, yyyy")}</p>
@@ -1188,23 +1192,24 @@ export default function RegistrationPage() {
     
     // Default thank you page
     return (
-      <div className="min-h-screen bg-slate-50">
+      <div className="min-h-screen bg-background">
         <header className="flex items-center justify-end gap-2 p-4">
+          <ThemeToggle />
           <LanguageToggle />
         </header>
         <div className="flex items-center justify-center min-h-[80vh] p-4">
-          <Card className="max-w-md w-full bg-slate-800 border-slate-700">
+          <Card className="max-w-md w-full">
             <CardContent className="p-8 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 mb-6">
-                <CheckCircle className="h-8 w-8 text-green-600" />
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30 mb-6">
+                <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400" />
               </div>
-              <h2 className="text-2xl font-semibold mb-2 text-slate-900">{t("registrationSuccess")}</h2>
-              <p className="text-slate-600 mb-4">
+              <h2 className="text-2xl font-semibold mb-2 text-foreground">{t("registrationSuccess")}</h2>
+              <p className="text-muted-foreground mb-4">
                 {language === "es"
                   ? "Su registro ha sido completado. Recibira un correo de confirmacion pronto."
                   : "Your registration has been completed. You will receive a confirmation email shortly."}
               </p>
-              <div className="text-sm text-slate-500">
+              <div className="text-sm text-muted-foreground">
                 <p className="font-medium">{eventName}</p>
                 {formattedDate && (
                   <p>{format(formattedDate, "MMMM d, yyyy")}</p>
@@ -1246,12 +1251,12 @@ export default function RegistrationPage() {
             <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-muted flex items-center justify-center">
               <Mail className="w-6 h-6 text-muted-foreground" />
             </div>
-            <CardTitle className="text-slate-900">
+            <CardTitle className="text-foreground">
               {language === "es" 
                 ? (loginHeroContent?.headlineEs || "Verifique su identidad")
                 : (loginHeroContent?.headline || "Verify Your Identity")}
             </CardTitle>
-            <CardDescription className="text-slate-600">
+            <CardDescription className="text-muted-foreground">
               {language === "es" 
                 ? (loginHeroContent?.subheadlineEs || "Ingrese su correo electronico para recibir un codigo de verificacion")
                 : (loginHeroContent?.subheadline || "Enter your email to receive a verification code")}
@@ -1286,13 +1291,13 @@ export default function RegistrationPage() {
       return (
         <Card>
           <CardHeader className="text-center">
-            <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
-              <ShieldCheck className="w-6 h-6 text-slate-700" />
+            <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+              <ShieldCheck className="w-6 h-6 text-muted-foreground" />
             </div>
-            <CardTitle className="text-slate-900">
+            <CardTitle className="text-foreground">
               {language === "es" ? "Ingrese el codigo" : "Enter Verification Code"}
             </CardTitle>
-            <CardDescription className="text-slate-600">
+            <CardDescription className="text-muted-foreground">
               {language === "es" 
                 ? `Enviamos un codigo de 6 digitos a ${verificationEmail}`
                 : `We sent a 6-digit code to ${verificationEmail}`}
@@ -2115,7 +2120,7 @@ export default function RegistrationPage() {
   // Standard layout - default, form centered on page
   if (layout === "standard") {
     return (
-      <div className="min-h-screen bg-slate-50 relative">
+      <div className="min-h-screen bg-background relative">
         {renderHeader()}
         
         {/* Use CMS intro section if available, otherwise use default hero */}
@@ -2130,11 +2135,11 @@ export default function RegistrationPage() {
                 className="w-full h-48 object-cover rounded-lg mb-6"
               />
             )}
-            <h1 className="text-3xl font-semibold tracking-tight mb-2 text-slate-900">
+            <h1 className="text-3xl font-semibold tracking-tight mb-2 text-foreground">
               {getCustomHeading() || getEventName()}
             </h1>
             {getCustomSubheading() && (
-              <p className="text-slate-600 mb-4">{getCustomSubheading()}</p>
+              <p className="text-muted-foreground mb-4">{getCustomSubheading()}</p>
             )}
             {renderEventInfo()}
           </div>
@@ -2142,10 +2147,10 @@ export default function RegistrationPage() {
         
         <div className="max-w-2xl mx-auto p-4 pb-12">
           {!introSection && getEventDescription() && !getCustomSubheading() && (
-            <Card className="mb-6 bg-white border-slate-200">
+            <Card className="mb-6 bg-card border">
               <CardContent className="p-6">
                 <div 
-                  className="prose prose-sm max-w-none text-slate-600"
+                  className="prose prose-sm max-w-none text-muted-foreground"
                   dangerouslySetInnerHTML={{ __html: getEventDescription() || "" }}
                 />
               </CardContent>
@@ -2154,7 +2159,7 @@ export default function RegistrationPage() {
 
           {renderMainContent()}
 
-          <footer className="mt-8 text-center text-sm text-slate-500">
+          <footer className="mt-8 text-center text-sm text-muted-foreground">
             Unicity International
           </footer>
         </div>
@@ -2269,7 +2274,7 @@ export default function RegistrationPage() {
 
   // Hero-background layout - bright hero image with event info below
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-card">
       {renderHeader()}
       
       {/* Hero Image - bright and prominent */}
@@ -2284,7 +2289,7 @@ export default function RegistrationPage() {
       )}
       
       {/* Event Info Section - clean white background */}
-      <div className="bg-white py-10 text-center border-b">
+      <div className="bg-card py-10 text-center border-b">
         <div className="max-w-2xl mx-auto px-4">
           <h1 className="text-3xl md:text-4xl font-bold text-[#1a365d] mb-2">
             {getCustomHeading() || getEventName()}
