@@ -2180,17 +2180,10 @@ export default function RegistrationPage() {
 
           {renderMainContent()}
 
-          <footer className="mt-8 text-center text-sm text-muted-foreground space-y-1">
-            <div>
-              <a href="https://unicity.com" target="_blank" rel="noopener noreferrer" className="hover:underline">
-                Unicity International
-              </a>
-            </div>
-            <div>
-              <a href="mailto:americasevent@unicity.com" className="hover:underline">
-                americasevent@unicity.com
-              </a>
-            </div>
+          <footer className="mt-8 text-center text-sm text-muted-foreground">
+            <a href="https://unicity.com" target="_blank" rel="noopener noreferrer" className="hover:underline">Unicity International</a>
+            <span className="mx-2">|</span>
+            <a href="mailto:americasevent@unicity.com" className="hover:underline">americasevent@unicity.com</a>
           </footer>
         </div>
       </div>
@@ -2314,17 +2307,10 @@ export default function RegistrationPage() {
             <div className="p-6 lg:p-10 bg-background">
               <div className="max-w-xl mx-auto">
                 {renderMainContent()}
-                <footer className="mt-8 pb-8 text-center text-sm text-muted-foreground space-y-1">
-                  <div>
-                    <a href="https://unicity.com" target="_blank" rel="noopener noreferrer" className="hover:underline">
-                      Unicity International
-                    </a>
-                  </div>
-                  <div>
-                    <a href="mailto:americasevent@unicity.com" className="hover:underline">
-                      americasevent@unicity.com
-                    </a>
-                  </div>
+                <footer className="mt-8 pb-8 text-center text-sm text-muted-foreground">
+                  <a href="https://unicity.com" target="_blank" rel="noopener noreferrer" className="hover:underline">Unicity International</a>
+                  <span className="mx-2">|</span>
+                  <a href="mailto:americasevent@unicity.com" className="hover:underline">americasevent@unicity.com</a>
                 </footer>
               </div>
             </div>
@@ -2388,17 +2374,10 @@ export default function RegistrationPage() {
       <div className="bg-gray-50 py-8">
         <div className="max-w-2xl mx-auto px-4">
           {renderMainContent()}
-          <footer className="mt-8 pb-8 text-center text-sm text-muted-foreground space-y-1">
-            <div>
-              <a href="https://unicity.com" target="_blank" rel="noopener noreferrer" className="hover:underline">
-                Unicity International
-              </a>
-            </div>
-            <div>
-              <a href="mailto:americasevent@unicity.com" className="hover:underline">
-                americasevent@unicity.com
-              </a>
-            </div>
+          <footer className="mt-8 pb-8 text-center text-sm text-muted-foreground">
+            <a href="https://unicity.com" target="_blank" rel="noopener noreferrer" className="hover:underline">Unicity International</a>
+            <span className="mx-2">|</span>
+            <a href="mailto:americasevent@unicity.com" className="hover:underline">americasevent@unicity.com</a>
           </footer>
         </div>
       </div>
