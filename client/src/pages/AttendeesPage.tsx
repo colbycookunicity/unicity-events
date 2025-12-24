@@ -37,8 +37,9 @@ type UnifiedPerson = {
   email: string;
   unicityId: string | null;
   phone?: string | null;
+  eventName?: string;
   registration?: Registration;
-  qualifier?: QualifiedRegistrant;
+  qualifier?: QualifiedRegistrant & { eventName?: string };
   isRegistered: boolean;
 };
 
@@ -58,7 +59,12 @@ type ColumnKey =
   | "status" | "swagStatus" | "shirtSize" | "pantSize" | "roomType"
   | "passportNumber" | "passportCountry" | "passportExpiration"
   | "emergencyContact" | "emergencyContactPhone" | "dietaryRestrictions" | "adaAccommodations"
-  | "registeredAt" | "checkedInAt" | "lastModified" | "verifiedByHydra" | "actions";
+  | "registeredAt" | "checkedInAt" | "lastModified" | "verifiedByHydra" | "event" | "actions";
+
+// Shared columns to show when "All Events" is selected (global view)
+const SHARED_COLUMNS: ColumnKey[] = [
+  "name", "unicityId", "email", "phone", "event", "status", "registeredAt", "swagStatus", "verifiedByHydra", "actions"
+];
 
 type SortConfig = {
   key: string;
@@ -72,6 +78,7 @@ const ALL_COLUMNS: { key: ColumnKey; label: string; defaultVisible: boolean }[] 
   { key: "phone", label: "Phone", defaultVisible: true },
   { key: "gender", label: "Gender", defaultVisible: false },
   { key: "dateOfBirth", label: "Date of Birth", defaultVisible: false },
+  { key: "event", label: "Event", defaultVisible: true },
   { key: "status", label: "Status", defaultVisible: true },
   { key: "swagStatus", label: "Swag Status", defaultVisible: true },
   { key: "shirtSize", label: "Shirt Size", defaultVisible: false },
@@ -271,12 +278,18 @@ export default function AttendeesPage() {
 
   // Compute which columns are relevant for this event
   const relevantColumns = useMemo(() => {
-    // Always include these base columns
+    // When "All Events" is selected, show only shared/global columns
+    if (eventFilter === "all") {
+      return new Set(SHARED_COLUMNS);
+    }
+    
+    // Always include these base columns for specific event view (exclude "event" column)
     const alwaysVisible: ColumnKey[] = ["name", "email", "status", "registeredAt", "actions"];
     
-    // If no event selected or no form fields, show all columns
+    // If no form fields defined, show base columns plus operational ones
     if (!eventFormFields) {
-      return new Set(ALL_COLUMNS.map(c => c.key));
+      const defaultColumns: ColumnKey[] = [...alwaysVisible, "unicityId", "phone", "swagStatus", "checkedInAt", "lastModified", "verifiedByHydra"];
+      return new Set(defaultColumns);
     }
     
     // Get column keys from form fields
@@ -293,7 +306,7 @@ export default function AttendeesPage() {
     const additionalColumns: ColumnKey[] = ["swagStatus", "checkedInAt", "lastModified", "verifiedByHydra"];
     
     return new Set([...alwaysVisible, ...relevantFromForm, ...additionalColumns]);
-  }, [eventFormFields]);
+  }, [eventFormFields, eventFilter]);
 
   const { data: guestRules = [] } = useQuery<GuestAllowanceRule[]>({
     queryKey: [`/api/events/${eventFilter}/guest-rules`],
@@ -340,6 +353,13 @@ export default function AttendeesPage() {
     return qualifiersByEmail.get(reg.email.toLowerCase());
   };
 
+  // Create a map of event IDs to event names for quick lookup
+  const eventNamesById = useMemo(() => {
+    const map = new Map<string, string>();
+    events?.forEach(e => map.set(e.id, e.name));
+    return map;
+  }, [events]);
+
   const unifiedPeople = useMemo((): UnifiedPerson[] => {
     const people: UnifiedPerson[] = [];
     const processedQualifierIds = new Set<string>();
@@ -368,6 +388,7 @@ export default function AttendeesPage() {
         email: reg.email,
         unicityId: reg.unicityId || null,
         phone: reg.phone,
+        eventName: eventNamesById.get(reg.eventId) || "Unknown Event",
         registration: reg,
         qualifier: matchingQualifier,
         isRegistered: true,
@@ -386,6 +407,9 @@ export default function AttendeesPage() {
           (unicityIdKey && registeredUnicityIdEventPairs.has(unicityIdKey));
         
         if (!isRegisteredForThisEvent && !processedQualifierIds.has(q.id)) {
+          // For qualifiers from "all events" query, they have eventName property
+          // For event-specific qualifiers, we look up the name
+          const qualifierEventName = (q as any).eventName || eventNamesById.get(q.eventId) || "Unknown Event";
           people.push({
             type: "qualifier",
             id: q.id,
@@ -393,7 +417,8 @@ export default function AttendeesPage() {
             lastName: q.lastName,
             email: q.email,
             unicityId: q.unicityId || null,
-            qualifier: q,
+            eventName: qualifierEventName,
+            qualifier: { ...q, eventName: qualifierEventName },
             isRegistered: false,
           });
         }
@@ -401,7 +426,7 @@ export default function AttendeesPage() {
     }
 
     return people;
-  }, [registrations, qualifiers, qualifiersByEmail]);
+  }, [registrations, qualifiers, qualifiersByEmail, eventNamesById]);
 
   const createQualifierMutation = useMutation({
     mutationFn: async (data: typeof qualifierFormData) => {
@@ -834,6 +859,9 @@ export default function AttendeesPage() {
             case "verifiedByHydra":
               value = reg ? (reg.verifiedByHydra ? "Hydra" : "Qualified List") : "";
               break;
+            case "event":
+              value = person.eventName || "";
+              break;
           }
           return `"${value.toString().replace(/"/g, '""')}"`;
         }).join(",");
@@ -947,6 +975,8 @@ export default function AttendeesPage() {
         return reg.verifiedByHydra 
           ? <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30">Hydra</Badge>
           : <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-500/30">Qualified List</Badge>;
+      case "event":
+        return <span className="text-muted-foreground whitespace-nowrap">{person.eventName || "-"}</span>;
       case "actions":
         if (person.isRegistered && reg) {
           return (
