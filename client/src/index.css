@@ -202,6 +202,19 @@
     @apply hidden;
   }
 
+  /* Fix time/date input icons for dark mode */
+  input[type="time"]::-webkit-calendar-picker-indicator,
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    filter: invert(0);
+  }
+  
+  .dark input[type="time"]::-webkit-calendar-picker-indicator,
+  .dark input[type="date"]::-webkit-calendar-picker-indicator,
+  .dark input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+  }
+
   /* Placeholder styling for contentEditable div */
   [contenteditable][data-placeholder]:empty::before {
     content: attr(data-placeholder);
