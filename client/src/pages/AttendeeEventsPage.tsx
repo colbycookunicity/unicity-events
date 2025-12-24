@@ -221,7 +221,7 @@ export default function AttendeeEventsPage() {
                 />
                 <div>
                   <CardTitle data-testid="text-attendee-title">
-                    {t("My Events", "Mis Eventos")}
+                    {t("Event Login", "Iniciar Sesión")}
                   </CardTitle>
                   <CardDescription className="mt-2">
                     {t(
