@@ -2235,8 +2235,8 @@ export default function RegistrationPage() {
           
           {/* Right side - Form content (scrolls with page) */}
           <div className="flex-1 lg:w-[60%]">
-            {/* Header with logo, date, location, and controls - single row */}
-            <div className="bg-muted/50 border-b px-4 py-3">
+            {/* Header with logo, date, location, and controls - single row, sticky */}
+            <div className="bg-background/95 backdrop-blur-sm border-b px-4 py-3 sticky top-0 z-50">
               <div className="flex items-center justify-between gap-6">
                 {/* Left: Logo */}
                 <div className="shrink-0">
