@@ -8,13 +8,14 @@ import { LanguageToggle } from "@/components/LanguageToggle";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
-import { MapPin, Calendar, ChevronRight, LogOut, Mail, Loader2, CheckCircle2, Clock } from "lucide-react";
+import { MapPin, Calendar, ChevronRight, LogOut, Mail, Loader2, CheckCircle2, Clock, ShieldCheck } from "lucide-react";
 import unicityLogoDark from "@/assets/unicity-logo-dark.png";
 import unicityLogoWhite from "@/assets/unicity-logo-white.png";
 
@@ -209,16 +210,24 @@ export default function AttendeeEventsPage() {
         {step === "email" && (
           <div className="max-w-md mx-auto">
             <Card>
-              <CardHeader className="text-center">
-                <CardTitle data-testid="text-attendee-title">
-                  {t("My Events", "Mis Eventos")}
-                </CardTitle>
-                <CardDescription>
-                  {t(
-                    "Enter your email to see events you're qualified for",
-                    "Ingresa tu correo para ver los eventos para los que calificas"
-                  )}
-                </CardDescription>
+              <CardHeader className="text-center space-y-4">
+                <img 
+                  src={unicityLogo} 
+                  alt="Unicity" 
+                  className="mx-auto h-10 object-contain"
+                  data-testid="img-unicity-logo"
+                />
+                <div>
+                  <CardTitle data-testid="text-attendee-title">
+                    {t("My Events", "Mis Eventos")}
+                  </CardTitle>
+                  <CardDescription className="mt-2">
+                    {t(
+                      "Enter your email to see events you're qualified for",
+                      "Ingresa tu correo para ver los eventos para los que calificas"
+                    )}
+                  </CardDescription>
+                </div>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleEmailSubmit} className="space-y-4">
@@ -259,56 +268,85 @@ export default function AttendeeEventsPage() {
         {step === "otp" && (
           <div className="max-w-md mx-auto">
             <Card>
-              <CardHeader className="text-center">
-                <CardTitle>{t("Verify Your Email", "Verifica tu Correo")}</CardTitle>
-                <CardDescription>
-                  {t(
-                    `Enter the 6-digit code sent to ${email}`,
-                    `Ingresa el código de 6 dígitos enviado a ${email}`
-                  )}
-                </CardDescription>
+              <CardHeader className="text-center space-y-4">
+                <img 
+                  src={unicityLogo} 
+                  alt="Unicity" 
+                  className="mx-auto h-10 object-contain"
+                  data-testid="img-unicity-logo-otp"
+                />
+                <div>
+                  <CardTitle>{t("Verify Your Email", "Verifica tu Correo")}</CardTitle>
+                  <CardDescription className="mt-2">
+                    {t("Enter the 6-digit code", "Ingresa el código de 6 dígitos")}
+                  </CardDescription>
+                </div>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleOtpSubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="otp">{t("Verification Code", "Código de Verificación")}</Label>
-                    <Input
-                      id="otp"
-                      type="text"
-                      placeholder="123456"
-                      value={otpCode}
-                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                      className="text-center text-2xl tracking-widest"
-                      maxLength={6}
-                      required
-                      data-testid="input-attendee-otp"
-                    />
+                <div className="space-y-6">
+                  <div className="flex items-center gap-2 justify-center text-sm text-muted-foreground">
+                    <ShieldCheck className="h-4 w-4" />
+                    <span>{t(`Code sent to ${email}`, `Código enviado a ${email}`)}</span>
                   </div>
-                  <Button 
-                    type="submit" 
-                    className="w-full"
-                    disabled={validateOtpMutation.isPending || otpCode.length !== 6}
-                    data-testid="button-attendee-verify"
-                  >
-                    {validateOtpMutation.isPending ? (
+
+                  <div className="flex justify-center">
+                    <InputOTP
+                      maxLength={6}
+                      value={otpCode}
+                      onChange={(value) => {
+                        setOtpCode(value);
+                        if (value.length === 6) {
+                          validateOtpMutation.mutate({ email: email.trim(), code: value });
+                        }
+                      }}
+                      disabled={validateOtpMutation.isPending}
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      autoFocus
+                      data-testid="input-attendee-otp"
+                    >
+                      <InputOTPGroup>
+                        <InputOTPSlot index={0} />
+                        <InputOTPSlot index={1} />
+                        <InputOTPSlot index={2} />
+                        <InputOTPSlot index={3} />
+                        <InputOTPSlot index={4} />
+                        <InputOTPSlot index={5} />
+                      </InputOTPGroup>
+                    </InputOTP>
+                  </div>
+
+                  {validateOtpMutation.isPending && (
+                    <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
                       <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      t("Verify", "Verificar")
-                    )}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="w-full"
-                    onClick={() => {
-                      setStep("email");
-                      setOtpCode("");
-                    }}
-                    data-testid="button-attendee-back"
-                  >
-                    {t("Back", "Volver")}
-                  </Button>
-                </form>
+                      <span>{t("Verifying...", "Verificando...")}</span>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-2">
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => generateOtpMutation.mutate(email.trim())}
+                      disabled={validateOtpMutation.isPending || generateOtpMutation.isPending}
+                      className="text-sm"
+                      data-testid="button-attendee-resend"
+                    >
+                      {t("Resend code", "Reenviar código")}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        setStep("email");
+                        setOtpCode("");
+                      }}
+                      disabled={validateOtpMutation.isPending}
+                      className="text-sm text-muted-foreground"
+                      data-testid="button-attendee-back"
+                    >
+                      {t("Change email", "Cambiar correo")}
+                    </Button>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </div>
