@@ -783,7 +783,7 @@ export default function AttendeesPage() {
   const handleExportCSV = () => {
     if (!filteredPeople?.length) return;
 
-    const exportColumns = ALL_COLUMNS.filter(c => visibleColumns.has(c.key) && relevantColumns.has(c.key) && c.key !== "actions");
+    const exportColumns = ALL_COLUMNS.filter(c => effectiveVisibleColumns.has(c.key) && c.key !== "actions");
     const headers = exportColumns.map(c => c.label);
     
     const csvContent = [
@@ -1072,7 +1072,17 @@ export default function AttendeesPage() {
     }
   };
 
-  const visibleColumnList = ALL_COLUMNS.filter(c => visibleColumns.has(c.key) && relevantColumns.has(c.key));
+  // For "All Events" mode, force visibility to only SHARED_COLUMNS (no customization allowed)
+  // For specific event views, use persisted visibleColumns intersected with relevantColumns
+  const effectiveVisibleColumns = useMemo(() => {
+    if (eventFilter === "all") {
+      return new Set(SHARED_COLUMNS);
+    }
+    // For specific event: intersection of user's visible preferences and what's relevant for the event
+    return new Set(Array.from(visibleColumns).filter(c => relevantColumns.has(c)));
+  }, [eventFilter, visibleColumns, relevantColumns]);
+  
+  const visibleColumnList = ALL_COLUMNS.filter(c => effectiveVisibleColumns.has(c.key));
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -1125,38 +1135,40 @@ export default function AttendeesPage() {
               </Button>
             </>
           )}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="outline" data-testid="button-column-settings">
-                <Settings2 className="h-4 w-4 mr-2" />
-                Columns
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-64" align="end">
-              <div className="space-y-2">
-                <h4 className="font-medium text-sm">Visible Columns</h4>
-                <p className="text-xs text-muted-foreground">Select which columns to display</p>
-                <Separator />
-                <ScrollArea className="h-[300px] pr-3">
-                  <div className="space-y-2">
-                    {ALL_COLUMNS.filter(c => c.key !== "actions" && relevantColumns.has(c.key)).map((col) => (
-                      <div key={col.key} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`col-${col.key}`}
-                          checked={visibleColumns.has(col.key)}
-                          onCheckedChange={() => toggleColumn(col.key)}
-                          data-testid={`checkbox-column-${col.key}`}
-                        />
-                        <Label htmlFor={`col-${col.key}`} className="text-sm font-normal cursor-pointer">
-                          {col.label}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </div>
-            </PopoverContent>
-          </Popover>
+          {eventFilter !== "all" && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" data-testid="button-column-settings">
+                  <Settings2 className="h-4 w-4 mr-2" />
+                  Columns
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64" align="end">
+                <div className="space-y-2">
+                  <h4 className="font-medium text-sm">Visible Columns</h4>
+                  <p className="text-xs text-muted-foreground">Select which columns to display</p>
+                  <Separator />
+                  <ScrollArea className="h-[300px] pr-3">
+                    <div className="space-y-2">
+                      {ALL_COLUMNS.filter(c => c.key !== "actions" && relevantColumns.has(c.key)).map((col) => (
+                        <div key={col.key} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`col-${col.key}`}
+                            checked={visibleColumns.has(col.key)}
+                            onCheckedChange={() => toggleColumn(col.key)}
+                            data-testid={`checkbox-column-${col.key}`}
+                          />
+                          <Label htmlFor={`col-${col.key}`} className="text-sm font-normal cursor-pointer">
+                            {col.label}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
           <Button onClick={handleExportCSV} variant="outline" data-testid="button-export-csv">
             <Download className="h-4 w-4 mr-2" />
             {t("export")}
