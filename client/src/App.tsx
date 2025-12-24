@@ -94,16 +94,24 @@ function AdminRouter() {
   );
 }
 
+function RedirectToMyEvents() {
+  const [, setLocation] = useLocation();
+  useEffect(() => {
+    setLocation("/my-events");
+  }, [setLocation]);
+  return null;
+}
+
 function PublicRouter() {
   return (
     <Switch>
-      <Route path="/login" component={LoginPage} />
+      <Route path="/admin/login" component={LoginPage} />
       <Route path="/register/:eventId" component={RegistrationPage} />
       <Route path="/register">{() => <EventListPage />}</Route>
       <Route path="/events/:slug" component={EventLandingPage} />
       <Route path="/my-events" component={AttendeeEventsPage} />
       <Route path="/my-dashboard" component={UserDashboard} />
-      <Route path="/" component={PublicLoginPage} />
+      <Route path="/" component={RedirectToMyEvents} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -165,12 +173,18 @@ function AppRouter() {
     );
   }
 
-  const isAdminRoute = location.startsWith("/admin");
+  const isAdminLoginRoute = location === "/admin/login";
+  const isAdminRoute = location.startsWith("/admin") && !isAdminLoginRoute;
   const isPublicRoute = location.startsWith("/register/") || location === "/my-dashboard";
   const hasToken = typeof window !== 'undefined' && !!localStorage.getItem('authToken');
 
+  // Admin login page is public - don't redirect
+  if (isAdminLoginRoute) {
+    return <PublicRouter />;
+  }
+
   if (isAdminRoute && !isAuthenticated && !hasToken) {
-    setLocation("/login");
+    setLocation("/admin/login");
     return null;
   }
 

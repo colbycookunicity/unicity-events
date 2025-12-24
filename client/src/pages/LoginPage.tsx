@@ -28,6 +28,8 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isVerified, setIsVerified] = useState(false);
 
+  const [accessDeniedMessage, setAccessDeniedMessage] = useState("");
+
   const handleSendCode = async () => {
     if (!email || !email.includes("@")) {
       toast({
@@ -38,6 +40,7 @@ export default function LoginPage() {
       return;
     }
 
+    setAccessDeniedMessage("");
     setIsLoading(true);
     try {
       const res = await apiRequest("POST", "/api/auth/otp/generate", { email });
@@ -47,12 +50,17 @@ export default function LoginPage() {
         title: t("emailSent"),
         description: `Code sent to ${email}`,
       });
-    } catch (error) {
-      toast({
-        title: t("error"),
-        description: "Failed to send verification code",
-        variant: "destructive",
-      });
+    } catch (error: any) {
+      // Check for 403 access denied (non-admin user)
+      if (error?.status === 403 || error?.message?.includes("Access denied") || error?.message?.includes("authorized administrators")) {
+        setAccessDeniedMessage("This login is for authorized administrators only. If you're looking to register for an event, please use the attendee portal.");
+      } else {
+        toast({
+          title: t("error"),
+          description: "Failed to send verification code",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -122,10 +130,10 @@ export default function LoginPage() {
             />
             <div>
               <CardTitle className="text-2xl font-semibold">
-                Unicity Events
+                Admin Login
               </CardTitle>
               <CardDescription className="mt-2">
-                {step === "email" ? t("enterEmail") : t("enterCode")}
+                {step === "email" ? "Admin access only" : t("enterCode")}
               </CardDescription>
             </div>
           </CardHeader>
@@ -149,6 +157,21 @@ export default function LoginPage() {
                     />
                   </div>
                 </div>
+                {accessDeniedMessage && (
+                  <div className="p-3 rounded-md bg-destructive/10 border border-destructive/20 text-sm text-destructive" data-testid="text-access-denied">
+                    <p className="font-medium mb-1">Access Denied</p>
+                    <p>{accessDeniedMessage}</p>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="mt-2"
+                      onClick={() => setLocation("/my-events")}
+                      data-testid="link-attendee-portal"
+                    >
+                      Go to Attendee Portal
+                    </Button>
+                  </div>
+                )}
                 <Button
                   className="w-full"
                   onClick={handleSendCode}

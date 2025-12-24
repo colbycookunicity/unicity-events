@@ -4,26 +4,61 @@
 
 Added a dedicated attendee entry point at `/my-events` where users qualified for events can see and manage their registrations without affecting admin login or existing event registration pages.
 
-## Authentication Flows (Unchanged vs New)
+**The attendee portal is now the default entry point for the site.** Visiting `events.unicity.com/` redirects to `/my-events`.
 
-### Existing Flows (Unchanged)
-1. **Admin Login at `/`** (events.unicity.com)
-   - Uses OTP verification via Hydra API
-   - Checks admin whitelist + database users
-   - Creates admin auth session (`auth_sessions` table)
-   - Routes to `/admin` dashboard
+## Routing Architecture (Updated December 2024)
 
-2. **Public Event Registration at `/register/:eventSlug`**
-   - Event-scoped OTP verification
-   - Session stored in `otp_sessions` with `registrationEventId` in customerData
-   - No persistent session - scoped to single event
+| Route | Purpose | OTP Scope |
+|-------|---------|-----------|
+| `/` | Redirects to `/my-events` | N/A |
+| `/my-events` | Attendee portal (default entry) | Attendee-scoped |
+| `/admin/login` | Admin-only login | Admin-scoped |
+| `/admin/*` | Admin dashboard pages | Requires admin session |
+| `/register/:eventSlug` | Event registration | Registration-scoped |
 
-### New Flow: Attendee Portal at `/my-events`
+### Key Routing Decisions
+
+1. **Default Entry Point**: `/` → `/my-events`
+   - Attendees should never hit admin OTP logic by default
+   - Clean separation of concerns
+
+2. **Admin Login Moved**: `/login` → `/admin/login`
+   - Explicit route for administrators
+   - Shows "Admin access only" messaging
+   - Non-admin users see friendly "Access Denied" with link to attendee portal
+
+3. **Deep Links Preserved**:
+   - `/register/:eventSlug` continues to work
+   - Event landing pages at `/events/:slug` unchanged
+
+## Authentication Flows
+
+### 1. Attendee Portal at `/my-events` (DEFAULT)
 - **Purpose**: Let qualified users see ALL events they're eligible for
-- **OTP Login**: Uses Hydra API (same as registration)
+- **OTP Login**: Uses Hydra API with `attendeePortal: true` flag
 - **Session Type**: Creates `attendee_sessions` (NOT admin sessions)
 - **Data Source**: Queries `qualified_registrants` and `registrations` tables
 - **No Admin Access**: Attendee tokens cannot access admin routes
+
+### 2. Admin Login at `/admin/login`
+- Uses OTP verification via Hydra API
+- Checks admin whitelist + database users
+- Creates admin auth session (`auth_sessions` table)
+- Routes to `/admin` dashboard
+- **Non-admin users see**: "This login is for authorized administrators only" with link to attendee portal
+
+### 3. Public Event Registration at `/register/:eventSlug`
+- Event-scoped OTP verification
+- Session stored in `otp_sessions` with `registrationEventId` in customerData
+- No persistent session - scoped to single event
+
+## Security Boundaries
+
+1. **Admin tokens** (`auth_sessions`) grant access to `/admin/*` routes
+2. **Attendee tokens** (`attendee_sessions`) only work with `/api/attendee/*` endpoints
+3. **Registration OTP sessions** are event-scoped and temporary
+4. **Email normalization**: All lookups use `toLowerCase().trim()`
+5. **OTP Isolation**: Each flow has dedicated session validation - `getOtpSessionForAttendeePortal` filters by `customerData.attendeePortal === true`
 
 ## Database Changes
 
