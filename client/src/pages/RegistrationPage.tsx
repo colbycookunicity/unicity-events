@@ -312,8 +312,10 @@ export default function RegistrationPage() {
   // Skip verification if URL params provide identity (pre-qualified link)
   const skipVerification = Boolean(prePopulatedUnicityId && prePopulatedEmail);
   
-  // Identity fields are locked after verification
+  // Identity fields are locked after verification (but only if we have actual values)
   const isIdentityLocked = Boolean(verifiedProfile) || skipVerification;
+  // Distributor ID is only locked if we actually have a value from Hydra or URL
+  const isUnicityIdLocked = Boolean(verifiedProfile?.unicityId) || Boolean(prePopulatedUnicityId);
 
   const { data: event, isLoading } = useQuery<PublicEvent>({
     queryKey: ["/api/events", params.eventId, "public"],
@@ -1315,12 +1317,12 @@ export default function RegistrationPage() {
                         {...field} 
                         placeholder={language === "es" ? "Su ID de distribuidor" : "Your distributor ID"} 
                         data-testid="input-unicity-id"
-                        disabled={isIdentityLocked}
-                        className={isIdentityLocked ? "bg-muted" : ""}
+                        disabled={isUnicityIdLocked}
+                        className={isUnicityIdLocked ? "bg-muted" : ""}
                       />
                     </FormControl>
                     <FormDescription>
-                      {isIdentityLocked 
+                      {isUnicityIdLocked 
                         ? (language === "es" 
                             ? "Este campo ha sido verificado y no puede ser editado" 
                             : "This field has been verified and cannot be edited")
