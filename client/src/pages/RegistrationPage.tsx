@@ -1121,13 +1121,12 @@ export default function RegistrationPage() {
           {verifiedProfile && (
             <Button
               variant="ghost"
-              size="sm"
+              size="icon"
               onClick={handleLogout}
               className="text-muted-foreground"
               data-testid="button-logout"
             >
-              <LogOut className="h-4 w-4 mr-1" />
-              {language === "es" ? "Salir" : "Logout"}
+              <LogOut className="h-4 w-4" />
             </Button>
           )}
           <ThemeToggle />
@@ -2272,13 +2271,12 @@ export default function RegistrationPage() {
                   {verifiedProfile && (
                     <Button
                       variant="ghost"
-                      size="sm"
+                      size="icon"
                       onClick={handleLogout}
                       className="text-muted-foreground"
                       data-testid="button-logout"
                     >
-                      <LogOut className="h-4 w-4 mr-1" />
-                      {language === "es" ? "Salir" : "Logout"}
+                      <LogOut className="h-4 w-4" />
                     </Button>
                   )}
                   <ThemeToggle />
