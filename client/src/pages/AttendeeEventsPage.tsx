@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLanguage } from "@/lib/i18n";
+import { useTheme } from "@/components/ThemeProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +17,8 @@ import { apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
 import { MapPin, Calendar, ChevronRight, LogOut, Mail, Loader2, CheckCircle2, Clock, ShieldCheck } from "lucide-react";
 import unicityIcon from "@/assets/unicity-logo.png";
+import unicityLogoDark from "@/assets/unicity-logo-dark.png";
+import unicityLogoWhite from "@/assets/unicity-logo-white.png";
 
 interface AttendeeEvent {
   id: string;
@@ -40,7 +43,10 @@ const ATTENDEE_EMAIL_KEY = "attendeeEmail";
 export default function AttendeeEventsPage() {
   const { language } = useLanguage();
   const t = (en: string, es: string) => (language === "es" ? es : en);
+  const { theme } = useTheme();
   const { toast } = useToast();
+  
+  const unicityLogo = theme === 'dark' ? unicityLogoWhite : unicityLogoDark;
   const [, setLocation] = useLocation();
   
   const [step, setStep] = useState<Step>("email");
@@ -180,9 +186,9 @@ export default function AttendeeEventsPage() {
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto flex items-center justify-between gap-4 p-4">
           <img 
-            src={unicityIcon} 
+            src={unicityLogo} 
             alt="Unicity" 
-            className="h-8 w-8 rounded-md object-cover"
+            className="h-8 object-contain"
             data-testid="img-attendee-logo"
           />
           <div className="flex items-center gap-2">
@@ -206,16 +212,24 @@ export default function AttendeeEventsPage() {
         {step === "email" && (
           <div className="max-w-md mx-auto">
             <Card>
-              <CardHeader className="text-center">
-                <CardTitle data-testid="text-attendee-title">
-                  {t("My Events", "Mis Eventos")}
-                </CardTitle>
-                <CardDescription className="mt-2">
-                  {t(
-                    "Enter your email to see events you're qualified for",
-                    "Ingresa tu correo para ver los eventos para los que calificas"
-                  )}
-                </CardDescription>
+              <CardHeader className="text-center space-y-4">
+                <img 
+                  src={unicityIcon} 
+                  alt="Unicity" 
+                  className="mx-auto h-14 w-14 rounded-md object-cover"
+                  data-testid="img-unicity-icon"
+                />
+                <div>
+                  <CardTitle data-testid="text-attendee-title">
+                    {t("My Events", "Mis Eventos")}
+                  </CardTitle>
+                  <CardDescription className="mt-2">
+                    {t(
+                      "Enter your email to see events you're qualified for",
+                      "Ingresa tu correo para ver los eventos para los que calificas"
+                    )}
+                  </CardDescription>
+                </div>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleEmailSubmit} className="space-y-4">
@@ -256,11 +270,19 @@ export default function AttendeeEventsPage() {
         {step === "otp" && (
           <div className="max-w-md mx-auto">
             <Card>
-              <CardHeader className="text-center">
-                <CardTitle>{t("Verify Your Email", "Verifica tu Correo")}</CardTitle>
-                <CardDescription className="mt-2">
-                  {t("Enter the 6-digit code", "Ingresa el código de 6 dígitos")}
-                </CardDescription>
+              <CardHeader className="text-center space-y-4">
+                <img 
+                  src={unicityIcon} 
+                  alt="Unicity" 
+                  className="mx-auto h-14 w-14 rounded-md object-cover"
+                  data-testid="img-unicity-icon-otp"
+                />
+                <div>
+                  <CardTitle>{t("Verify Your Email", "Verifica tu Correo")}</CardTitle>
+                  <CardDescription className="mt-2">
+                    {t("Enter the 6-digit code", "Ingresa el código de 6 dígitos")}
+                  </CardDescription>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-6">
