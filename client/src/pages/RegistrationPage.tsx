@@ -2235,25 +2235,33 @@ export default function RegistrationPage() {
           
           {/* Right side - Form content (scrolls with page) */}
           <div className="flex-1 lg:w-[60%]">
-            {/* Header with date, location, and controls */}
+            {/* Header with logo, date, location, and controls */}
             <div className="bg-muted/50 border-b px-6 py-4">
               <div className="flex items-center justify-between gap-4 flex-wrap max-w-xl mx-auto">
-                <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
-                  {event?.startDate && (
-                    <div className="flex items-center gap-1">
-                      <Calendar className="w-4 h-4" />
-                      <span>
-                        {format(parseLocalDate(event.startDate)!, "MMM d, yyyy")}
-                        {event.endDate && ` - ${format(parseLocalDate(event.endDate)!, "MMM d, yyyy")}`}
-                      </span>
-                    </div>
-                  )}
-                  {event?.location && (
-                    <div className="flex items-center gap-1">
-                      <MapPin className="w-4 h-4" />
-                      <span>{event.location}</span>
-                    </div>
-                  )}
+                <div className="flex items-center gap-4 flex-wrap">
+                  <img 
+                    src={unicityLogoDark} 
+                    alt="Unicity" 
+                    className="h-6 w-auto"
+                    data-testid="img-header-logo"
+                  />
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
+                    {event?.startDate && (
+                      <div className="flex items-center gap-1">
+                        <Calendar className="w-4 h-4" />
+                        <span>
+                          {format(parseLocalDate(event.startDate)!, "MMM d, yyyy")}
+                          {event.endDate && ` - ${format(parseLocalDate(event.endDate)!, "MMM d, yyyy")}`}
+                        </span>
+                      </div>
+                    )}
+                    {event?.location && (
+                      <div className="flex items-center gap-1">
+                        <MapPin className="w-4 h-4" />
+                        <span>{event.location}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   {verifiedProfile && (
