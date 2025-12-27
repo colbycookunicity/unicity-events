@@ -41,7 +41,8 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 export interface FormFieldDefinition {
-  id: string;
+  id?: string;
+  name?: string; // Template fields use 'name' as identifier
   type: "text" | "email" | "phone" | "select" | "checkbox" | "textarea" | "date" | "number";
   label: string;
   labelEs?: string;
@@ -50,6 +51,11 @@ export interface FormFieldDefinition {
   required: boolean;
   options?: { value: string; label: string; labelEs?: string }[];
 }
+
+// Helper to get unique identifier for a field (supports both custom fields with 'id' and template fields with 'name')
+const getFieldId = (field: FormFieldDefinition): string => {
+  return field.id || field.name || `field_${Math.random().toString(36).substr(2, 9)}`;
+};
 
 interface FormBuilderProps {
   fields: FormFieldDefinition[];
@@ -80,12 +86,14 @@ const fieldTypeLabels: Record<string, string> = {
 
 function SortableFieldItem({ 
   field, 
+  fieldId,
   isExpanded,
   onToggle,
   onUpdate, 
   onRemove 
 }: { 
   field: FormFieldDefinition;
+  fieldId: string;
   isExpanded: boolean;
   onToggle: () => void;
   onUpdate: (updates: Partial<FormFieldDefinition>) => void;
@@ -97,7 +105,7 @@ function SortableFieldItem({
     setNodeRef,
     transform,
     transition,
-  } = useSortable({ id: field.id });
+  } = useSortable({ id: fieldId });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -159,7 +167,7 @@ function SortableFieldItem({
             e.stopPropagation();
             onRemove();
           }}
-          data-testid={`button-remove-field-${field.id}`}
+          data-testid={`button-remove-field-${fieldId}`}
         >
           <Trash2 className="h-4 w-4 text-destructive" />
         </Button>
@@ -176,7 +184,7 @@ function SortableFieldItem({
                 value={field.type} 
                 onValueChange={(value) => onUpdate({ type: value as FormFieldDefinition["type"] })}
               >
-                <SelectTrigger data-testid={`select-field-type-${field.id}`}>
+                <SelectTrigger data-testid={`select-field-type-${fieldId}`}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -194,12 +202,12 @@ function SortableFieldItem({
 
             <div className="flex items-center gap-2 pt-6">
               <Switch
-                id={`required-${field.id}`}
+                id={`required-${fieldId}`}
                 checked={field.required}
                 onCheckedChange={(checked) => onUpdate({ required: checked })}
-                data-testid={`switch-field-required-${field.id}`}
+                data-testid={`switch-field-required-${fieldId}`}
               />
-              <Label htmlFor={`required-${field.id}`}>Required field</Label>
+              <Label htmlFor={`required-${fieldId}`}>Required field</Label>
             </div>
           </div>
 
@@ -210,7 +218,7 @@ function SortableFieldItem({
                 value={field.label}
                 onChange={(e) => onUpdate({ label: e.target.value })}
                 placeholder="Enter field label"
-                data-testid={`input-field-label-${field.id}`}
+                data-testid={`input-field-label-${fieldId}`}
               />
             </div>
             <div className="space-y-2">
@@ -219,7 +227,7 @@ function SortableFieldItem({
                 value={field.labelEs || ""}
                 onChange={(e) => onUpdate({ labelEs: e.target.value })}
                 placeholder="Ingrese la etiqueta"
-                data-testid={`input-field-label-es-${field.id}`}
+                data-testid={`input-field-label-es-${fieldId}`}
               />
             </div>
           </div>
@@ -232,7 +240,7 @@ function SortableFieldItem({
                   value={field.placeholder || ""}
                   onChange={(e) => onUpdate({ placeholder: e.target.value })}
                   placeholder="Enter placeholder text"
-                  data-testid={`input-field-placeholder-${field.id}`}
+                  data-testid={`input-field-placeholder-${fieldId}`}
                 />
               </div>
               <div className="space-y-2">
@@ -241,7 +249,7 @@ function SortableFieldItem({
                   value={field.placeholderEs || ""}
                   onChange={(e) => onUpdate({ placeholderEs: e.target.value })}
                   placeholder="Ingrese texto de marcador"
-                  data-testid={`input-field-placeholder-es-${field.id}`}
+                  data-testid={`input-field-placeholder-es-${fieldId}`}
                 />
               </div>
             </div>
@@ -256,7 +264,7 @@ function SortableFieldItem({
                   variant="outline"
                   size="sm"
                   onClick={addOption}
-                  data-testid={`button-add-option-${field.id}`}
+                  data-testid={`button-add-option-${fieldId}`}
                 >
                   <Plus className="h-3 w-3 mr-1" />
                   Add Option
@@ -324,19 +332,19 @@ export function FormBuilder({ fields, onChange }: FormBuilderProps) {
   };
 
   const updateField = (id: string, updates: Partial<FormFieldDefinition>) => {
-    onChange(fields.map(f => f.id === id ? { ...f, ...updates } : f));
+    onChange(fields.map(f => getFieldId(f) === id ? { ...f, ...updates } : f));
   };
 
   const removeField = (id: string) => {
-    onChange(fields.filter(f => f.id !== id));
+    onChange(fields.filter(f => getFieldId(f) !== id));
     if (expandedId === id) setExpandedId(null);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (over && active.id !== over.id) {
-      const oldIndex = fields.findIndex(f => f.id === active.id);
-      const newIndex = fields.findIndex(f => f.id === over.id);
+      const oldIndex = fields.findIndex(f => getFieldId(f) === active.id);
+      const newIndex = fields.findIndex(f => getFieldId(f) === over.id);
       onChange(arrayMove(fields, oldIndex, newIndex));
     }
   };
@@ -384,18 +392,22 @@ export function FormBuilder({ fields, onChange }: FormBuilderProps) {
           collisionDetection={closestCenter}
           onDragEnd={handleDragEnd}
         >
-          <SortableContext items={fields.map(f => f.id)} strategy={verticalListSortingStrategy}>
+          <SortableContext items={fields.map(f => getFieldId(f))} strategy={verticalListSortingStrategy}>
             <div className="space-y-2">
-              {fields.map((field) => (
-                <SortableFieldItem
-                  key={field.id}
-                  field={field}
-                  isExpanded={expandedId === field.id}
-                  onToggle={() => setExpandedId(expandedId === field.id ? null : field.id)}
-                  onUpdate={(updates) => updateField(field.id, updates)}
-                  onRemove={() => removeField(field.id)}
-                />
-              ))}
+              {fields.map((field) => {
+                const fieldId = getFieldId(field);
+                return (
+                  <SortableFieldItem
+                    key={fieldId}
+                    field={field}
+                    fieldId={fieldId}
+                    isExpanded={expandedId === fieldId}
+                    onToggle={() => setExpandedId(expandedId === fieldId ? null : fieldId)}
+                    onUpdate={(updates) => updateField(fieldId, updates)}
+                    onRemove={() => removeField(fieldId)}
+                  />
+                );
+              })}
             </div>
           </SortableContext>
         </DndContext>
