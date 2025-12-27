@@ -148,55 +148,56 @@ export default function CheckInPage() {
                   className={reg.status === "checked_in" ? "border-green-200 dark:border-green-900" : ""}
                   data-testid={`card-checkin-${reg.id}`}
                 >
-                  <CardHeader className="pb-3">
+                  <CardHeader className="pb-2">
                     <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <CardTitle className="text-xl font-semibold">
+                      <div className="min-w-0 flex-1">
+                        <CardTitle className="text-lg font-semibold truncate">
                           {reg.firstName} {reg.lastName}
                         </CardTitle>
-                        <CardDescription>{reg.email}</CardDescription>
+                        <CardDescription className="truncate">{reg.email}</CardDescription>
                       </div>
                       <StatusBadge status={reg.status} />
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
                       {reg.unicityId && (
                         <span className="flex items-center gap-1.5">
-                          <User className="h-4 w-4" />
-                          {reg.unicityId}
+                          <User className="h-4 w-4 shrink-0" />
+                          <span>{reg.unicityId}</span>
                         </span>
                       )}
                       {reg.shirtSize && (
                         <span className="flex items-center gap-1.5">
-                          <Shirt className="h-4 w-4" />
-                          {reg.shirtSize}
-                        </span>
-                      )}
-                      {reg.swagStatus && (
-                        <span className="flex items-center gap-1.5">
-                          <Package className="h-4 w-4" />
-                          <StatusBadge status={reg.swagStatus} type="swag" />
+                          <Shirt className="h-4 w-4 shrink-0" />
+                          <span>{reg.shirtSize}</span>
                         </span>
                       )}
                     </div>
 
-                    <div className="flex gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5">
+                        <Package className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <StatusBadge status={reg.swagStatus || "pending"} type="swag" />
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t space-y-2">
                       {reg.status !== "checked_in" ? (
                         <Button
                           onClick={() => checkInMutation.mutate(reg.id)}
                           disabled={checkInMutation.isPending}
-                          className="flex-1"
+                          className="w-full"
                           data-testid={`button-checkin-${reg.id}`}
                         >
                           <CheckCircle className="h-4 w-4 mr-2" />
                           Check In
                         </Button>
                       ) : (
-                        <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                          <CheckCircle className="h-4 w-4 mr-1" />
-                          Checked In {reg.checkedInAt && `at ${format(new Date(reg.checkedInAt), "h:mm a")}`}
-                        </Badge>
+                        <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400">
+                          <CheckCircle className="h-4 w-4 shrink-0" />
+                          <span>Checked in {reg.checkedInAt && `at ${format(new Date(reg.checkedInAt), "h:mm a")}`}</span>
+                        </div>
                       )}
 
                       {reg.swagStatus !== "picked_up" && (
@@ -204,6 +205,7 @@ export default function CheckInPage() {
                           variant="outline"
                           onClick={() => markSwagMutation.mutate(reg.id)}
                           disabled={markSwagMutation.isPending}
+                          className="w-full"
                           data-testid={`button-swag-${reg.id}`}
                         >
                           <Package className="h-4 w-4 mr-2" />
