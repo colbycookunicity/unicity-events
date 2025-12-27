@@ -27,6 +27,15 @@ const parseLocalDate = (dateStr: string | Date | null | undefined) => {
   return new Date(dateStr);
 };
 
+// Strip HTML tags for plain text preview
+const stripHtml = (html: string | null | undefined): string => {
+  if (!html) return "";
+  // Create a temporary element to parse HTML and extract text
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html;
+  return tmp.textContent || tmp.innerText || "";
+};
+
 interface AttendeeEventInfo {
   eventId: string;
   registrationStatus: "registered" | "not_registered";
@@ -228,7 +237,7 @@ export default function EventListPage({ showNotFoundMessage = false, notFoundSlu
                         </div>
                         {getEventDescription(event) && (
                           <p className="text-muted-foreground mb-3 line-clamp-2">
-                            {getEventDescription(event)}
+                            {stripHtml(getEventDescription(event))}
                           </p>
                         )}
                         <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
