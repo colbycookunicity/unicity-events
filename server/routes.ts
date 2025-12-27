@@ -362,26 +362,24 @@ export async function registerRoutes(
       }
 
       // Verify event exists and is published
-      {
-        const event = await storage.getEventByIdOrSlug(eventId);
-        if (!event) {
-          return res.status(404).json({ error: "Event not found" });
-        }
-        if (event.status !== "published") {
-          return res.status(400).json({ error: "Registration is not open for this event" });
-        }
+      const event = await storage.getEventByIdOrSlug(eventId);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+      if (event.status !== "published") {
+        return res.status(400).json({ error: "Registration is not open for this event" });
+      }
+      
+      // Check if user is qualified for this event (or already registered)
+      if (event.requiresQualification) {
+        const normalizedEmail = email.toLowerCase().trim();
+        const qualifier = await storage.getQualifiedRegistrantByEmail(event.id, normalizedEmail);
+        const existingRegistration = await storage.getRegistrationByEmail(event.id, normalizedEmail);
         
-        // Check if user is qualified for this event (or already registered)
-        if (event.requiresQualification) {
-          const normalizedEmail = email.toLowerCase().trim();
-          const qualifier = await storage.getQualifiedRegistrantByEmail(event.id, normalizedEmail);
-          const existingRegistration = await storage.getRegistrationByEmail(event.id, normalizedEmail);
-          
-          if (!qualifier && !existingRegistration) {
-            return res.status(403).json({ 
-              error: `You are not qualified for this event. The email "${normalizedEmail}" was not found in the qualified list. If you believe this is an error, please contact americasevent@unicity.com` 
-            });
-          }
+        if (!qualifier && !existingRegistration) {
+          return res.status(403).json({ 
+            error: `You are not qualified for this event. The email "${normalizedEmail}" was not found in the qualified list. If you believe this is an error, please contact americasevent@unicity.com` 
+          });
         }
       }
 
@@ -393,8 +391,8 @@ export async function registerRoutes(
           validationId: `dev-reg-${Date.now()}`,
           verified: false,
           expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-          // Store eventId to scope session to this specific event
-          customerData: eventId ? { registrationEventId: eventId } : null,
+          // Store the resolved event.id (UUID) to scope session to this specific event
+          customerData: { registrationEventId: event.id },
         });
         console.log(`DEV MODE: Registration OTP for ${email} is ${devCode}`);
         return res.json({ success: true, message: "Verification code sent", devCode });
@@ -429,8 +427,8 @@ export async function registerRoutes(
         validationId: data.data.validation_id,
         verified: false,
         expiresAt: new Date(data.data.expires_at),
-        // Store eventId to scope session to this specific event
-        customerData: eventId ? { registrationEventId: eventId } : null,
+        // Store the resolved event.id (UUID) to scope session to this specific event
+        customerData: { registrationEventId: event.id },
       });
 
       res.json({ success: true, message: "Verification code sent" });

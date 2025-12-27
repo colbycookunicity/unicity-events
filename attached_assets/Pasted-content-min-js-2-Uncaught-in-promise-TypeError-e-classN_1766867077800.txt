@@ -1,0 +1,118 @@
+content.min.js:2 Uncaught (in promise) TypeError: e.className.includes is not a function
+    at content.min.js:2:441645
+    at Array.some (<anonymous>)
+    at content.min.js:2:441594
+    at Array.filter (<anonymous>)
+    at Object.<anonymous> (content.min.js:2:441281)
+    at f (content.min.js:2:169418)
+    at Generator.<anonymous> (content.min.js:2:170773)
+    at Generator.next (content.min.js:2:169781)
+    at y (content.min.js:2:327508)
+    at i (content.min.js:2:327711)
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+f @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+y @ content.min.js:2
+i @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+f @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+y @ content.min.js:2
+i @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+Promise.then
+yr @ content.min.js:2
+param @ content.min.js:2
+(anonymous) @ content.min.js:2
+childList
+N$ @ index-CNgviO4u.js:40
+N$ @ index-CNgviO4u.js:40
+N$ @ index-CNgviO4u.js:40
+So @ index-CNgviO4u.js:40
+qL @ index-CNgviO4u.js:40
+Ba @ index-CNgviO4u.js:40
+qL @ index-CNgviO4u.js:40
+Ba @ index-CNgviO4u.js:40
+qL @ index-CNgviO4u.js:40
+Ba @ index-CNgviO4u.js:40
+qL @ index-CNgviO4u.js:40
+Ba @ index-CNgviO4u.js:40
+qL @ index-CNgviO4u.js:40
+Ba @ index-CNgviO4u.js:40
+qL @ index-CNgviO4u.js:40
+Ba @ index-CNgviO4u.js:40
+qL @ index-CNgviO4u.js:40
+Ba @ index-CNgviO4u.js:40
+qL @ index-CNgviO4u.js:40
+Ba @ index-CNgviO4u.js:40
+qL @ index-CNgviO4u.js:40
+Ba @ index-CNgviO4u.js:40
+qL @ index-CNgviO4u.js:40
+Ba @ index-CNgviO4u.js:40
+qL @ index-CNgviO4u.js:40
+Ba @ index-CNgviO4u.js:40
+qL @ index-CNgviO4u.js:40
+Ba @ index-CNgviO4u.js:40
+qL @ index-CNgviO4u.js:40
+Ba @ index-CNgviO4u.js:40
+qL @ index-CNgviO4u.js:40
+Ba @ index-CNgviO4u.js:40
+qL @ index-CNgviO4u.js:40
+Ba @ index-CNgviO4u.js:40
+qL @ index-CNgviO4u.js:40
+Ba @ index-CNgviO4u.js:40
+qL @ index-CNgviO4u.js:40
+Ba @ index-CNgviO4u.js:40
+qL @ index-CNgviO4u.js:40
+Ba @ index-CNgviO4u.js:40
+qL @ index-CNgviO4u.js:40
+Ba @ index-CNgviO4u.js:40
+qL @ index-CNgviO4u.js:40
+Ba @ index-CNgviO4u.js:40
+qL @ index-CNgviO4u.js:40
+Ba @ index-CNgviO4u.js:40
+qL @ index-CNgviO4u.js:40
+Ba @ index-CNgviO4u.js:40
+qL @ index-CNgviO4u.js:40
+Ba @ index-CNgviO4u.js:40
+qL @ index-CNgviO4u.js:40
+mte @ index-CNgviO4u.js:40
+Lc @ index-CNgviO4u.js:40
+GL @ index-CNgviO4u.js:40
+S @ index-CNgviO4u.js:25
+T @ index-CNgviO4u.js:25Understand this error
+index-CNgviO4u.js:48  POST https://events.unicity.com/api/register/otp/validate 400 (Bad Request)
+ot @ index-CNgviO4u.js:48
+Ia @ index-CNgviO4u.js:681
+(anonymous) @ index-CNgviO4u.js:474
+xw @ index-CNgviO4u.js:40
+nf @ index-CNgviO4u.js:40
+mte @ index-CNgviO4u.js:40
+Lc @ index-CNgviO4u.js:40
+x4 @ index-CNgviO4u.js:40
+xc @ index-CNgviO4u.js:38
+ju @ index-CNgviO4u.js:40
+N6 @ index-CNgviO4u.js:37
+KS @ index-CNgviO4u.js:37
+nO @ index-CNgviO4u.js:37
+JJ @ index-CNgviO4u.js:37Understand this error
+content.min.js:2 Uncaught (in promise) TypeError: e.className.includes is not a function
+    at content.min.js:2:441466
+    at Array.some (<anonymous>)
+    at content.min.js:2:441415
+    at Array.filter (<anonymous>)
+    at Object.<anonymous> (content.min.js:2:441281)
+    at f (content.min.js:2:169418)
+    at Generator.<anonymous> (content.min.js:2:170773)
+    at Generator.next (content.min.js:2:169781)
+    at y (content.min.js:2:327508)
+    at i (content.min.js:2:327711)
