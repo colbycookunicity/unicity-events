@@ -195,6 +195,24 @@ export class DatabaseStorage implements IStorage {
   async deleteUser(id: string): Promise<boolean> {
     // First delete any auth sessions for this user
     await db.delete(authSessions).where(eq(authSessions.userId, id));
+    
+    // Set foreign key references to NULL to avoid constraint violations
+    // Events created by this user
+    await db.update(events).set({ createdBy: null }).where(eq(events.createdBy, id));
+    
+    // Registrations checked in by this user
+    await db.update(registrations).set({ checkedInBy: null }).where(eq(registrations.checkedInBy, id));
+    
+    // Reimbursements processed by this user
+    await db.update(reimbursements).set({ processedBy: null }).where(eq(reimbursements.processedBy, id));
+    
+    // Qualified registrants imported by this user
+    await db.update(qualifiedRegistrants).set({ importedBy: null }).where(eq(qualifiedRegistrants.importedBy, id));
+    
+    // Event manager assignments where this user assigned someone (assignedBy field)
+    // Note: eventManagerAssignments.userId has ON DELETE CASCADE, so those rows will be deleted automatically
+    await db.update(eventManagerAssignments).set({ assignedBy: null }).where(eq(eventManagerAssignments.assignedBy, id));
+    
     // Then delete the user
     const result = await db.delete(users).where(eq(users.id, id));
     return (result.rowCount ?? 0) > 0;
