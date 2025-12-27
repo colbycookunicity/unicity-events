@@ -410,6 +410,8 @@ export class DatabaseStorage implements IStorage {
     await db.delete(guests).where(eq(guests.registrationId, id));
     await db.delete(flights).where(eq(flights.registrationId, id));
     await db.delete(reimbursements).where(eq(reimbursements.registrationId, id));
+    // Set swag assignments to null (preserve history)
+    await db.update(swagAssignments).set({ registrationId: null }).where(eq(swagAssignments.registrationId, id));
     // Then delete the registration
     await db.delete(registrations).where(eq(registrations.id, id));
     return true;
