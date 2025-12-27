@@ -76,6 +76,7 @@ export interface IStorage {
 
   // OTP Sessions
   getOtpSession(email: string): Promise<OtpSession | undefined>;
+  getOtpSessionForRegistration(email: string, eventId: string): Promise<OtpSession | undefined>;
   getOtpSessionForAttendeePortal(email: string): Promise<OtpSession | undefined>;
   getOtpSessionByRedirectToken(token: string): Promise<OtpSession | undefined>;
   createOtpSession(session: InsertOtpSession): Promise<OtpSession>;
@@ -493,6 +494,20 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(otpSessions.email, email), gte(otpSessions.expiresAt, new Date())))
       .orderBy(desc(otpSessions.createdAt));
     return session || undefined;
+  }
+
+  async getOtpSessionForRegistration(email: string, eventId: string): Promise<OtpSession | undefined> {
+    // Fetch all active sessions for this email and filter for the specific event
+    const sessions = await db.select().from(otpSessions)
+      .where(and(eq(otpSessions.email, email), gte(otpSessions.expiresAt, new Date())))
+      .orderBy(desc(otpSessions.createdAt));
+    
+    // Find session scoped to this registration event
+    const registrationSession = sessions.find(s => {
+      const data = s.customerData as any;
+      return data?.registrationEventId === eventId;
+    });
+    return registrationSession || undefined;
   }
 
   async getOtpSessionForAttendeePortal(email: string): Promise<OtpSession | undefined> {

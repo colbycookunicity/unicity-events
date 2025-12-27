@@ -447,8 +447,19 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Email and code are required" });
       }
 
-      // Verify there's a pending session
-      const session = await storage.getOtpSession(email);
+      // Resolve eventId to actual event.id (could be slug)
+      let resolvedEventId = eventId;
+      if (eventId) {
+        const event = await storage.getEventByIdOrSlug(eventId);
+        if (event) {
+          resolvedEventId = event.id;
+        }
+      }
+
+      // Verify there's a pending session - use event-scoped lookup if eventId provided
+      const session = resolvedEventId 
+        ? await storage.getOtpSessionForRegistration(email, resolvedEventId)
+        : await storage.getOtpSession(email);
       if (!session) {
         return res.status(400).json({ error: "No pending verification. Please request a new code." });
       }
@@ -775,8 +786,15 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Email and eventId are required" });
       }
 
-      // Security check: Verify there's an active verified OTP session for this email
-      const session = await storage.getOtpSession(email);
+      // Get the event by ID or slug to resolve the actual event ID
+      const event = await storage.getEventByIdOrSlug(eventId);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      // Security check: Verify there's an active verified OTP session scoped to this event
+      // Use the event-specific lookup to avoid collisions with admin/other sessions
+      const session = await storage.getOtpSessionForRegistration(email, event.id);
       if (!session || !session.verified) {
         return res.status(403).json({ error: "Email not verified. Please complete OTP verification first." });
       }
@@ -785,21 +803,6 @@ export async function registerRoutes(
       const verifiedAt = session.verifiedAt ? new Date(session.verifiedAt) : null;
       if (!verifiedAt || (Date.now() - verifiedAt.getTime()) > 15 * 60 * 1000) {
         return res.status(403).json({ error: "Session expired. Please verify again." });
-      }
-
-      // Security: Validate event scope - session MUST be scoped to the requested event
-      const sessionEventId = (session.customerData as any)?.registrationEventId;
-      if (!sessionEventId) {
-        return res.status(403).json({ error: "Session is not scoped to an event. Please verify again for this event." });
-      }
-      if (sessionEventId !== eventId) {
-        return res.status(403).json({ error: "Session is not valid for this event. Please verify again." });
-      }
-
-      // Get the event by ID or slug
-      const event = await storage.getEventByIdOrSlug(eventId);
-      if (!event) {
-        return res.status(404).json({ error: "Event not found" });
       }
 
       // Get existing registration with full details
@@ -1747,17 +1750,14 @@ export async function registerRoutes(
         }
       }
 
-      // Strategy 2: Check OTP session (for users who just verified)
+      // Strategy 2: Check OTP session for this specific event (for users who just verified)
       if (!isAuthenticated) {
-        const session = await storage.getOtpSession(email);
+        const session = await storage.getOtpSessionForRegistration(email, event.id);
         if (session && session.verified) {
           const verifiedAt = session.verifiedAt ? new Date(session.verifiedAt) : null;
           if (verifiedAt && (Date.now() - verifiedAt.getTime()) <= 15 * 60 * 1000) {
-            const sessionEventId = (session.customerData as any)?.registrationEventId;
-            if (sessionEventId && (sessionEventId === req.params.eventIdOrSlug || sessionEventId === event.id)) {
-              isAuthenticated = true;
-              authenticatedEmail = email;
-            }
+            isAuthenticated = true;
+            authenticatedEmail = email;
           }
         }
       }
