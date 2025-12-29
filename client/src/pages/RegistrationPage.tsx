@@ -771,6 +771,7 @@ export default function RegistrationPage() {
     }
     if (reg.adaAccommodations !== undefined) form.setValue("adaAccommodations", reg.adaAccommodations);
     if (reg.roomType) form.setValue("roomType", reg.roomType);
+    if (reg.termsAccepted) form.setValue("termsAccepted", reg.termsAccepted);
     
     if (reg.formData && typeof reg.formData === 'object') {
       setCustomFormData(reg.formData as Record<string, any>);
