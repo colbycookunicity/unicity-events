@@ -550,6 +550,15 @@ export async function registerRoutes(
       const redirectTokenExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
       // Mark session as verified and store redirect token + customer data
+      // IMPORTANT: Merge with existing customerData to preserve registrationEventId
+      const existingCustomerData = (session.customerData as Record<string, any>) || {};
+      const mergedCustomerData = {
+        ...existingCustomerData,
+        ...customerData,
+        // Ensure registrationEventId is always preserved
+        registrationEventId: existingCustomerData.registrationEventId || resolvedEventId,
+      };
+      
       await storage.updateOtpSession(session.id, {
         verified: true,
         verifiedAt: new Date(),
@@ -558,7 +567,7 @@ export async function registerRoutes(
         redirectToken,
         redirectTokenExpiresAt,
         redirectTokenConsumed: false,
-        customerData,
+        customerData: mergedCustomerData,
       });
 
       // Check qualification if event requires it
