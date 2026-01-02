@@ -1466,6 +1466,14 @@ export async function registerRoutes(
         delete eventData.buyInPrice;
       }
       
+      // Verify formTemplateId exists if provided
+      if (normalizedFormTemplateId) {
+        const template = await storage.getFormTemplate(normalizedFormTemplateId);
+        if (!template) {
+          return res.status(400).json({ error: "Selected form template does not exist" });
+        }
+      }
+      
       const data = insertEventSchema.parse(eventData);
       const event = await storage.createEvent(data);
       res.status(201).json(event);
@@ -1474,6 +1482,10 @@ export async function registerRoutes(
       if (error instanceof z.ZodError) {
         console.error("Zod validation errors:", JSON.stringify(error.errors, null, 2));
         return res.status(400).json({ error: "Invalid event data", details: error.errors });
+      }
+      // Log detailed error for debugging
+      if (error instanceof Error) {
+        console.error("Event creation failed:", error.message, error.stack);
       }
       res.status(500).json({ error: "Failed to create event" });
     }

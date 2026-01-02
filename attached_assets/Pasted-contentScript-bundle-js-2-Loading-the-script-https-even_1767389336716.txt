@@ -1,0 +1,26 @@
+contentScript.bundle.js:2 Loading the script 'https://events.unicity.com/43.bundle.js' violates the following Content Security Policy directive: "script-src 'self' 'wasm-unsafe-eval' 'inline-speculation-rules' chrome-extension://1150ad2c-8aad-4741-b0b9-769a7d249c88/". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.
+a.l @ contentScript.bundle.js:2Understand this error
+contentScript.bundle.js:2 Failed to load font styles: ChunkLoadError: Loading chunk 43 failed.
+(error: https://events.unicity.com/43.bundle.js)
+    at a.f.j (contentScript.bundle.js:2:2505284)
+    at contentScript.bundle.js:2:2503863
+    at Array.reduce (<anonymous>)
+    at a.e (contentScript.bundle.js:2:2503842)
+    at contentScript.bundle.js:2:4636362
+    at Generator.<anonymous> (contentScript.bundle.js:2:4629728)
+    at Generator.next (contentScript.bundle.js:2:4630666)
+    at NMe (contentScript.bundle.js:2:4631812)
+    at a (contentScript.bundle.js:2:4632016)
+    at contentScript.bundle.js:2:4632079
+(anonymous) @ contentScript.bundle.js:2Understand this warning
+index.html:1 The resource https://apps.rokt.com/icons/rokt-icons.woff was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.Understand this warning
+index.html:1 The resource https://apps.rokt.com/icons/rokt-icons.woff was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.Understand this warning
+/admin:1 Unchecked runtime.lastError: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was receivedUnderstand this error
+6background.js:2 Uncaught (in promise) Error: Could not establish connection. Receiving end does not exist.Understand this error
+13serviceWorker.js:1 Uncaught (in promise) Error: Frame with ID 4614 was removed.Understand this error
+9c363e38-eb19-4d0a-9ac3-7a6a6501b98a/pages/registration:1 Unchecked runtime.lastError: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was receivedUnderstand this error
+/api/registrations/recent:1  Failed to load resource: the server responded with a status of 401 ()Understand this error
+/api/admin/stats:1  Failed to load resource: the server responded with a status of 401 ()Understand this error
+/api/events:1  Failed to load resource: the server responded with a status of 401 ()Understand this error
+/api/events:1  Failed to load resource: the server responded with a status of 401 ()Understand this error
+/api/events:1  Failed to load resource: the server responded with a status of 401 ()

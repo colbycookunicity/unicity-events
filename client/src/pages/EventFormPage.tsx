@@ -165,8 +165,9 @@ export default function EventFormPage() {
       toast({ title: t("success"), description: "Event created successfully" });
       setLocation("/admin/events");
     },
-    onError: () => {
-      toast({ title: t("error"), description: "Failed to create event", variant: "destructive" });
+    onError: (error: any) => {
+      const message = error?.message || "Failed to create event";
+      toast({ title: t("error"), description: message, variant: "destructive" });
     },
   });
 
@@ -179,8 +180,9 @@ export default function EventFormPage() {
       toast({ title: t("success"), description: "Event updated successfully" });
       setLocation("/admin/events");
     },
-    onError: () => {
-      toast({ title: t("error"), description: "Failed to update event", variant: "destructive" });
+    onError: (error: any) => {
+      const message = error?.message || "Failed to update event";
+      toast({ title: t("error"), description: message, variant: "destructive" });
     },
   });
 
