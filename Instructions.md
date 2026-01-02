@@ -1289,3 +1289,285 @@ If bridge is offline:
 3. What information should the QR code contain?
 4. Should we support badge reprinting with tracking?
 5. Is there a specific Zebra model being used?
+
+---
+
+# Implementation Readiness Summary (January 2026)
+
+## Status: READY FOR IMPLEMENTATION
+
+After analyzing the current codebase against the Badge Printing System plan, the system is well-positioned for implementation with minimal conflicts.
+
+---
+
+## 1. Alignment with Current Codebase
+
+### What Works Well
+
+| Current Component | Alignment with Plan |
+|-------------------|---------------------|
+| `CheckInPage.tsx` | Existing card-based UI is ideal for adding print buttons; already has event selection, search, and per-attendee actions |
+| `storage.checkInRegistration()` | Pattern for updating registration status can be extended for badge tracking |
+| React Query mutations | Same pattern can be used for print job creation with optimistic updates |
+| Toast feedback system | Ready for print success/failure notifications |
+| Admin sidebar (`AppSidebar.tsx`) | Clear location to add "Printers" menu item |
+| Admin routing (`App.tsx`) | Pattern established for adding `/admin/printers` route |
+| `shared/schema.ts` | Drizzle schema structure supports adding new tables cleanly |
+
+### Current Check-in Flow (No Changes Needed)
+
+```
+CheckInPage → POST /api/registrations/:id/check-in → storage.checkInRegistration() → Updates status/checkedInAt/checkedInBy
+```
+
+Badge printing will **extend** this flow, not replace it.
+
+---
+
+## 2. Gaps to Fill
+
+### Database Schema (shared/schema.ts)
+
+| Gap | Action Required |
+|-----|-----------------|
+| No `printers` table | Add table with eventId, name, location, ipAddress, port, status |
+| No `print_logs` table | Add table for job tracking, ZPL snapshots, error logging |
+| No badge fields on registrations | Add `badgePrintedAt`, `badgePrintCount` columns |
+| No types/schemas | Create insert schemas, types, relations |
+
+### Storage Layer (server/storage.ts)
+
+| Gap | Action Required |
+|-----|-----------------|
+| No printer CRUD methods | Add `getPrinters`, `createPrinter`, `updatePrinter`, `deletePrinter` |
+| No print log methods | Add `createPrintLog`, `getPrintLogsByRegistration`, `updatePrintLog` |
+| No badge update method | Add `updateBadgePrinted(registrationId)` |
+
+### API Routes (server/routes.ts)
+
+| Gap | Action Required |
+|-----|-----------------|
+| No printer endpoints | Add `GET/POST /api/events/:eventId/printers`, `PATCH/DELETE /api/printers/:id` |
+| No print job endpoint | Add `POST /api/print-jobs` |
+| No print history endpoint | Add `GET /api/registrations/:id/print-history` |
+
+### Frontend (client/src/)
+
+| Gap | Action Required |
+|-----|-----------------|
+| No PrintBadgeButton | Create component with printer selection |
+| No BridgeStatusIndicator | Create component showing bridge connectivity |
+| No PrinterManagement page | Create admin page for CRUD |
+| No sidebar entry for Printers | Add to `AppSidebar.tsx` |
+| No route for printers | Add `/admin/printers` to `App.tsx` |
+
+### Print Bridge Service
+
+| Gap | Action Required |
+|-----|-----------------|
+| Service doesn't exist | Create separate Node/Express project |
+| ZPL template generator | Create shared module for badge rendering |
+| TCP client for Zebra | Implement port 9100 connection |
+
+---
+
+## 3. Conflicts & Risks
+
+### No Architectural Conflicts Found
+
+The current codebase has no patterns that conflict with the badge printing approach.
+
+### Identified Risks
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|------------|--------|------------|
+| Network unreliability between iPads and Print Bridge | Medium | High | Add retry logic, status polling, queue pending jobs |
+| Printer misconfiguration at venue | Medium | Medium | Test print endpoint, health checks, clear error messages |
+| Bridge goes offline during event | Low | High | Check-in continues without print; batch print when restored |
+| CORS/HTTPS issues between cloud app and local bridge | Low | High | Bridge handles CORS; document network config requirements |
+| Wrong ZPL for specific Zebra model | Low | Medium | Get exact model specs; test with actual hardware before Vegas |
+
+---
+
+## 4. Where Components Should Live
+
+### Admin Navigation Structure
+
+```
+Sidebar
+├── Dashboard        (/admin)
+├── Events           (/admin/events)
+├── Attendees        (/admin/attendees)
+├── Check-In         (/admin/check-in)     ← Add Print Badge button here
+├── Swag             (/admin/swag)
+├── Reports          (/admin/reports)
+├── Printers         (/admin/printers)     ← NEW: Printer management
+└── Settings         (/admin/settings)
+```
+
+### File Organization
+
+```
+client/src/
+├── pages/
+│   ├── CheckInPage.tsx         (MODIFY - add print button)
+│   └── PrintersPage.tsx        (NEW - printer management)
+├── components/
+│   ├── PrintBadgeButton.tsx    (NEW)
+│   ├── PrinterSelector.tsx     (NEW)
+│   ├── PrintStatusBadge.tsx    (NEW)
+│   └── BridgeSettings.tsx      (NEW)
+
+server/
+├── routes.ts                   (MODIFY - add printer/print-job routes)
+└── storage.ts                  (MODIFY - add printer/log methods)
+
+shared/
+└── schema.ts                   (MODIFY - add tables)
+
+print-bridge/                   (NEW - separate project)
+├── src/
+│   ├── index.ts
+│   ├── printer.ts
+│   ├── zpl.ts
+│   └── routes.ts
+└── package.json
+```
+
+---
+
+## 5. Minimal MVP Scope for Vegas
+
+### Must Have (MVP)
+
+1. **Database**: `printers` table, `print_logs` table, badge fields on registrations
+2. **Backend**: Printer CRUD routes, print job creation route
+3. **Frontend**: 
+   - Print Badge button in CheckInPage
+   - Printer selector modal
+   - Basic print status indicator
+   - Simple Printers admin page
+4. **Print Bridge**: 
+   - Health endpoint
+   - Print endpoint
+   - ZPL template (name + QR only)
+   - TCP connection to Zebra
+
+### Nice to Have (Post-Vegas)
+
+- Guest badge printing
+- Badge preview
+- Batch printing
+- Print queue management
+- Printer auto-discovery
+
+---
+
+## 6. Print Bridge Approach Validation
+
+### Compatibility Confirmed
+
+| Requirement | Current App Support | Notes |
+|-------------|---------------------|-------|
+| Safari fetch to HTTP endpoint | Yes | Standard fetch API works |
+| React Query mutations | Yes | Same pattern as check-in |
+| LocalStorage for bridge URL | Yes | Already used for other settings |
+| Admin-only access | Yes | Use existing `authenticateToken` middleware |
+
+### Bridge Discovery Strategy Options
+
+| Option | Pros | Cons | Recommendation |
+|--------|------|------|----------------|
+| Manual URL entry | Simple, no discovery needed | Staff must know IP | **MVP choice** |
+| QR code at venue | Easy onboarding | Requires QR generation | Post-MVP |
+| mDNS auto-discovery | Zero config | Complex, browser support varies | Post-MVP |
+
+**Recommendation**: For Vegas MVP, use manual bridge URL entry stored in localStorage. Staff enters `http://192.168.x.x:3100` once on their iPad.
+
+---
+
+## 7. Prep Steps Before Coding
+
+### Immediate (Before Implementation)
+
+- [ ] Confirm Zebra printer model and media specs (4x6 badge stock?)
+- [ ] Decide QR code payload format (`REG:uuid:eventId:type`?)
+- [ ] Confirm bridge authentication approach (shared secret? admin token?)
+- [ ] Get venue network requirements (subnet, firewall rules?)
+
+### During Implementation
+
+- [ ] Test with actual Zebra hardware (borrow/rent if needed)
+- [ ] Validate ZPL output before Vegas
+- [ ] Create bridge deployment documentation
+
+### Before Vegas
+
+- [ ] Dry run: Full check-in → print flow on venue network
+- [ ] Train staff on bridge setup and troubleshooting
+- [ ] Document fallback procedures
+
+---
+
+## 8. Implementation Order
+
+### Recommended Sequence
+
+```
+Phase 1: Database & Backend
+├── 1.1 Add schema tables (printers, print_logs)
+├── 1.2 Add registration badge fields
+├── 1.3 Run db:push migration
+├── 1.4 Add storage interface methods
+├── 1.5 Add API routes
+└── 1.6 Test with curl/Postman
+
+Phase 2: Print Bridge Service
+├── 2.1 Create Node/Express project
+├── 2.2 Implement health endpoint
+├── 2.3 Implement ZPL template
+├── 2.4 Implement TCP printer client
+├── 2.5 Test with actual Zebra printer
+└── 2.6 Add CORS and error handling
+
+Phase 3: Frontend Integration
+├── 3.1 Add Printers page and sidebar entry
+├── 3.2 Add Bridge URL settings
+├── 3.3 Add Print Badge button to CheckInPage
+├── 3.4 Add printer selector modal
+├── 3.5 Add print status indicators
+└── 3.6 End-to-end testing
+
+Phase 4: Polish & Documentation
+├── 4.1 Error handling and edge cases
+├── 4.2 Bridge deployment docs
+├── 4.3 Staff training materials
+└── 4.4 Fallback procedure docs
+```
+
+---
+
+## 9. Estimated Effort
+
+| Phase | Estimated Hours | Dependencies |
+|-------|-----------------|--------------|
+| Phase 1: Database & Backend | 4-6 hours | None |
+| Phase 2: Print Bridge Service | 4-6 hours | Access to Zebra printer |
+| Phase 3: Frontend Integration | 4-6 hours | Phase 1 complete |
+| Phase 4: Polish & Documentation | 2-4 hours | Phase 2-3 complete |
+| **Total** | **14-22 hours** | |
+
+---
+
+## 10. Go/No-Go Checklist
+
+Before starting implementation, confirm:
+
+- [ ] Zebra printer model confirmed
+- [ ] 4x6 badge stock available
+- [ ] QR payload format approved
+- [ ] Bridge auth approach decided
+- [ ] Vegas network info obtained (or will test on-site)
+- [ ] Stakeholder questions answered (see above)
+
+**Status: Awaiting confirmation on the above items before proceeding.**
