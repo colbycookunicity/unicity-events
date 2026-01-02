@@ -729,3 +729,563 @@ Verified with: colby.cook+method@unicity.com
 - Re-submitting updates existing registration without error
 - Form shows "Update Registration" when editing existing registration
 - `lastModified` timestamp is refreshed on every edit
+
+---
+
+# Badge Printing System - Implementation Plan (January 2026)
+
+## Overview
+
+This document outlines the implementation plan for adding badge printing functionality to the Unicity Events web app, replacing Bizzabo's on-site check-in and badge printing flow. The system is designed for **Vegas MVP scope**.
+
+---
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              VENUE NETWORK                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌──────────────┐     HTTPS      ┌──────────────────┐                       │
+│  │   iPad       │◄──────────────►│  Events Web App  │                       │
+│  │   Safari     │                │  (Replit Cloud)  │                       │
+│  │              │                │                  │                       │
+│  │  Check-In UI │                │ POST /api/print- │                       │
+│  │  + Print Btn │                │      jobs        │                       │
+│  └──────────────┘                └────────┬─────────┘                       │
+│                                           │                                 │
+│                                           │ HTTP (local network)            │
+│                                           ▼                                 │
+│                               ┌───────────────────────┐                     │
+│                               │   Print Bridge        │                     │
+│                               │   (Node/Express)      │                     │
+│                               │                       │                     │
+│                               │   Running on laptop   │                     │
+│                               │   at venue            │                     │
+│                               │                       │                     │
+│                               │   - Receives jobs     │                     │
+│                               │   - Renders ZPL       │                     │
+│                               │   - Sends to printer  │                     │
+│                               └───────────┬───────────┘                     │
+│                                           │                                 │
+│                              TCP Port 9100│                                 │
+│                    ┌──────────────────────┼──────────────────────┐          │
+│                    ▼                      ▼                      ▼          │
+│            ┌─────────────┐       ┌─────────────┐       ┌─────────────┐      │
+│            │ Zebra       │       │ Zebra       │       │ Zebra       │      │
+│            │ Printer #1  │       │ Printer #2  │       │ Printer #3  │      │
+│            │ (Lobby)     │       │ (VIP)       │       │ (Staff)     │      │
+│            └─────────────┘       └─────────────┘       └─────────────┘      │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Why This Architecture?
+
+**iPad Safari Constraints:**
+| Constraint | Impact | Solution |
+|------------|--------|----------|
+| No raw TCP sockets | Cannot connect directly to Zebra printers | Print Bridge proxy |
+| No AirPrint from web | Standard web printing won't work | ZPL over TCP |
+| No native iOS APIs | Cannot use iOS printing frameworks | HTTP to Bridge |
+| CORS restrictions | Cannot POST to arbitrary local IPs | Bridge handles CORS |
+
+---
+
+## Current Check-in System Analysis
+
+### Existing Components
+
+| Component | Location | Description |
+|-----------|----------|-------------|
+| Check-in Page | `client/src/pages/CheckInPage.tsx` | UI for searching attendees and checking them in |
+| Check-in API | `POST /api/registrations/:id/check-in` | Marks registration as checked in |
+| Storage Function | `storage.checkInRegistration()` | Updates `status`, `checkedInAt`, `checkedInBy` |
+| Registration Schema | `shared/schema.ts` | Has `checkedInAt`, `checkedInBy` fields |
+
+### Current Check-in Flow
+
+1. Staff selects event from dropdown
+2. Staff searches for attendee by name/email/ID
+3. Staff clicks "Check In" button
+4. API updates registration status to "checked_in"
+5. UI refreshes to show checked-in state
+
+### Gap Analysis
+
+- **No printer infrastructure** in database schema
+- **No print job tracking** or history
+- **No ZPL template** system
+- **No bridge service** for printer communication
+
+---
+
+## Database Schema Changes
+
+### New Tables Required
+
+#### 1. `printers` Table
+
+```typescript
+// shared/schema.ts
+export const printers = pgTable("printers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  eventId: varchar("event_id").references(() => events.id).notNull(),
+  name: text("name").notNull(),                    // "Lobby Printer", "VIP Check-in"
+  location: text("location"),                       // "Main Entrance", "Ballroom A"
+  ipAddress: text("ip_address").notNull(),         // "192.168.1.100"
+  port: integer("port").default(9100),              // Default ZPL port
+  status: text("status").default("unknown"),        // "online" | "offline" | "unknown"
+  lastSeenAt: timestamp("last_seen_at"),
+  capabilities: jsonb("capabilities"),              // { "maxWidth": 4, "maxHeight": 6, "dpi": 203 }
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  lastModified: timestamp("last_modified").defaultNow().notNull(),
+});
+```
+
+#### 2. `print_logs` Table
+
+```typescript
+export const printLogs = pgTable("print_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  registrationId: varchar("registration_id").references(() => registrations.id).notNull(),
+  guestId: varchar("guest_id").references(() => guests.id),  // For guest badges
+  printerId: varchar("printer_id").references(() => printers.id),
+  status: text("status").notNull().default("pending"), // "pending" | "sent" | "success" | "failed"
+  zplSnapshot: text("zpl_snapshot"),                    // Store generated ZPL for debugging/reprint
+  requestedBy: varchar("requested_by").references(() => users.id).notNull(),
+  requestedAt: timestamp("requested_at").defaultNow().notNull(),
+  sentAt: timestamp("sent_at"),
+  completedAt: timestamp("completed_at"),
+  errorMessage: text("error_message"),
+  retryCount: integer("retry_count").default(0),
+});
+```
+
+### Registration Table Addition
+
+Add badge tracking to existing registrations:
+
+```typescript
+// Add to registrations table
+badgePrintedAt: timestamp("badge_printed_at"),  // When badge was last printed
+badgePrintCount: integer("badge_print_count").default(0),  // Number of times printed
+```
+
+---
+
+## Print Bridge Service Specification
+
+### Overview
+
+A lightweight Node/Express service that runs on a laptop at the venue, acting as a bridge between the Events web app and local Zebra printers.
+
+### API Contract
+
+#### Base URL
+```
+http://<bridge-laptop-ip>:3100
+```
+
+#### Endpoints
+
+##### 1. Health Check
+```
+GET /health
+
+Response:
+{
+  "status": "healthy",
+  "version": "1.0.0",
+  "uptime": 3600,
+  "connectedPrinters": 3
+}
+```
+
+##### 2. List Printers
+```
+GET /printers
+
+Response:
+{
+  "printers": [
+    {
+      "id": "printer-001",
+      "name": "Lobby Printer",
+      "ipAddress": "192.168.1.100",
+      "port": 9100,
+      "status": "online",
+      "lastSeen": "2026-01-02T10:30:00Z"
+    }
+  ]
+}
+```
+
+##### 3. Register/Update Printer
+```
+POST /printers
+
+Body:
+{
+  "name": "VIP Check-in",
+  "ipAddress": "192.168.1.101",
+  "port": 9100
+}
+
+Response:
+{
+  "id": "printer-002",
+  "name": "VIP Check-in",
+  "status": "online"
+}
+```
+
+##### 4. Print Badge
+```
+POST /print
+
+Body:
+{
+  "printerId": "printer-001",
+  "badge": {
+    "firstName": "John",
+    "lastName": "Smith",
+    "eventName": "Rise 2026",
+    "registrationId": "uuid-here",
+    "unicityId": "12345678",
+    "role": "Distributor"  // Optional: "VIP", "Staff", "Guest"
+  }
+}
+
+Response:
+{
+  "jobId": "job-uuid",
+  "status": "sent",
+  "sentAt": "2026-01-02T10:30:00Z"
+}
+```
+
+##### 5. Job Status
+```
+GET /jobs/:jobId
+
+Response:
+{
+  "jobId": "job-uuid",
+  "status": "success",  // "pending" | "sent" | "success" | "failed"
+  "sentAt": "2026-01-02T10:30:00Z",
+  "completedAt": "2026-01-02T10:30:02Z",
+  "errorMessage": null
+}
+```
+
+##### 6. Test Print
+```
+POST /printers/:printerId/test
+
+Response:
+{
+  "success": true,
+  "message": "Test label printed successfully"
+}
+```
+
+### Configuration
+
+```env
+# print-bridge/.env
+PORT=3100
+ALLOWED_ORIGINS=https://events.unicity.com,http://localhost:5000
+PRINTER_TIMEOUT_MS=5000
+MAX_RETRIES=3
+LOG_LEVEL=info
+```
+
+### Error Handling
+
+| Error Code | Description | Action |
+|------------|-------------|--------|
+| PRINTER_OFFLINE | Cannot connect to printer | Return error, mark printer offline |
+| TIMEOUT | Print job timed out | Retry up to MAX_RETRIES |
+| INVALID_ZPL | ZPL rendering failed | Return error with details |
+| NETWORK_ERROR | Network connectivity issue | Return error, suggest check connection |
+
+---
+
+## ZPL Badge Template
+
+### Badge Specifications
+
+- **Size:** 4" x 6" (101.6mm x 152.4mm)
+- **Orientation:** Portrait
+- **DPI:** 203 (standard Zebra)
+- **Content:** Name, Event, QR Code, Role indicator
+
+### Template Design
+
+```
+┌────────────────────────────────────────┐
+│                                        │
+│              RISE 2026                 │  ← Event name (centered, bold)
+│         ─────────────────              │  ← Decorative line
+│                                        │
+│                                        │
+│              JOHN                      │  ← First name (large, bold)
+│              SMITH                     │  ← Last name (large, bold)
+│                                        │
+│                                        │
+│           ┌─────────────┐              │
+│           │             │              │
+│           │   QR CODE   │              │  ← QR containing registration ID
+│           │             │              │
+│           └─────────────┘              │
+│                                        │
+│            ID: 12345678                │  ← Unicity ID (if present)
+│                                        │
+│         ┌───────────────┐              │
+│         │  DISTRIBUTOR  │              │  ← Role badge (optional)
+│         └───────────────┘              │
+│                                        │
+└────────────────────────────────────────┘
+```
+
+### ZPL Template Code
+
+```zpl
+^XA
+
+; Set print width for 4" label at 203 DPI (4 * 203 = 812 dots)
+^PW812
+
+; Set label length for 6" label at 203 DPI (6 * 203 = 1218 dots)
+^LL1218
+
+; Event Name - centered at top
+^FO0,80^A0N,60,60^FB812,1,0,C^FD{{eventName}}^FS
+
+; Decorative line
+^FO100,160^GB612,4,4^FS
+
+; First Name - large, centered
+^FO0,250^A0N,100,100^FB812,1,0,C^FD{{firstName}}^FS
+
+; Last Name - large, centered
+^FO0,370^A0N,100,100^FB812,1,0,C^FD{{lastName}}^FS
+
+; QR Code - centered (contains registration ID for scanning)
+; Position: centered horizontally, below name
+^FO306,520^BQN,2,6^FDQA,{{qrData}}^FS
+
+; Unicity ID - below QR code
+^FO0,820^A0N,35,35^FB812,1,0,C^FDID: {{unicityId}}^FS
+
+; Role Badge (conditional) - bottom of badge
+{{#if role}}
+^FO256,900^GB300,60,60^FS
+^FO256,900^FR^A0N,40,40^FB300,1,0,C^FD{{role}}^FS
+{{/if}}
+
+^XZ
+```
+
+### QR Code Data Format
+
+Encoded as: `REG:uuid-here:event-uuid:attendee`
+
+---
+
+## Events App API Integration
+
+### New Backend Routes
+
+```typescript
+// server/routes.ts
+
+// Printer Management
+GET    /api/events/:eventId/printers        // List printers for event
+POST   /api/events/:eventId/printers        // Add printer
+PATCH  /api/printers/:id                     // Update printer
+DELETE /api/printers/:id                     // Remove printer
+
+// Print Jobs
+POST   /api/print-jobs                       // Create print job
+GET    /api/print-jobs/:id                   // Get job status
+GET    /api/registrations/:id/print-history  // Get print history for registration
+
+// Bridge Proxy (optional - if cloud needs to relay)
+POST   /api/bridge/print                     // Proxy to local print bridge
+GET    /api/bridge/status                    // Check bridge connectivity
+```
+
+### Print Job Request Schema
+
+```typescript
+interface PrintJobRequest {
+  registrationId: string;
+  guestId?: string;          // For guest badges
+  printerId: string;
+  bridgeUrl: string;         // Local bridge URL (e.g., "http://192.168.1.50:3100")
+}
+```
+
+---
+
+## Frontend Integration
+
+### Check-in Page Enhancements
+
+Add to each attendee card:
+
+1. **Print Badge Button** - Appears after check-in or anytime
+2. **Printer Selection** - Dropdown/modal to choose printer
+3. **Print Status Indicator** - Shows if badge was printed
+4. **Reprint Option** - Allow reprinting with confirmation
+
+### New Components Needed
+
+```
+client/src/components/
+├── PrintBadgeButton.tsx      // Button with printer selection
+├── PrinterSelector.tsx       // Dropdown to select printer
+├── PrintStatusBadge.tsx      // Shows print status
+├── BridgeStatusIndicator.tsx // Shows if bridge is connected
+└── PrinterManagement.tsx     // Admin UI for managing printers
+```
+
+### State Management
+
+```typescript
+// Store bridge URL in localStorage
+const BRIDGE_URL_KEY = "print-bridge-url";
+
+// Bridge connection state
+interface BridgeState {
+  url: string | null;
+  status: "connected" | "disconnected" | "unknown";
+  printers: Printer[];
+  lastChecked: Date | null;
+}
+```
+
+---
+
+## MVP Implementation Tasks
+
+### Phase 1: Database & Backend (Est: 4-6 hours)
+
+| Task | Description | Files |
+|------|-------------|-------|
+| 1.1 | Add `printers` table schema | `shared/schema.ts` |
+| 1.2 | Add `printLogs` table schema | `shared/schema.ts` |
+| 1.3 | Add `badgePrintedAt`, `badgePrintCount` to registrations | `shared/schema.ts` |
+| 1.4 | Create insert schemas and types | `shared/schema.ts` |
+| 1.5 | Add printer CRUD to storage interface | `server/storage.ts` |
+| 1.6 | Add print log methods to storage | `server/storage.ts` |
+| 1.7 | Add printer management API routes | `server/routes.ts` |
+| 1.8 | Add print job API routes | `server/routes.ts` |
+| 1.9 | Run database migration | `npm run db:push` |
+
+### Phase 2: Print Bridge Service (Est: 4-6 hours)
+
+| Task | Description | Files |
+|------|-------------|-------|
+| 2.1 | Create bridge project structure | `print-bridge/` |
+| 2.2 | Implement Express server with CORS | `print-bridge/src/index.ts` |
+| 2.3 | Implement TCP socket to Zebra (port 9100) | `print-bridge/src/printer.ts` |
+| 2.4 | Implement ZPL template rendering | `print-bridge/src/zpl.ts` |
+| 2.5 | Implement health check endpoint | `print-bridge/src/routes.ts` |
+| 2.6 | Implement printer management endpoints | `print-bridge/src/routes.ts` |
+| 2.7 | Implement print job endpoint | `print-bridge/src/routes.ts` |
+| 2.8 | Add timeout/retry logic | `print-bridge/src/printer.ts` |
+| 2.9 | Package for Mac deployment | `print-bridge/package.json` |
+
+### Phase 3: Frontend Integration (Est: 4-6 hours)
+
+| Task | Description | Files |
+|------|-------------|-------|
+| 3.1 | Add bridge URL settings modal | `client/src/components/BridgeSettings.tsx` |
+| 3.2 | Add bridge connection status indicator | `client/src/components/BridgeStatusIndicator.tsx` |
+| 3.3 | Create printer management admin page | `client/src/pages/PrinterManagementPage.tsx` |
+| 3.4 | Add "Print Badge" button to CheckInPage cards | `client/src/pages/CheckInPage.tsx` |
+| 3.5 | Add printer selection dropdown | `client/src/components/PrinterSelector.tsx` |
+| 3.6 | Add print status badge component | `client/src/components/PrintStatusBadge.tsx` |
+| 3.7 | Add print history to attendee drawer | `client/src/pages/AttendeesPage.tsx` |
+| 3.8 | Handle reprint confirmation flow | `client/src/pages/CheckInPage.tsx` |
+
+### Phase 4: Testing & Polish (Est: 2-4 hours)
+
+| Task | Description |
+|------|-------------|
+| 4.1 | End-to-end test: Check-in → Print flow |
+| 4.2 | Test error handling (offline printer, timeout) |
+| 4.3 | Test offline bridge scenario |
+| 4.4 | Write setup documentation for bridge |
+| 4.5 | Create troubleshooting guide |
+
+---
+
+## Deployment & Operations
+
+### Bridge Deployment Checklist
+
+- [ ] Laptop with Node.js 18+ installed
+- [ ] Bridge service cloned and configured
+- [ ] .env file configured with correct ALLOWED_ORIGINS
+- [ ] Laptop connected to venue WiFi (same network as printers)
+- [ ] Printer IP addresses documented
+- [ ] Test prints verified from each printer
+- [ ] Bridge URL shared with check-in staff
+
+### Network Requirements
+
+| Device | IP Range | Ports |
+|--------|----------|-------|
+| Print Bridge Laptop | Venue LAN | 3100 (inbound) |
+| Zebra Printers | Venue LAN | 9100 (outbound from bridge) |
+| iPads | Venue LAN or routed | HTTPS to events.unicity.com |
+
+### Fallback Procedures
+
+If bridge is offline:
+1. Check-in can continue without printing
+2. Badge status shows "pending"
+3. When bridge reconnects, batch print pending badges
+4. Manual reprint option always available
+
+---
+
+## Success Criteria
+
+| Metric | Target |
+|--------|--------|
+| Check-in to print roundtrip | < 5 seconds |
+| Print success rate | > 99% |
+| Bridge uptime during event | > 99.5% |
+| Support multiple printers | Yes (3+ per event) |
+| Print logs visible in admin | Yes |
+| Reprint capability | Yes |
+| Works on iPad Safari | Yes |
+
+---
+
+## Future Enhancements (Post-MVP)
+
+- [ ] Guest badge printing
+- [ ] Badge design customization per event
+- [ ] Batch print for pre-registration
+- [ ] QR code scanning for fast check-in
+- [ ] Print queue management
+- [ ] Printer auto-discovery via mDNS
+- [ ] Badge preview before printing
+- [ ] Analytics dashboard
+
+---
+
+## Questions for Stakeholders
+
+1. Should badge include attendee photo?
+2. Are there different badge types needed (VIP, Staff, Guest)?
+3. What information should the QR code contain?
+4. Should we support badge reprinting with tracking?
+5. Is there a specific Zebra model being used?
