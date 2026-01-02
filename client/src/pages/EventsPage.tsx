@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Plus, Search, Calendar, MapPin, Users, MoreHorizontal, Archive, Trash2 } from "lucide-react";
+import { Plus, Search, Calendar, MapPin, Users, MoreHorizontal, Archive, Trash2, Eye, EyeOff, FileEdit } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +26,24 @@ export default function EventsPage() {
 
   const { data: events, isLoading } = useQuery<EventWithStats[]>({
     queryKey: ["/api/events"],
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: async ({ eventId, status }: { eventId: string; status: string }) => {
+      return apiRequest("PATCH", `/api/events/${eventId}`, { status });
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      const statusLabels: Record<string, string> = {
+        draft: "Draft",
+        published: "Published",
+        archived: "Archived",
+      };
+      toast({ title: t("success"), description: `Event status changed to ${statusLabels[variables.status]}` });
+    },
+    onError: () => {
+      toast({ title: t("error"), description: "Failed to update event status", variant: "destructive" });
+    },
   });
 
   const archiveMutation = useMutation({
@@ -184,6 +202,25 @@ export default function EventsPage() {
                             View Attendees
                           </DropdownMenuItem>
                         </Link>
+                        <DropdownMenuSeparator />
+                        {event.status !== "published" && (
+                          <DropdownMenuItem
+                            onClick={() => statusMutation.mutate({ eventId: event.id, status: "published" })}
+                            data-testid={`action-publish-${event.id}`}
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            Publish
+                          </DropdownMenuItem>
+                        )}
+                        {event.status !== "draft" && (
+                          <DropdownMenuItem
+                            onClick={() => statusMutation.mutate({ eventId: event.id, status: "draft" })}
+                            data-testid={`action-draft-${event.id}`}
+                          >
+                            <FileEdit className="h-4 w-4 mr-2" />
+                            Set to Draft
+                          </DropdownMenuItem>
+                        )}
                         {event.status !== "archived" && (
                           <DropdownMenuItem
                             onClick={() => archiveMutation.mutate(event.id)}
