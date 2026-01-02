@@ -42,7 +42,7 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
 
 app.use(
   cors({
-    origin: (origin, callback) => {
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
       if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
