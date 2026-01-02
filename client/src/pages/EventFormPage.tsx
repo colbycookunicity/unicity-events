@@ -72,7 +72,7 @@ const eventFormSchema = z.object({
   requiresQualification: z.boolean().default(false),
   qualificationStartDate: z.string().optional(),
   qualificationEndDate: z.string().optional(),
-  slug: z.string().regex(/^[a-z0-9-]+$/, "Only lowercase letters, numbers, and hyphens allowed").min(3).max(50).optional().or(z.literal("")),
+  slug: z.string().max(50).optional().or(z.literal("")),
   formTemplateId: z.string().optional(),
   formFields: z.array(formFieldSchema).optional(),
 });
@@ -88,6 +88,17 @@ interface FormTemplate {
 }
 
 type EventFormData = z.infer<typeof eventFormSchema>;
+
+// Helper function to normalize slug (lowercase, spaces to hyphens, remove invalid chars)
+function normalizeSlug(input: string): string {
+  return input
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')        // Replace spaces with hyphens
+    .replace(/[^a-z0-9-]/g, '')  // Remove invalid characters
+    .replace(/-+/g, '-')         // Replace multiple hyphens with single
+    .replace(/^-|-$/g, '');      // Remove leading/trailing hyphens
+}
 
 export default function EventFormPage() {
   const { t } = useTranslation();
@@ -187,10 +198,11 @@ export default function EventFormPage() {
   });
 
   const onSubmit = (data: EventFormData) => {
-    // Normalize slug: convert empty string to undefined so backend stores null
+    // Normalize slug: auto-format and convert empty string to undefined so backend stores null
+    const normalizedSlug = data.slug ? normalizeSlug(data.slug) : undefined;
     const normalizedData: EventFormData = {
       ...data,
-      slug: data.slug?.trim() || undefined,
+      slug: normalizedSlug || undefined,
       // Include custom form fields only when no template is selected
       formFields: !data.formTemplateId ? customFields : undefined,
     };
@@ -1114,15 +1126,20 @@ export default function EventFormPage() {
                             {...field} 
                             placeholder="rise-2026" 
                             className="max-w-xs"
-                            data-testid="input-event-slug" 
+                            data-testid="input-event-slug"
+                            onBlur={(e) => {
+                              const normalized = normalizeSlug(e.target.value);
+                              field.onChange(normalized);
+                              field.onBlur();
+                            }}
                           />
                           <p className="text-xs text-muted-foreground break-all">
-                            {window.location.origin}/register/{field.value || "[slug]"}
+                            {window.location.origin}/register/{field.value ? normalizeSlug(field.value) : "[slug]"}
                           </p>
                         </div>
                       </FormControl>
                       <FormDescription>
-                        Leave empty to use the event ID. Use lowercase letters, numbers, and hyphens only.
+                        Leave empty to use the event ID. Spaces and capitals will be auto-converted.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
