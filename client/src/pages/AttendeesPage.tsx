@@ -695,7 +695,7 @@ export default function AttendeesPage() {
 
   const moveToEventMutation = useMutation({
     mutationFn: async ({ registrationId, newEventId }: { registrationId: string; newEventId: string }) => {
-      const response = await apiRequest("PATCH", `/api/registrations/${registrationId}`, { eventId: newEventId });
+      const response = await apiRequest("POST", `/api/registrations/${registrationId}/transfer`, { targetEventId: newEventId });
       return response.json();
     },
     onSuccess: () => {
@@ -707,7 +707,7 @@ export default function AttendeesPage() {
       setTargetEventId("");
       setDrawerOpen(false);
       setSelectedAttendee(null);
-      toast({ title: t("success"), description: "Attendee moved to new event successfully" });
+      toast({ title: t("success"), description: "Attendee transferred to new event. Check-in status and badges have been reset." });
     },
     onError: () => {
       toast({ title: t("error"), description: "Failed to move attendee", variant: "destructive" });
@@ -2232,14 +2232,14 @@ export default function AttendeesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Move to Event Dialog */}
+      {/* Transfer to Event Dialog */}
       <Dialog open={moveDialogOpen} onOpenChange={(open) => { setMoveDialogOpen(open); if (!open) setRegistrationToMove(null); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Move Attendee to Different Event</DialogTitle>
+            <DialogTitle>Transfer Attendee to Different Event</DialogTitle>
             <DialogDescription>
               {registrationToMove && (
-                <>Moving <strong>{registrationToMove.firstName} {registrationToMove.lastName}</strong> to a different event.</>
+                <>Transfer <strong>{registrationToMove.firstName} {registrationToMove.lastName}</strong> to a different event.</>
               )}
             </DialogDescription>
           </DialogHeader>
@@ -2249,7 +2249,7 @@ export default function AttendeesPage() {
               if (otherEvents.length === 0) {
                 return (
                   <p className="text-sm text-muted-foreground text-center py-4">
-                    No other events available to move this attendee to.
+                    No other events available to transfer this attendee to.
                   </p>
                 );
               }
@@ -2272,9 +2272,23 @@ export default function AttendeesPage() {
               );
             })()}
             {registrationToMove && (
-              <p className="text-sm text-muted-foreground">
-                Currently registered for: {events?.find(e => e.id === registrationToMove.eventId)?.name || "Unknown Event"}
-              </p>
+              <div className="flex flex-col gap-2 text-sm text-muted-foreground">
+                <p>Currently registered for: {events?.find(e => e.id === registrationToMove.eventId)?.name || "Unknown Event"}</p>
+                <div className="bg-muted/50 rounded-md p-3 mt-2">
+                  <p className="font-medium text-foreground mb-1">What will be reset:</p>
+                  <ul className="list-disc list-inside space-y-0.5">
+                    <li>Check-in status</li>
+                    <li>Badge print history</li>
+                    <li>Swag assignments</li>
+                  </ul>
+                  <p className="mt-2 font-medium text-foreground mb-1">What will be kept:</p>
+                  <ul className="list-disc list-inside space-y-0.5">
+                    <li>Personal information</li>
+                    <li>Guests & flights</li>
+                    <li>Reimbursements</li>
+                  </ul>
+                </div>
+              </div>
             )}
           </div>
           <DialogFooter>
@@ -2290,7 +2304,7 @@ export default function AttendeesPage() {
               disabled={!targetEventId || moveToEventMutation.isPending || (events?.filter(e => e.id !== registrationToMove?.eventId).length === 0)}
               data-testid="button-confirm-move"
             >
-              {moveToEventMutation.isPending ? "Moving..." : "Move Attendee"}
+              {moveToEventMutation.isPending ? "Transferring..." : "Transfer Attendee"}
             </Button>
           </DialogFooter>
         </DialogContent>
