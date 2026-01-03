@@ -104,7 +104,18 @@ export class IterableService {
       });
 
       const messageId = result?.msg || result?.messageId || undefined;
-      log('info', `Success: ${context} sent to ${recipientEmail}`, { messageId });
+      
+      // Structured log for email analytics
+      console.log(JSON.stringify({
+        event: 'EMAIL_SENT',
+        type: context,
+        email: recipientEmail,
+        campaignId,
+        eventId: dataFields.eventId || dataFields.registrationId,
+        eventName: dataFields.eventName,
+        messageId,
+        timestamp: new Date().toISOString(),
+      }));
       
       return { success: true, messageId };
     } catch (error) {
