@@ -105,15 +105,16 @@ export class IterableService {
 
       const messageId = result?.msg || result?.messageId || undefined;
       
-      // Structured log for email analytics
+      // Structured log for email analytics (gold standard format)
       console.log(JSON.stringify({
         event: 'EMAIL_SENT',
-        type: context,
+        type: context.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase(),
         email: recipientEmail,
         campaignId,
-        eventId: dataFields.eventId || dataFields.registrationId,
-        eventName: dataFields.eventName,
-        messageId,
+        eventId: dataFields.eventId || null,
+        eventName: dataFields.eventName || null,
+        registrationId: dataFields.registrationId || null,
+        messageId: messageId || null,
         timestamp: new Date().toISOString(),
       }));
       
@@ -188,6 +189,7 @@ export class IterableService {
       dataFields: {
         firstName: registration.firstName,
         lastName: registration.lastName,
+        eventId: event.id,
         eventName,
         eventLocation: event.location,
         eventUrl: buildEventUrl(event),
@@ -214,8 +216,10 @@ export class IterableService {
       context: 'RegistrationUpdate',
       dataFields: {
         firstName: registration.firstName,
+        eventId: event.id,
         eventName,
         eventUrl: buildEventUrl(event),
+        registrationId: registration.id,
         language,
       },
     });
@@ -238,6 +242,7 @@ export class IterableService {
         email,
         firstName: registration.firstName,
         lastName: registration.lastName,
+        eventId: event.id,
         eventName,
         eventUrl: buildEventUrl(event),
         eventStartDate: event.startDate,
@@ -264,6 +269,7 @@ export class IterableService {
         email,
         firstName: registration.firstName,
         lastName: registration.lastName,
+        eventId: event.id,
         eventName,
         eventUrl: buildEventUrl(event),
         eventStartDate: event.startDate,
@@ -290,6 +296,7 @@ export class IterableService {
         email,
         firstName: registration.firstName,
         lastName: registration.lastName,
+        eventId: event.id,
         eventName,
         eventUrl: buildEventUrl(event),
         eventStartDate: event.startDate,
@@ -316,6 +323,7 @@ export class IterableService {
         email,
         firstName: registration.firstName,
         lastName: registration.lastName,
+        eventId: event.id,
         eventName,
         eventUrl: buildEventUrl(event),
         eventStartDate: event.startDate,
