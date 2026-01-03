@@ -1571,3 +1571,413 @@ Before starting implementation, confirm:
 - [ ] Stakeholder questions answered (see above)
 
 **Status: Awaiting confirmation on the above items before proceeding.**
+
+---
+
+# Iterable Email Integration - Architecture & Implementation Plan
+
+## Executive Summary
+
+This document outlines the complete architecture for integrating Iterable email into the Unicity Events platform. The research covers the existing codebase structure, identifies all email trigger points, and proposes a clean, maintainable email service architecture.
+
+---
+
+## Part 1: Codebase Research Findings
+
+### 1.1 User Registration Flow
+
+**Location:** `server/routes.ts` (lines 353-438, 441-600, 1600-1744)
+
+**Flow:**
+1. **Public OTP Request** - `POST /api/register/otp/generate`
+   - User submits email + eventId
+   - System validates event is published
+   - If event requires qualification, checks `qualified_registrants` table
+   - Calls Hydra API to generate OTP (dev mode uses "123456")
+   - Creates entry in `otp_sessions` table with `customerData.registrationEventId`
+
+2. **OTP Validation** - `POST /api/register/otp/validate`
+   - Validates code against Hydra API (or dev test code)
+   - Extracts customer data (Unicity ID, name) from Hydra response
+   - Marks session as verified, stores `bearerToken`, `customerData`
+
+3. **Existing Registration Check** - `POST /api/register/existing`
+   - After OTP verification, checks for existing registration
+   - Returns existing data for pre-population
+
+4. **Registration Creation/Update** - `POST /api/events/:eventIdOrSlug/register`
+   - Creates new registration in `registrations` table
+   - **EXISTING EMAIL TRIGGER**: Calls `iterableService.sendRegistrationConfirmation()`
+
+5. **Registration Update** - `PUT /api/events/:eventIdOrSlug/register/:registrationId`
+   - Updates existing registration
+   - No email trigger currently exists for public updates
+
+**Schema:** `shared/schema.ts`
+- `registrations` table (line 86+)
+- `otpSessions` table (line 237+)
+- `qualifiedRegistrants` table (line 196+)
+
+---
+
+### 1.2 Login / Magic Link Email Flow
+
+**Admin Login Flow** (`server/routes.ts` lines 143-304):
+1. `POST /api/auth/otp/generate` - Admin email whitelist check, calls Hydra API
+2. `POST /api/auth/otp/validate` - Validates OTP, creates auth session
+
+**Attendee Portal Login** (`server/routes.ts` lines 600-780):
+1. `POST /api/attendee/otp/generate` - For attendee portal access
+2. `POST /api/attendee/otp/validate` - Validates and creates attendee session
+
+**Current State:**
+- OTP emails are sent by Hydra API (Unicity's identity service)
+- No direct Iterable integration for OTP emails exists
+- `sendOTPEmail()` method exists in `IterableService` but is NOT called anywhere
+
+**Key Finding:**
+The Hydra API (`https://hydra.unicity.net/v6` or `hydraqa.unicity.net/v6-test`) handles OTP email delivery. If Iterable should take over OTP emails, this requires coordination with the Hydra team or bypassing Hydra for OTP delivery.
+
+---
+
+### 1.3 Admin Actions Related to Registrations
+
+| Action | Endpoint | Location | Current Email? |
+|--------|----------|----------|----------------|
+| **Check-in** | `POST /api/registrations/:id/check-in` | routes.ts:1919 | None |
+| **Update Registration** | `PATCH /api/registrations/:id` | routes.ts:1879 | **YES** - `sendRegistrationUpdate()` for status/roomType/shirtSize changes |
+| **Delete Registration** | `DELETE /api/registrations/:id` | routes.ts:1976 | None |
+| **Transfer to Event** | `POST /api/registrations/:id/transfer` | routes.ts:1933 | None |
+| **Bulk Swag Assignment** | `POST /api/swag-assignments/bulk` | routes.ts:2458 | None |
+| **Add Qualifier** | `POST /api/events/:eventId/qualifiers` | routes.ts:2577 | None |
+| **Bulk Import Qualifiers** | `POST /api/events/:eventId/qualifiers/import` | routes.ts:2603 | None |
+
+---
+
+### 1.4 Existing Email / Notification Logic
+
+**File:** `server/iterable.ts`
+
+**Current Implementation:**
+```
+IterableService class with methods:
+├── upsertUser()                    - Create/update user in Iterable
+├── sendEmail()                     - Generic email send (campaignId-based)
+├── trackEvent()                    - Track custom events
+├── sendOTPEmail()                  - NOT USED (Hydra sends OTPs)
+├── sendQualificationEmail()        - NOT USED
+├── sendRegistrationConfirmation()  - USED in routes.ts:1725
+├── sendRegistrationUpdate()        - USED in routes.ts:1900
+└── sendPreEventReminder()          - NOT USED (no cron/scheduler)
+```
+
+**Import Issue Found:**
+- `server/iterable.ts` line 2 imports from `./iterableClient` which DOES NOT EXIST
+- This is dead code that should be removed
+
+**Usage in Routes:**
+```typescript
+// routes.ts line 10
+import { iterableService } from "./iterable";
+
+// routes.ts line 1722-1734 - Registration confirmation
+if (process.env.ITERABLE_API_KEY) {
+  try {
+    await iterableService.sendRegistrationConfirmation(
+      registration.email,
+      registration,
+      event,
+      registration.language
+    );
+  } catch (err) {
+    console.error('Failed to send confirmation email:', err);
+  }
+}
+
+// routes.ts line 1896-1910 - Registration update (admin)
+if (process.env.ITERABLE_API_KEY && (req.body.status || req.body.roomType || req.body.shirtSize)) {
+  // ... sends update email
+}
+```
+
+---
+
+### 1.5 Environment Variable Usage Patterns
+
+**Current Pattern:**
+- Secrets via `process.env.VARIABLE_NAME`
+- Conditional feature flags: `if (process.env.ITERABLE_API_KEY)`
+- Dev mode detection: `process.env.NODE_ENV !== "production"`
+
+**Existing Environment Variables:**
+| Variable | Purpose | Location |
+|----------|---------|----------|
+| `DATABASE_URL` | PostgreSQL connection | db.ts, drizzle.config.ts |
+| `ITERABLE_API_KEY` | Iterable API authentication | iterable.ts |
+| `ITERABLE_*_CAMPAIGN_ID_*` | Campaign IDs for each email type | iterable.ts |
+| `NODE_ENV` | Production/development mode | routes.ts |
+| `REPLIT_DOMAINS` | Current domain for webhooks | index.ts |
+
+**Required Iterable Environment Variables (from iterable.ts):**
+```
+ITERABLE_API_KEY                    - Main API key
+ITERABLE_OTP_CAMPAIGN_ID_EN         - OTP email (English)
+ITERABLE_OTP_CAMPAIGN_ID_ES         - OTP email (Spanish)
+ITERABLE_QUALIFIED_CAMPAIGN_ID_EN   - Qualification notice (English)
+ITERABLE_QUALIFIED_CAMPAIGN_ID_ES   - Qualification notice (Spanish)
+ITERABLE_REG_CONFIRM_CAMPAIGN_ID_EN - Registration confirmation (English)
+ITERABLE_REG_CONFIRM_CAMPAIGN_ID_ES - Registration confirmation (Spanish)
+ITERABLE_REG_UPDATE_CAMPAIGN_ID_EN  - Registration update (English)
+ITERABLE_REG_UPDATE_CAMPAIGN_ID_ES  - Registration update (Spanish)
+ITERABLE_REMINDER_CAMPAIGN_ID_EN    - Pre-event reminder (English)
+ITERABLE_REMINDER_CAMPAIGN_ID_ES    - Pre-event reminder (Spanish)
+```
+
+---
+
+### 1.6 Backend vs Frontend Responsibilities
+
+**Backend (server/):**
+- Authentication & authorization (OTP, sessions, role checks)
+- Data persistence (storage.ts, db.ts)
+- External API calls (Hydra, Stripe, Iterable)
+- Email sending (all email triggers must be server-side)
+- File uploads (objectStorage.ts)
+
+**Frontend (client/):**
+- UI rendering and form handling
+- API calls via `apiRequest()` from `lib/queryClient`
+- No direct external API calls (except printing)
+- No secrets/credentials access
+
+**Key Principle:** All Iterable integration lives in the backend. Frontend triggers actions via API, backend handles email delivery.
+
+---
+
+## Part 2: Proposed Email Service Architecture
+
+### 2.1 Service Structure
+
+**Recommended Approach (Simpler):**
+Keep in single file but refactor:
+```
+server/
+├── iterable.ts               # Refactored IterableService (remove dead import)
+├── routes.ts                 # Uses iterableService
+└── index.ts                  # No changes needed
+```
+
+**Alternative (If email complexity grows):**
+```
+server/
+├── email/
+│   ├── index.ts              # Main export + initialization
+│   ├── iterableService.ts    # Iterable API wrapper (refactored)
+│   ├── emailEvents.ts        # Event type definitions
+│   └── templates.ts          # Campaign ID mapping
+├── routes.ts                 # Uses email service
+└── index.ts                  # Initializes email service
+```
+
+**Recommendation:** Use simpler approach - refactor existing `iterable.ts`.
+
+---
+
+### 2.2 Email Service Interface
+
+```typescript
+interface IEmailService {
+  // User Management
+  upsertUser(email: string, data: UserData): Promise<void>;
+  
+  // Transactional Emails
+  sendRegistrationConfirmation(registration: Registration, event: Event): Promise<void>;
+  sendRegistrationUpdate(registration: Registration, event: Event, changes: string[]): Promise<void>;
+  sendRegistrationCancelled(email: string, event: Event): Promise<void>;
+  sendRegistrationTransferred(registration: Registration, fromEvent: Event, toEvent: Event): Promise<void>;
+  sendCheckInConfirmation(registration: Registration, event: Event): Promise<void>;
+  sendQualificationNotice(email: string, event: Event, qualifierData: QualifierData): Promise<void>;
+  sendPreEventReminder(registration: Registration, event: Event, daysUntil: number): Promise<void>;
+  
+  // Event Tracking (for analytics)
+  trackEvent(email: string, eventName: string, data: Record<string, any>): Promise<void>;
+}
+```
+
+---
+
+### 2.3 Error Handling Strategy
+
+```typescript
+async function sendEmailSafely(fn: () => Promise<any>, context: string): Promise<void> {
+  if (!process.env.ITERABLE_API_KEY) {
+    console.log(`[Email] Skipping ${context} - ITERABLE_API_KEY not configured`);
+    return;
+  }
+  
+  try {
+    await fn();
+    console.log(`[Email] Sent: ${context}`);
+  } catch (error) {
+    console.error(`[Email] Failed: ${context}`, error);
+    // Do NOT throw - email failures should not break main flow
+  }
+}
+```
+
+---
+
+## Part 3: Email Trigger Events
+
+### 3.1 Complete Event Catalog
+
+| Event | Trigger Point | Route | Priority |
+|-------|---------------|-------|----------|
+| **Registration Confirmed** | New registration created | `POST /api/events/:id/register` | P0 |
+| **Registration Updated** | User/admin updates registration | `PUT /api/events/:id/register/:id`, `PATCH /api/registrations/:id` | P1 |
+| **Registration Cancelled** | Admin deletes registration | `DELETE /api/registrations/:id` | P2 |
+| **Registration Transferred** | Admin moves to different event | `POST /api/registrations/:id/transfer` | P2 |
+| **Check-In Confirmed** | Attendee checked in at event | `POST /api/registrations/:id/check-in` | P3 |
+| **Qualified for Event** | Admin adds to qualifier list | `POST /api/events/:id/qualifiers`, bulk import | P1 |
+| **Pre-Event Reminder** | Scheduled (X days before event) | Cron job (not implemented) | P2 |
+| **Attendee Portal Link** | User requests my-events access | Could replace `POST /api/attendee/otp/generate` | P3 |
+
+### 3.2 Implementation Priority
+
+**Phase 1 (Core):**
+- Registration Confirmation (already exists, verify working)
+- Registration Update (already exists, verify working)
+- Qualification Notice (method exists, needs trigger)
+
+**Phase 2 (Admin Actions):**
+- Registration Cancelled
+- Registration Transferred
+
+**Phase 3 (Enhanced):**
+- Check-In Confirmation
+- Pre-Event Reminder (requires cron implementation)
+
+---
+
+## Part 4: File Modification Plan
+
+### 4.1 Files to Modify
+
+| File | Changes |
+|------|---------|
+| `server/iterable.ts` | Remove dead import, add new email methods, improve error handling |
+| `server/routes.ts` | Add email triggers for transfer, cancel, qualifiers, check-in |
+
+### 4.2 Files to Create (Optional)
+
+| File | Purpose |
+|------|---------|
+| `server/email/templates.ts` | Centralize campaign ID mapping if list grows |
+
+### 4.3 Files NOT to Modify
+
+- `client/*` - No frontend changes needed for email
+- `shared/schema.ts` - No schema changes needed
+- `server/storage.ts` - No storage changes needed
+
+---
+
+## Part 5: Implementation Checklist
+
+### Pre-Implementation
+- [ ] Obtain Iterable API key
+- [ ] Create/verify campaign templates in Iterable dashboard
+- [ ] Document campaign IDs for each email type
+- [ ] Add environment variables to Replit Secrets
+
+### Implementation
+- [ ] Fix `server/iterable.ts` - remove dead import line 2
+- [ ] Add missing email methods to IterableService
+- [ ] Add `sendQualificationEmail` trigger to qualifier endpoints
+- [ ] Add `sendRegistrationCancelled` trigger to DELETE endpoint
+- [ ] Add `sendRegistrationTransferred` trigger to transfer endpoint
+- [ ] Add `sendCheckInConfirmation` trigger to check-in endpoint
+
+### Verification
+- [ ] Test registration confirmation email
+- [ ] Test registration update email
+- [ ] Test qualification notification email
+- [ ] Verify emails are NOT blocking main flow on failure
+- [ ] Verify multi-language (EN/ES) support works
+
+---
+
+## Part 6: Environment Variables Required
+
+Add these to Replit Secrets:
+
+```
+# Core
+ITERABLE_API_KEY=your_api_key_here
+
+# Campaign IDs - English
+ITERABLE_REG_CONFIRM_CAMPAIGN_ID_EN=123456
+ITERABLE_REG_UPDATE_CAMPAIGN_ID_EN=123457
+ITERABLE_QUALIFIED_CAMPAIGN_ID_EN=123458
+ITERABLE_CANCELLED_CAMPAIGN_ID_EN=123459
+ITERABLE_TRANSFERRED_CAMPAIGN_ID_EN=123460
+ITERABLE_CHECKIN_CAMPAIGN_ID_EN=123461
+ITERABLE_REMINDER_CAMPAIGN_ID_EN=123462
+
+# Campaign IDs - Spanish
+ITERABLE_REG_CONFIRM_CAMPAIGN_ID_ES=123463
+ITERABLE_REG_UPDATE_CAMPAIGN_ID_ES=123464
+ITERABLE_QUALIFIED_CAMPAIGN_ID_ES=123465
+ITERABLE_CANCELLED_CAMPAIGN_ID_ES=123466
+ITERABLE_TRANSFERRED_CAMPAIGN_ID_ES=123467
+ITERABLE_CHECKIN_CAMPAIGN_ID_ES=123468
+ITERABLE_REMINDER_CAMPAIGN_ID_ES=123469
+
+# Optional: OTP (if taking over from Hydra)
+ITERABLE_OTP_CAMPAIGN_ID_EN=123470
+ITERABLE_OTP_CAMPAIGN_ID_ES=123471
+```
+
+---
+
+## Part 7: Notes & Considerations
+
+### 7.1 OTP Email Decision
+Currently, Hydra API sends OTP emails. Options:
+1. **Keep Hydra** - No changes, emails stay with Unicity identity system
+2. **Hybrid** - Use Iterable for event emails only, Hydra for auth
+3. **Full Iterable** - Intercept OTP code from Hydra, send via Iterable (complex)
+
+**Recommendation:** Start with hybrid approach (option 2).
+
+### 7.2 Pre-Event Reminders
+Requires a scheduled job (cron) to:
+1. Query registrations for upcoming events
+2. Calculate days until event
+3. Send appropriate reminder emails
+
+This is NOT currently implemented. Consider:
+- Replit Scheduled Workflows
+- External cron service (e.g., cron-job.org)
+- Iterable's journey/workflow feature (managed in Iterable dashboard)
+
+### 7.3 No Native Replit Iterable Integration
+Unlike Stripe or SendGrid, there is no native Replit integration for Iterable. 
+Manual API key management via Secrets is required.
+
+---
+
+## Summary
+
+The codebase already has a partial Iterable integration with the foundation in place:
+- `IterableService` class exists with core methods
+- Registration confirmation and update emails are implemented
+- Multi-language support (EN/ES) is structured
+
+**Key work needed:**
+1. Fix dead import in `iterable.ts`
+2. Add email triggers for missing admin actions
+3. Configure environment variables with actual campaign IDs
+4. Test end-to-end email delivery
+
+The architecture is clean and follows good patterns - no major refactoring needed, just completion of existing integration.
