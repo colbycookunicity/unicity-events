@@ -378,7 +378,7 @@ export async function registerRoutes(
         
         if (!qualifier && !existingRegistration) {
           return res.status(403).json({ 
-            error: `You are not qualified for this event. The email "${normalizedEmail}" was not found in the qualified list. If you believe this is an error, please contact americasevent@unicity.com` 
+            error: `You are not qualified for this event. The email "${normalizedEmail}" was not found in the qualified list. If you believe this is an error, please reach out to colby.cook@unicity.com for assistance.` 
           });
         }
       }
