@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertEventSchema, insertRegistrationSchema, insertGuestSchema, insertFlightSchema, insertReimbursementSchema, insertSwagItemSchema, insertSwagAssignmentSchema, insertQualifiedRegistrantSchema, insertUserSchema, userRoleEnum } from "@shared/schema";
+import { insertEventSchema, insertRegistrationSchema, insertGuestSchema, insertFlightSchema, insertReimbursementSchema, insertSwagItemSchema, insertSwagAssignmentSchema, insertQualifiedRegistrantSchema, insertUserSchema, insertPrinterSchema, insertPrintLogSchema, userRoleEnum } from "@shared/schema";
 import { z } from "zod";
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
@@ -3260,6 +3260,159 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error reordering sections:", error);
       res.status(500).json({ error: "Failed to reorder sections" });
+    }
+  });
+
+  // ==================== PRINTER MANAGEMENT ====================
+
+  // Get printers for an event
+  app.get("/api/events/:eventId/printers", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const printers = await storage.getPrintersByEvent(req.params.eventId);
+      res.json(printers);
+    } catch (error) {
+      console.error("Error fetching printers:", error);
+      res.status(500).json({ error: "Failed to fetch printers" });
+    }
+  });
+
+  // Get a single printer
+  app.get("/api/printers/:id", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const printer = await storage.getPrinter(req.params.id);
+      if (!printer) {
+        return res.status(404).json({ error: "Printer not found" });
+      }
+      res.json(printer);
+    } catch (error) {
+      console.error("Error fetching printer:", error);
+      res.status(500).json({ error: "Failed to fetch printer" });
+    }
+  });
+
+  // Create a printer
+  app.post("/api/events/:eventId/printers", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const parsed = insertPrinterSchema.safeParse({
+        ...req.body,
+        eventId: req.params.eventId,
+      });
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid printer data", details: parsed.error.errors });
+      }
+      const printer = await storage.createPrinter(parsed.data);
+      res.status(201).json(printer);
+    } catch (error) {
+      console.error("Error creating printer:", error);
+      res.status(500).json({ error: "Failed to create printer" });
+    }
+  });
+
+  // Update a printer
+  app.patch("/api/printers/:id", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const printer = await storage.updatePrinter(req.params.id, req.body);
+      if (!printer) {
+        return res.status(404).json({ error: "Printer not found" });
+      }
+      res.json(printer);
+    } catch (error) {
+      console.error("Error updating printer:", error);
+      res.status(500).json({ error: "Failed to update printer" });
+    }
+  });
+
+  // Delete a printer
+  app.delete("/api/printers/:id", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const deleted = await storage.deletePrinter(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Printer not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting printer:", error);
+      res.status(500).json({ error: "Failed to delete printer" });
+    }
+  });
+
+  // ==================== PRINT JOBS ====================
+
+  // Get print logs for a registration
+  app.get("/api/registrations/:registrationId/print-logs", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const logs = await storage.getPrintLogsByRegistration(req.params.registrationId);
+      res.json(logs);
+    } catch (error) {
+      console.error("Error fetching print logs:", error);
+      res.status(500).json({ error: "Failed to fetch print logs" });
+    }
+  });
+
+  // Get print logs for an event
+  app.get("/api/events/:eventId/print-logs", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const logs = await storage.getPrintLogsByEvent(req.params.eventId);
+      res.json(logs);
+    } catch (error) {
+      console.error("Error fetching print logs:", error);
+      res.status(500).json({ error: "Failed to fetch print logs" });
+    }
+  });
+
+  // Create a print job (request badge print)
+  app.post("/api/registrations/:registrationId/print", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const registration = await storage.getRegistration(req.params.registrationId);
+      if (!registration) {
+        return res.status(404).json({ error: "Registration not found" });
+      }
+
+      const { printerId, guestId, zplSnapshot } = req.body;
+
+      const logData = {
+        registrationId: req.params.registrationId,
+        guestId: guestId || null,
+        printerId: printerId || null,
+        status: "pending" as const,
+        zplSnapshot: zplSnapshot || null,
+        requestedBy: req.user!.id,
+      };
+
+      const printLog = await storage.createPrintLog(logData);
+      res.status(201).json(printLog);
+    } catch (error) {
+      console.error("Error creating print job:", error);
+      res.status(500).json({ error: "Failed to create print job" });
+    }
+  });
+
+  // Update print job status (called after sending to bridge)
+  app.patch("/api/print-logs/:id", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { status, errorMessage } = req.body;
+      const updateData: Record<string, unknown> = { status };
+      
+      if (status === "sent") {
+        updateData.sentAt = new Date();
+      } else if (status === "success") {
+        updateData.completedAt = new Date();
+        const log = await storage.getPrintLog(req.params.id);
+        if (log) {
+          await storage.recordBadgePrint(log.registrationId);
+        }
+      } else if (status === "failed") {
+        updateData.errorMessage = errorMessage || "Print failed";
+      }
+
+      const printLog = await storage.updatePrintLog(req.params.id, updateData);
+      if (!printLog) {
+        return res.status(404).json({ error: "Print log not found" });
+      }
+      res.json(printLog);
+    } catch (error) {
+      console.error("Error updating print log:", error);
+      res.status(500).json({ error: "Failed to update print log" });
     }
   });
 
