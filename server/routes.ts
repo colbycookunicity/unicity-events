@@ -1918,10 +1918,30 @@ export async function registerRoutes(
 
   app.post("/api/registrations/:id/check-in", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
     try {
+      // Check if already checked in BEFORE performing check-in (to prevent duplicate emails)
+      const existingReg = await storage.getRegistration(req.params.id);
+      const wasAlreadyCheckedIn = existingReg?.checkedInAt !== null;
+
       const registration = await storage.checkInRegistration(req.params.id, req.user!.id);
       if (!registration) {
         return res.status(404).json({ error: "Registration not found" });
       }
+
+      // Send check-in confirmation email ONLY if this is the first check-in
+      if (!wasAlreadyCheckedIn) {
+        const event = await storage.getEvent(registration.eventId);
+        if (event) {
+          iterableService.sendCheckedInConfirmation(
+            registration.email,
+            registration,
+            event,
+            registration.language
+          ).catch(err => {
+            console.error('[Iterable] Failed to send check-in confirmation email:', err);
+          });
+        }
+      }
+
       res.json(registration);
     } catch (error) {
       console.error("Check-in error:", error);
@@ -1966,6 +1986,16 @@ export async function registerRoutes(
         return res.status(500).json({ error: "Failed to transfer registration" });
       }
 
+      // Send transfer notification email (non-blocking)
+      iterableService.sendRegistrationTransferred(
+        registration.email,
+        registration,
+        targetEvent,
+        registration.language
+      ).catch(err => {
+        console.error('[Iterable] Failed to send registration transferred email:', err);
+      });
+
       res.json(registration);
     } catch (error) {
       console.error("Transfer error:", error);
@@ -1975,7 +2005,24 @@ export async function registerRoutes(
 
   app.delete("/api/registrations/:id", authenticateToken, requireRole("admin"), async (req, res) => {
     try {
+      // Fetch registration and event BEFORE deletion to send cancellation email
+      const registration = await storage.getRegistration(req.params.id);
+      const event = registration ? await storage.getEvent(registration.eventId) : null;
+
       await storage.deleteRegistration(req.params.id);
+
+      // Send cancellation email after successful deletion (non-blocking)
+      if (registration && event) {
+        iterableService.sendRegistrationCanceled(
+          registration.email,
+          registration,
+          event,
+          registration.language
+        ).catch(err => {
+          console.error('[Iterable] Failed to send registration canceled email:', err);
+        });
+      }
+
       res.json({ success: true });
     } catch (error) {
       console.error("Delete registration error:", error);
@@ -2579,6 +2626,24 @@ export async function registerRoutes(
       const data = { ...req.body, eventId: req.params.eventId, importedBy: req.user!.id };
       const validatedData = insertQualifiedRegistrantSchema.parse(data);
       const qualifier = await storage.createQualifiedRegistrant(validatedData);
+
+      // Send qualification granted email (non-blocking)
+      const event = await storage.getEvent(req.params.eventId);
+      if (event && qualifier.email) {
+        iterableService.sendQualificationGranted(
+          qualifier.email,
+          {
+            id: qualifier.id,
+            firstName: qualifier.firstName,
+            lastName: qualifier.lastName,
+          },
+          event,
+          'en'
+        ).catch(err => {
+          console.error('[Iterable] Failed to send qualification granted email:', err);
+        });
+      }
+
       res.status(201).json(qualifier);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -2622,6 +2687,28 @@ export async function registerRoutes(
       }));
 
       const created = await storage.createQualifiedRegistrantsBulk(registrantsToInsert);
+
+      // Send qualification granted emails for all imported registrants (non-blocking)
+      const event = await storage.getEvent(eventId);
+      if (event && created.length > 0) {
+        for (const qualifier of created) {
+          if (qualifier.email) {
+            iterableService.sendQualificationGranted(
+              qualifier.email,
+              {
+                id: qualifier.id,
+                firstName: qualifier.firstName,
+                lastName: qualifier.lastName,
+              },
+              event,
+              'en'
+            ).catch(err => {
+              console.error(`[Iterable] Failed to send qualification granted email to ${qualifier.email}:`, err);
+            });
+          }
+        }
+      }
+
       res.status(201).json({ 
         imported: created.length, 
         registrants: created 
