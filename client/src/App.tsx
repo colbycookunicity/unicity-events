@@ -32,6 +32,7 @@ import EventListPage from "@/pages/EventListPage";
 import SettingsPage from "@/pages/SettingsPage";
 import ReportsPage from "@/pages/ReportsPage";
 import AttendeeEventsPage from "@/pages/AttendeeEventsPage";
+import PrintersPage from "@/pages/PrintersPage";
 
 function AdminLayout({ children }: { children: React.ReactNode }) {
   const { theme } = useTheme();
@@ -87,6 +88,7 @@ function AdminRouter() {
         <Route path="/admin/check-in" component={CheckInPage} />
         <Route path="/admin/swag" component={SwagPage} />
         <Route path="/admin/reports" component={ReportsPage} />
+        <Route path="/admin/printers" component={PrintersPage} />
         <Route path="/admin/settings" component={SettingsPage} />
         <Route component={NotFound} />
       </Switch>

@@ -8,6 +8,7 @@ import {
   FileBarChart,
   Settings,
   LogOut,
+  Printer,
 } from "lucide-react";
 import {
   Sidebar,
@@ -69,6 +70,11 @@ export function AppSidebar() {
       title: t("reports"),
       url: "/admin/reports",
       icon: FileBarChart,
+    },
+    {
+      title: "Printers",
+      url: "/admin/printers",
+      icon: Printer,
     },
   ];
 
