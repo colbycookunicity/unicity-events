@@ -1,6 +1,20 @@
 const ITERABLE_API_KEY = process.env.ITERABLE_API_KEY;
 const ITERABLE_API_BASE = 'https://api.iterable.com/api';
 
+function getBaseUrl(): string {
+  return process.env.REPLIT_DEPLOYMENT_URL 
+    || process.env.REPLIT_DEV_DOMAIN 
+    || 'https://unicity-events.replit.app';
+}
+
+function buildEventUrl(event: any): string {
+  const baseUrl = getBaseUrl();
+  if (event.slug) {
+    return `${baseUrl}/events/${event.slug}`;
+  }
+  return `${baseUrl}/events/${event.id}`;
+}
+
 export interface EmailResult {
   success: boolean;
   messageId?: string;
@@ -165,6 +179,7 @@ export class IterableService {
         lastName: registration.lastName,
         eventName,
         eventLocation: event.location,
+        eventUrl: buildEventUrl(event),
         startDate: event.startDate,
         endDate: event.endDate,
         registrationId: registration.id,
@@ -189,6 +204,7 @@ export class IterableService {
       dataFields: {
         firstName: registration.firstName,
         eventName,
+        eventUrl: buildEventUrl(event),
         language,
       },
     });
@@ -212,6 +228,7 @@ export class IterableService {
         firstName: registration.firstName,
         lastName: registration.lastName,
         eventName,
+        eventUrl: buildEventUrl(event),
         eventStartDate: event.startDate,
         registrationId: registration.id,
         language,
@@ -237,6 +254,7 @@ export class IterableService {
         firstName: registration.firstName,
         lastName: registration.lastName,
         eventName,
+        eventUrl: buildEventUrl(event),
         eventStartDate: event.startDate,
         registrationId: registration.id,
         language,
@@ -262,6 +280,7 @@ export class IterableService {
         firstName: registration.firstName,
         lastName: registration.lastName,
         eventName,
+        eventUrl: buildEventUrl(event),
         eventStartDate: event.startDate,
         registrationId: registration.id,
         language,
@@ -287,6 +306,7 @@ export class IterableService {
         firstName: registration.firstName,
         lastName: registration.lastName,
         eventName,
+        eventUrl: buildEventUrl(event),
         eventStartDate: event.startDate,
         registrationId: registration.id,
         language,
