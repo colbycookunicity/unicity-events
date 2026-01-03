@@ -193,6 +193,106 @@ export class IterableService {
       },
     });
   }
+
+  async sendRegistrationCanceled(
+    email: string,
+    registration: any,
+    event: any,
+    language: string = 'en'
+  ): Promise<EmailResult> {
+    const campaignId = getCampaignId('ITERABLE_REGISTRATION_CANCELED_CAMPAIGN_ID');
+    const eventName = (language === 'es' && event.nameEs) ? event.nameEs : event.name;
+
+    return this.sendEmailInternal({
+      campaignId,
+      recipientEmail: email,
+      context: 'RegistrationCanceled',
+      dataFields: {
+        email,
+        firstName: registration.firstName,
+        lastName: registration.lastName,
+        eventName,
+        eventStartDate: event.startDate,
+        registrationId: registration.id,
+        language,
+      },
+    });
+  }
+
+  async sendRegistrationTransferred(
+    email: string,
+    registration: any,
+    event: any,
+    language: string = 'en'
+  ): Promise<EmailResult> {
+    const campaignId = getCampaignId('ITERABLE_REGISTRATION_TRANSFERRED_CAMPAIGN_ID');
+    const eventName = (language === 'es' && event.nameEs) ? event.nameEs : event.name;
+
+    return this.sendEmailInternal({
+      campaignId,
+      recipientEmail: email,
+      context: 'RegistrationTransferred',
+      dataFields: {
+        email,
+        firstName: registration.firstName,
+        lastName: registration.lastName,
+        eventName,
+        eventStartDate: event.startDate,
+        registrationId: registration.id,
+        language,
+      },
+    });
+  }
+
+  async sendCheckedInConfirmation(
+    email: string,
+    registration: any,
+    event: any,
+    language: string = 'en'
+  ): Promise<EmailResult> {
+    const campaignId = getCampaignId('ITERABLE_CHECKED_IN_CAMPAIGN_ID');
+    const eventName = (language === 'es' && event.nameEs) ? event.nameEs : event.name;
+
+    return this.sendEmailInternal({
+      campaignId,
+      recipientEmail: email,
+      context: 'CheckedInConfirmation',
+      dataFields: {
+        email,
+        firstName: registration.firstName,
+        lastName: registration.lastName,
+        eventName,
+        eventStartDate: event.startDate,
+        registrationId: registration.id,
+        language,
+      },
+    });
+  }
+
+  async sendQualificationGranted(
+    email: string,
+    registration: any,
+    event: any,
+    language: string = 'en'
+  ): Promise<EmailResult> {
+    const campaignId = getCampaignId('ITERABLE_QUALIFICATION_GRANTED_CAMPAIGN_ID');
+    const eventName = (language === 'es' && event.nameEs) ? event.nameEs : event.name;
+
+    return this.sendEmailInternal({
+      campaignId,
+      recipientEmail: email,
+      context: 'QualificationGranted',
+      dataFields: {
+        email,
+        firstName: registration.firstName,
+        lastName: registration.lastName,
+        eventName,
+        eventStartDate: event.startDate,
+        registrationId: registration.id,
+        language,
+      },
+    });
+  }
 }
 
 export const iterableService = new IterableService();
