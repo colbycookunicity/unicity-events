@@ -1929,6 +1929,50 @@ export async function registerRoutes(
     }
   });
 
+  // Transfer registration to another event
+  app.post("/api/registrations/:id/transfer", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const { targetEventId } = req.body;
+      if (!targetEventId) {
+        return res.status(400).json({ error: "Target event ID is required" });
+      }
+
+      // Get the current registration
+      const currentReg = await storage.getRegistration(req.params.id);
+      if (!currentReg) {
+        return res.status(404).json({ error: "Registration not found" });
+      }
+
+      // Check if already in the target event
+      if (currentReg.eventId === targetEventId) {
+        return res.status(400).json({ error: "Registration is already in this event" });
+      }
+
+      // Verify target event exists
+      const targetEvent = await storage.getEvent(targetEventId);
+      if (!targetEvent) {
+        return res.status(404).json({ error: "Target event not found" });
+      }
+
+      // Check for duplicate registration in target event
+      const existingInTarget = await storage.getRegistrationByEmail(targetEventId, currentReg.email);
+      if (existingInTarget) {
+        return res.status(400).json({ error: "This attendee is already registered for the target event" });
+      }
+
+      // Perform the transfer
+      const registration = await storage.transferRegistration(req.params.id, targetEventId, req.user!.email);
+      if (!registration) {
+        return res.status(500).json({ error: "Failed to transfer registration" });
+      }
+
+      res.json(registration);
+    } catch (error) {
+      console.error("Transfer error:", error);
+      res.status(500).json({ error: "Failed to transfer registration" });
+    }
+  });
+
   app.delete("/api/registrations/:id", authenticateToken, requireRole("admin"), async (req, res) => {
     try {
       await storage.deleteRegistration(req.params.id);

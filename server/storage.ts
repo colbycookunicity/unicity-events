@@ -57,6 +57,7 @@ export interface IStorage {
   updateRegistration(id: string, data: Partial<InsertRegistration>): Promise<Registration | undefined>;
   deleteRegistration(id: string): Promise<boolean>;
   checkInRegistration(id: string, checkedInBy: string): Promise<Registration | undefined>;
+  transferRegistration(id: string, targetEventId: string, transferredBy: string): Promise<Registration | undefined>;
 
   // Guests
   getGuestsByRegistration(registrationId: string): Promise<Guest[]>;
@@ -442,6 +443,28 @@ export class DatabaseStorage implements IStorage {
       checkedInBy,
       lastModified: new Date(),
     }).where(eq(registrations.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async transferRegistration(id: string, targetEventId: string, transferredBy: string): Promise<Registration | undefined> {
+    // Reset event-specific data and move to new event
+    // Delete print logs for this registration (event-specific)
+    await db.delete(printLogs).where(eq(printLogs.registrationId, id));
+    // Clear swag assignments (event-specific items)
+    await db.update(swagAssignments).set({ registrationId: null }).where(eq(swagAssignments.registrationId, id));
+    
+    // Update registration with new event and reset check-in/badge data
+    const [updated] = await db.update(registrations).set({
+      eventId: targetEventId,
+      status: "confirmed", // Reset status (no longer checked in)
+      checkedInAt: null,
+      checkedInBy: null,
+      badgePrintedAt: null,
+      badgePrintCount: 0,
+      lastModified: new Date(),
+      notes: sql`COALESCE(${registrations.notes}, '') || ${`\n[Transferred from another event by ${transferredBy} on ${new Date().toISOString()}]`}`,
+    }).where(eq(registrations.id, id)).returning();
+    
     return updated || undefined;
   }
 
