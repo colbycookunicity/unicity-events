@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import PhoneInput from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -740,6 +741,7 @@ export default function AttendeesPage() {
       dietaryRestrictions: mergedDietary.length > 0 ? mergedDietary : null,
       adaAccommodations: editForm.adaAccommodations || false,
       status: editForm.status,
+      notes: editForm.notes || null,
     };
     
     updateAttendeeMutation.mutate(updateData);

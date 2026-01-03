@@ -173,6 +173,8 @@ export const registrations = pgTable("registrations", {
   badgePrintCount: integer("badge_print_count").default(0),
   // Verification source
   verifiedByHydra: boolean("verified_by_hydra").default(false),
+  // Admin notes
+  notes: text("notes"),
   // Timestamps
   registeredAt: timestamp("registered_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
