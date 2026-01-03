@@ -1,23 +1,38 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Search, CheckCircle, User, Shirt, Package } from "lucide-react";
+import { Search, CheckCircle, User, Shirt, Package, Printer } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/StatusBadge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useTranslation } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
-import type { Registration, Event } from "@shared/schema";
+import type { Registration, Event, Printer as PrinterType } from "@shared/schema";
 
 export default function CheckInPage() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedEvent, setSelectedEvent] = useState<string>("");
+  const [selectedPrinter, setSelectedPrinter] = useState<string>("");
+  const [reprintConfirmReg, setReprintConfirmReg] = useState<Registration | null>(null);
+  const [bridgeUrl] = useState<string>(() => 
+    localStorage.getItem("print-bridge-url") || ""
+  );
 
   const { data: events } = useQuery<Event[]>({
     queryKey: ["/api/events"],
@@ -25,6 +40,11 @@ export default function CheckInPage() {
 
   const { data: registrations, isLoading } = useQuery<Registration[]>({
     queryKey: [`/api/registrations?eventId=${selectedEvent}`],
+    enabled: !!selectedEvent,
+  });
+
+  const { data: printers } = useQuery<PrinterType[]>({
+    queryKey: ["/api/events", selectedEvent, "printers"],
     enabled: !!selectedEvent,
   });
 
@@ -57,6 +77,91 @@ export default function CheckInPage() {
       toast({ title: t("error"), description: "Failed to update swag status", variant: "destructive" });
     },
   });
+
+  const printBadgeMutation = useMutation({
+    mutationFn: async (reg: Registration) => {
+      if (!bridgeUrl) {
+        throw new Error("Print Bridge URL not configured");
+      }
+      if (!selectedPrinter) {
+        throw new Error("No printer selected");
+      }
+
+      const printer = printers?.find(p => p.id === selectedPrinter);
+      if (!printer) {
+        throw new Error("Printer not found");
+      }
+
+      const response = await fetch(`${bridgeUrl}/print`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          printer: {
+            ipAddress: printer.ipAddress,
+            port: printer.port || 9100,
+          },
+          badge: {
+            firstName: reg.firstName,
+            lastName: reg.lastName,
+            unicityId: reg.unicityId || "",
+            registrationId: reg.id,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to print badge");
+      }
+
+      await apiRequest("POST", `/api/registrations/${reg.id}/record-print`, {
+        printerId: selectedPrinter,
+      });
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ predicate: (query) => 
+        String(query.queryKey[0]).startsWith("/api/registrations")
+      });
+      toast({ title: t("success"), description: "Badge printed successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: t("error"), description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handlePrintBadge = (reg: Registration) => {
+    if (!bridgeUrl) {
+      toast({ 
+        title: "Print Bridge not configured", 
+        description: "Go to Printers page to configure the Print Bridge URL",
+        variant: "destructive" 
+      });
+      return;
+    }
+    if (!selectedPrinter) {
+      toast({ 
+        title: "No printer selected", 
+        description: "Select a printer to print badges",
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    if (reg.badgePrintCount && reg.badgePrintCount > 0) {
+      setReprintConfirmReg(reg);
+    } else {
+      printBadgeMutation.mutate(reg);
+    }
+  };
+
+  const confirmReprint = () => {
+    if (reprintConfirmReg) {
+      printBadgeMutation.mutate(reprintConfirmReg);
+      setReprintConfirmReg(null);
+    }
+  };
 
   const filteredRegistrations = registrations?.filter((reg) => {
     if (!searchQuery) return true;
@@ -95,9 +200,26 @@ export default function CheckInPage() {
           </Select>
 
           {selectedEvent && (
-            <Badge variant="secondary" className="text-sm">
-              {checkedInCount} / {totalCount} checked in
-            </Badge>
+            <>
+              <Badge variant="secondary" className="text-sm">
+                {checkedInCount} / {totalCount} checked in
+              </Badge>
+              {printers && printers.length > 0 && (
+                <Select value={selectedPrinter} onValueChange={setSelectedPrinter}>
+                  <SelectTrigger className="w-[180px]" data-testid="select-printer">
+                    <Printer className="h-4 w-4 mr-2 shrink-0" />
+                    <SelectValue placeholder="Select printer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {printers.map((printer) => (
+                      <SelectItem key={printer.id} value={printer.id}>
+                        {printer.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -180,6 +302,12 @@ export default function CheckInPage() {
                         <Package className="h-4 w-4 text-muted-foreground shrink-0" />
                         <StatusBadge status={reg.swagStatus || "pending"} type="swag" />
                       </div>
+                      {reg.badgePrintCount && reg.badgePrintCount > 0 ? (
+                        <Badge variant="outline" className="text-xs">
+                          <Printer className="h-3 w-3 mr-1" />
+                          Printed {reg.badgePrintCount}x
+                        </Badge>
+                      ) : null}
                     </div>
 
                     <div className="pt-2 border-t space-y-2">
@@ -212,6 +340,19 @@ export default function CheckInPage() {
                           {t("markSwagPickedUp")}
                         </Button>
                       )}
+
+                      {reg.status === "checked_in" && selectedPrinter && (
+                        <Button
+                          variant="secondary"
+                          onClick={() => handlePrintBadge(reg)}
+                          disabled={printBadgeMutation.isPending}
+                          className="w-full"
+                          data-testid={`button-print-${reg.id}`}
+                        >
+                          <Printer className="h-4 w-4 mr-2" />
+                          {reg.badgePrintCount && reg.badgePrintCount > 0 ? "Reprint Badge" : "Print Badge"}
+                        </Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -230,6 +371,31 @@ export default function CheckInPage() {
           </CardContent>
         </Card>
       )}
+
+      <AlertDialog
+        open={!!reprintConfirmReg}
+        onOpenChange={(open) => !open && setReprintConfirmReg(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reprint Badge</AlertDialogTitle>
+            <AlertDialogDescription>
+              This badge has already been printed {reprintConfirmReg?.badgePrintCount} time(s).
+              Are you sure you want to print another badge for {reprintConfirmReg?.firstName} {reprintConfirmReg?.lastName}?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmReprint}
+              data-testid="button-confirm-reprint"
+            >
+              <Printer className="h-4 w-4 mr-2" />
+              Reprint Badge
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
