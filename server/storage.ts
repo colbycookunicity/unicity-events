@@ -1,7 +1,7 @@
 import {
   users, events, registrations, guests, flights, reimbursements, otpSessions, authSessions, attendeeSessions,
   swagItems, swagAssignments, qualifiedRegistrants, eventPages, eventPageSections, guestAllowanceRules,
-  formTemplates, eventManagerAssignments,
+  formTemplates, eventManagerAssignments, printers, printLogs,
   type User, type InsertUser,
   type Event, type InsertEvent,
   type Registration, type InsertRegistration,
@@ -18,6 +18,8 @@ import {
   type GuestAllowanceRule, type InsertGuestAllowanceRule,
   type FormTemplate,
   type EventManagerAssignment, type InsertEventManagerAssignment,
+  type Printer, type InsertPrinter,
+  type PrintLog, type InsertPrintLog,
   type EventWithStats, type RegistrationWithDetails,
   type SwagItemWithStats, type SwagAssignmentWithDetails,
 } from "@shared/schema";
@@ -165,6 +167,21 @@ export interface IStorage {
   canUserAccessEvent(userId: string, eventId: string, userRole: string): Promise<boolean>;
   assignEventManager(eventId: string, userId: string, assignedBy: string): Promise<EventManagerAssignment>;
   removeEventManager(eventId: string, userId: string): Promise<boolean>;
+
+  // Printers
+  getPrintersByEvent(eventId: string): Promise<Printer[]>;
+  getPrinter(id: string): Promise<Printer | undefined>;
+  createPrinter(printer: InsertPrinter): Promise<Printer>;
+  updatePrinter(id: string, data: Partial<InsertPrinter>): Promise<Printer | undefined>;
+  deletePrinter(id: string): Promise<boolean>;
+
+  // Print Logs
+  getPrintLogsByRegistration(registrationId: string): Promise<PrintLog[]>;
+  getPrintLogsByEvent(eventId: string): Promise<PrintLog[]>;
+  getPrintLog(id: string): Promise<PrintLog | undefined>;
+  createPrintLog(log: InsertPrintLog): Promise<PrintLog>;
+  updatePrintLog(id: string, data: Partial<InsertPrintLog>): Promise<PrintLog | undefined>;
+  recordBadgePrint(registrationId: string): Promise<Registration | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1278,6 +1295,78 @@ export class DatabaseStorage implements IStorage {
         eq(eventManagerAssignments.userId, userId)
       ));
     return (result.rowCount ?? 0) > 0;
+  }
+
+  // Printers
+  async getPrintersByEvent(eventId: string): Promise<Printer[]> {
+    return db.select().from(printers).where(eq(printers.eventId, eventId)).orderBy(desc(printers.createdAt));
+  }
+
+  async getPrinter(id: string): Promise<Printer | undefined> {
+    const [printer] = await db.select().from(printers).where(eq(printers.id, id));
+    return printer || undefined;
+  }
+
+  async createPrinter(printer: InsertPrinter): Promise<Printer> {
+    const [newPrinter] = await db.insert(printers).values(printer).returning();
+    return newPrinter;
+  }
+
+  async updatePrinter(id: string, data: Partial<InsertPrinter>): Promise<Printer | undefined> {
+    const [updated] = await db.update(printers)
+      .set({ ...data, lastModified: new Date() })
+      .where(eq(printers.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deletePrinter(id: string): Promise<boolean> {
+    const result = await db.delete(printers).where(eq(printers.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // Print Logs
+  async getPrintLogsByRegistration(registrationId: string): Promise<PrintLog[]> {
+    return db.select().from(printLogs).where(eq(printLogs.registrationId, registrationId)).orderBy(desc(printLogs.requestedAt));
+  }
+
+  async getPrintLogsByEvent(eventId: string): Promise<PrintLog[]> {
+    const logs = await db.select({ printLog: printLogs })
+      .from(printLogs)
+      .innerJoin(registrations, eq(printLogs.registrationId, registrations.id))
+      .where(eq(registrations.eventId, eventId))
+      .orderBy(desc(printLogs.requestedAt));
+    return logs.map(l => l.printLog);
+  }
+
+  async getPrintLog(id: string): Promise<PrintLog | undefined> {
+    const [log] = await db.select().from(printLogs).where(eq(printLogs.id, id));
+    return log || undefined;
+  }
+
+  async createPrintLog(log: InsertPrintLog): Promise<PrintLog> {
+    const [newLog] = await db.insert(printLogs).values(log).returning();
+    return newLog;
+  }
+
+  async updatePrintLog(id: string, data: Partial<InsertPrintLog>): Promise<PrintLog | undefined> {
+    const [updated] = await db.update(printLogs)
+      .set(data)
+      .where(eq(printLogs.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async recordBadgePrint(registrationId: string): Promise<Registration | undefined> {
+    const [updated] = await db.update(registrations)
+      .set({
+        badgePrintedAt: new Date(),
+        badgePrintCount: sql`COALESCE(${registrations.badgePrintCount}, 0) + 1`,
+        lastModified: new Date(),
+      })
+      .where(eq(registrations.id, registrationId))
+      .returning();
+    return updated || undefined;
   }
 }
 
