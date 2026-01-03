@@ -44,7 +44,7 @@ export default function CheckInPage() {
   });
 
   const { data: printers } = useQuery<PrinterType[]>({
-    queryKey: ["/api/events", selectedEvent, "printers"],
+    queryKey: [`/api/events/${selectedEvent}/printers`],
     enabled: !!selectedEvent,
   });
 

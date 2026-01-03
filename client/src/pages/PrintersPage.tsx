@@ -76,7 +76,7 @@ export default function PrintersPage() {
   });
 
   const { data: printers, isLoading: printersLoading, refetch: refetchPrinters } = useQuery<PrinterType[]>({
-    queryKey: ["/api/events", selectedEventId, "printers"],
+    queryKey: [`/api/events/${selectedEventId}/printers`],
     enabled: !!selectedEventId,
   });
 
@@ -95,7 +95,7 @@ export default function PrintersPage() {
       return apiRequest("POST", `/api/events/${selectedEventId}/printers`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/events", selectedEventId, "printers"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/events/${selectedEventId}/printers`] });
       setIsAddDialogOpen(false);
       form.reset();
       toast({
@@ -117,7 +117,7 @@ export default function PrintersPage() {
       return apiRequest("PATCH", `/api/printers/${id}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/events", selectedEventId, "printers"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/events/${selectedEventId}/printers`] });
       setEditingPrinter(null);
       form.reset();
       toast({
@@ -139,7 +139,7 @@ export default function PrintersPage() {
       return apiRequest("DELETE", `/api/printers/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/events", selectedEventId, "printers"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/events/${selectedEventId}/printers`] });
       setDeletingPrinter(null);
       toast({
         title: "Printer deleted",
