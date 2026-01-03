@@ -504,7 +504,7 @@ export default function AttendeeEventsPage() {
         <footer className="mt-8 pb-8 text-center text-sm text-muted-foreground">
           <a href="https://unicity.com" target="_blank" rel="noopener noreferrer" className="hover:underline">Unicity International</a>
           <span className="mx-2">|</span>
-          <a href="mailto:colby.cook@unicity.com" className="hover:underline">colby.cook@unicity.com</a>
+          <a href="mailto:americasevent@unicity.com" className="hover:underline">americasevent@unicity.com</a>
         </footer>
       </main>
     </div>

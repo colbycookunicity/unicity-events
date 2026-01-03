@@ -1408,8 +1408,8 @@ export default function RegistrationPage() {
       </CardHeader>
       <CardContent className="text-center text-muted-foreground text-sm">
         {language === "es" 
-          ? <>Si cree que esto es un error, por favor comuniquese con <a href="mailto:colby.cook@unicity.com" className="text-primary underline hover:no-underline">colby.cook@unicity.com</a> para asistencia.</>
-          : <>If you believe this is an error, please reach out to <a href="mailto:colby.cook@unicity.com" className="text-primary underline hover:no-underline">colby.cook@unicity.com</a> for assistance.</>}
+          ? <>Si cree que esto es un error, <a href="mailto:americasevent@unicity.com" className="text-primary underline hover:no-underline">contacte al soporte</a>.</>
+          : <>If you believe this is an error, please <a href="mailto:americasevent@unicity.com" className="text-primary underline hover:no-underline">contact support</a>.</>}
       </CardContent>
     </Card>
   );
@@ -2186,7 +2186,7 @@ export default function RegistrationPage() {
           <footer className="mt-8 text-center text-sm text-muted-foreground">
             <a href="https://unicity.com" target="_blank" rel="noopener noreferrer" className="hover:underline">Unicity International</a>
             <span className="mx-2">|</span>
-            <a href="mailto:colby.cook@unicity.com" className="hover:underline">colby.cook@unicity.com</a>
+            <a href="mailto:americasevent@unicity.com" className="hover:underline">americasevent@unicity.com</a>
           </footer>
         </div>
       </div>
@@ -2312,7 +2312,7 @@ export default function RegistrationPage() {
                 <footer className="mt-8 pb-8 text-center text-sm text-muted-foreground">
                   <a href="https://unicity.com" target="_blank" rel="noopener noreferrer" className="hover:underline">Unicity International</a>
                   <span className="mx-2">|</span>
-                  <a href="mailto:colby.cook@unicity.com" className="hover:underline">colby.cook@unicity.com</a>
+                  <a href="mailto:americasevent@unicity.com" className="hover:underline">americasevent@unicity.com</a>
                 </footer>
               </div>
             </div>
@@ -2379,7 +2379,7 @@ export default function RegistrationPage() {
           <footer className="mt-8 pb-8 text-center text-sm text-muted-foreground">
             <a href="https://unicity.com" target="_blank" rel="noopener noreferrer" className="hover:underline">Unicity International</a>
             <span className="mx-2">|</span>
-            <a href="mailto:colby.cook@unicity.com" className="hover:underline">colby.cook@unicity.com</a>
+            <a href="mailto:americasevent@unicity.com" className="hover:underline">americasevent@unicity.com</a>
           </footer>
         </div>
       </div>
