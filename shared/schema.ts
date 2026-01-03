@@ -168,6 +168,9 @@ export const registrations = pgTable("registrations", {
   // Check-in
   checkedInAt: timestamp("checked_in_at"),
   checkedInBy: varchar("checked_in_by").references(() => users.id),
+  // Badge printing
+  badgePrintedAt: timestamp("badge_printed_at"),
+  badgePrintCount: integer("badge_print_count").default(0),
   // Verification source
   verifiedByHydra: boolean("verified_by_hydra").default(false),
   // Timestamps
@@ -806,6 +809,56 @@ export type EventPage = typeof eventPages.$inferSelect;
 
 export type InsertEventPageSection = z.infer<typeof insertEventPageSectionSchema>;
 export type EventPageSection = typeof eventPageSections.$inferSelect;
+
+// Printers table - for badge printing at events
+export const printers = pgTable("printers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  eventId: varchar("event_id").references(() => events.id).notNull(),
+  name: text("name").notNull(),
+  location: text("location"),
+  ipAddress: text("ip_address").notNull(),
+  port: integer("port").default(9100),
+  status: text("status").default("unknown"),
+  lastSeenAt: timestamp("last_seen_at"),
+  capabilities: jsonb("capabilities"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  lastModified: timestamp("last_modified").defaultNow().notNull(),
+});
+
+export const insertPrinterSchema = createInsertSchema(printers).omit({
+  id: true,
+  createdAt: true,
+  lastModified: true,
+});
+export type InsertPrinter = z.infer<typeof insertPrinterSchema>;
+export type Printer = typeof printers.$inferSelect;
+
+// Print status enum
+export const printStatusEnum = ["pending", "sent", "success", "failed"] as const;
+export type PrintStatus = typeof printStatusEnum[number];
+
+// Print logs table - for tracking badge print jobs
+export const printLogs = pgTable("print_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  registrationId: varchar("registration_id").references(() => registrations.id).notNull(),
+  guestId: varchar("guest_id").references(() => guests.id),
+  printerId: varchar("printer_id").references(() => printers.id),
+  status: text("status").notNull().default("pending"),
+  zplSnapshot: text("zpl_snapshot"),
+  requestedBy: varchar("requested_by").references(() => users.id).notNull(),
+  requestedAt: timestamp("requested_at").defaultNow().notNull(),
+  sentAt: timestamp("sent_at"),
+  completedAt: timestamp("completed_at"),
+  errorMessage: text("error_message"),
+  retryCount: integer("retry_count").default(0),
+});
+
+export const insertPrintLogSchema = createInsertSchema(printLogs).omit({
+  id: true,
+  requestedAt: true,
+});
+export type InsertPrintLog = z.infer<typeof insertPrintLogSchema>;
+export type PrintLog = typeof printLogs.$inferSelect;
 
 // Extended types for API responses
 export type RegistrationWithDetails = Registration & {
