@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Plus, Search, Calendar, MapPin, Users, MoreHorizontal, Archive, Trash2, Eye, EyeOff, FileEdit } from "lucide-react";
+import { Plus, Search, Calendar, MapPin, Users, MoreHorizontal, Archive, Trash2, Eye, EyeOff, FileEdit, ExternalLink } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -253,24 +253,41 @@ export default function EventsPage() {
                   </CardDescription>
                 )}
               </CardHeader>
-              <CardContent className="space-y-3 relative z-10 pointer-events-none">
+              <CardContent className="space-y-3 relative z-10">
                 {getEventDescription(event) && (
-                  <p className="text-sm text-muted-foreground line-clamp-2">
+                  <p className="text-sm text-muted-foreground line-clamp-2 pointer-events-none">
                     {getEventDescription(event)}
                   </p>
                 )}
                 <div className="flex items-center gap-4 text-sm text-muted-foreground">
                   {event.location && (
-                    <span className="flex items-center gap-1.5">
+                    <span className="flex items-center gap-1.5 pointer-events-none">
                       <MapPin className="h-3.5 w-3.5" />
                       {event.location}
                     </span>
                   )}
-                  <span className="flex items-center gap-1.5">
-                    <Users className="h-3.5 w-3.5" />
-                    {event.totalRegistrations ?? 0}
-                    {event.capacity && ` / ${event.capacity}`}
-                  </span>
+                  <Link href={`/admin/attendees?event=${event.id}`}>
+                    <span 
+                      className="flex items-center gap-1.5 hover-elevate active-elevate-2 px-1.5 py-0.5 rounded-md cursor-pointer"
+                      data-testid={`link-attendees-${event.id}`}
+                    >
+                      <Users className="h-3.5 w-3.5" />
+                      {event.totalRegistrations ?? 0}
+                      {event.capacity && ` / ${event.capacity}`}
+                    </span>
+                  </Link>
+                  {event.slug && (
+                    <a 
+                      href={`/register/${event.slug}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 hover-elevate active-elevate-2 px-1.5 py-0.5 rounded-md cursor-pointer"
+                      onClick={(e) => e.stopPropagation()}
+                      data-testid={`link-registration-${event.id}`}
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  )}
                 </div>
               </CardContent>
             </Card>
