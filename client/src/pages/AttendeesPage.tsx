@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useSearch } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Search, Download, MoreHorizontal, Mail, Edit, Trash2, User, Shirt, Save, Pencil, ChevronUp, ChevronDown, Settings2, ArrowUpDown, Plus, Upload, Edit2, ArrowRightLeft, Copy } from "lucide-react";
+import { Search, Download, MoreHorizontal, Mail, Edit, Trash2, User, Shirt, Save, Pencil, ChevronUp, ChevronDown, Settings2, ArrowUpDown, Plus, Upload, Edit2, ArrowRightLeft, Copy, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PhoneInput from "react-phone-number-input";
@@ -1437,6 +1437,17 @@ export default function AttendeesPage() {
             ))}
           </SelectContent>
         </Select>
+        {selectedEvent && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => window.open(`/register/${selectedEvent.slug}`, '_blank')}
+            title="Open registration page"
+            data-testid="button-open-registration"
+          >
+            <ExternalLink className="h-4 w-4" />
+          </Button>
+        )}
         {eventFilter !== "all" && (
           <Select value={registrationStatusFilter} onValueChange={setRegistrationStatusFilter}>
             <SelectTrigger className="w-[160px]" data-testid="select-registration-status-filter">
