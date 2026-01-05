@@ -1613,7 +1613,12 @@ export default function RegistrationPage() {
                         <FormItem>
                           <FormLabel>{language === "es" ? "Fecha de Nacimiento" : "Date of Birth"} *</FormLabel>
                           <FormControl>
-                            <Input type="date" {...field} data-testid="input-dob" />
+                            <Input 
+                              type="date" 
+                              {...field} 
+                              max={new Date().toISOString().split('T')[0]}
+                              data-testid="input-dob" 
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
