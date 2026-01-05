@@ -627,7 +627,7 @@ export default function SwagPage() {
             </Button>
             <Button 
               onClick={handleBulkAssign}
-              disabled={selectedRegistrations.length === 0 || bulkAssignMutation.isPending}
+              disabled={selectedRegistrations.length === 0 || bulkAssignMutation.isPending || (itemToAssign?.sizeRequired && !assignSize)}
               data-testid="button-confirm-assign"
             >
               {bulkAssignMutation.isPending ? "Assigning..." : `Assign to ${selectedRegistrations.length}`}

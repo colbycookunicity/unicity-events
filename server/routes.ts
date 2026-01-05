@@ -2504,37 +2504,52 @@ export async function registerRoutes(
   
   app.post("/api/swag-assignments/bulk", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
     try {
+      console.log("[Swag] Bulk assign request:", JSON.stringify(req.body));
       const validated = bulkSwagAssignmentSchema.parse(req.body);
       const { swagItemId, registrationIds, guestIds, size } = validated;
       const assignments = [];
       
       if (registrationIds?.length) {
+        console.log(`[Swag] Assigning swag ${swagItemId} to ${registrationIds.length} registrations`);
         for (const registrationId of registrationIds) {
-          const assignment = await storage.createSwagAssignment({
-            swagItemId,
-            registrationId,
-            size,
-            status: 'assigned',
-          });
-          assignments.push(assignment);
+          try {
+            const assignment = await storage.createSwagAssignment({
+              swagItemId,
+              registrationId,
+              size,
+              status: 'assigned',
+            });
+            console.log(`[Swag] Created assignment ${assignment.id} for registration ${registrationId}`);
+            assignments.push(assignment);
+          } catch (assignError) {
+            console.error(`[Swag] Failed to create assignment for registration ${registrationId}:`, assignError);
+          }
         }
       }
       
       if (guestIds?.length) {
+        console.log(`[Swag] Assigning swag ${swagItemId} to ${guestIds.length} guests`);
         for (const guestId of guestIds) {
-          const assignment = await storage.createSwagAssignment({
-            swagItemId,
-            guestId,
-            size,
-            status: 'assigned',
-          });
-          assignments.push(assignment);
+          try {
+            const assignment = await storage.createSwagAssignment({
+              swagItemId,
+              guestId,
+              size,
+              status: 'assigned',
+            });
+            console.log(`[Swag] Created assignment ${assignment.id} for guest ${guestId}`);
+            assignments.push(assignment);
+          } catch (assignError) {
+            console.error(`[Swag] Failed to create assignment for guest ${guestId}:`, assignError);
+          }
         }
       }
       
+      console.log(`[Swag] Bulk assign complete: ${assignments.length} assignments created`);
       res.status(201).json(assignments);
     } catch (error) {
       if (error instanceof z.ZodError) {
+        console.error("[Swag] Validation error:", error.errors);
         return res.status(400).json({ error: "Invalid input", details: error.errors });
       }
       console.error("Error creating bulk swag assignments:", error);
