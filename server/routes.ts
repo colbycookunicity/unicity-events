@@ -29,10 +29,10 @@ async function isAdminEmail(email: string): Promise<boolean> {
     return false;
   }
   
-  // Check if user exists in the database
+  // Check if user exists in database AND has admin role
   const user = await storage.getUserByEmail(normalized);
-  if (user) {
-    return true; // User exists in database, they're authorized
+  if (user && user.role === "admin") {
+    return true; // User exists and is an admin
   }
   
   // Fallback: Check hardcoded list (for bootstrapping first admin)
@@ -646,14 +646,15 @@ export async function registerRoutes(
       let adminUser: any | undefined;
       
       if (email.toLowerCase().endsWith("@unicity.com")) {
-        // Find or create admin user
+        // Find or create user (only whitelist gets admin role)
         let user = await storage.getUserByEmail(email);
         if (!user) {
-          // Create new admin user
+          // Create new user - only fallback admin emails get admin role
+          const role = await isAdminEmail(email) ? "admin" : "readonly";
           user = await storage.createUser({
             email: email.toLowerCase(),
             name: email.split("@")[0],
-            role: "admin",
+            role,
           });
         }
         
