@@ -2001,6 +2001,22 @@ export default function AttendeesPage() {
                 </div>
               </div>
 
+              <Separator />
+
+              <div className="space-y-4">
+                <h4 className="font-medium">Admin Notes</h4>
+                <div className="space-y-2">
+                  <Label>Notes</Label>
+                  <Textarea
+                    value={editForm.notes || ""}
+                    onChange={(e) => handleFormChange("notes", e.target.value)}
+                    placeholder="Add notes about this attendee..."
+                    className="min-h-[100px]"
+                    data-testid="edit-notes"
+                  />
+                </div>
+              </div>
+
               <div className="flex gap-2 pt-4 sticky bottom-0 bg-background py-4 border-t">
                 <Button 
                   onClick={handleSave} 
