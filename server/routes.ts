@@ -1669,8 +1669,9 @@ export async function registerRoutes(
       // verify that the user has a valid OTP session before allowing registration
       const effectiveMode = (event.registrationMode as RegistrationMode) || deriveRegistrationMode(event.requiresQualification, event.requiresVerification);
       const { requiresVerification } = deriveRegistrationFlags(effectiveMode);
+      const isAnonymousMode = effectiveMode === "open_anonymous";
       
-      if (requiresVerification) {
+      if (requiresVerification && !isAnonymousMode) {
         // Check for valid OTP session for this email+event combination
         const otpSession = await storage.getOtpSessionForRegistration(normalizedEmail, event.id);
         const isOtpVerified = otpSession && otpSession.verified && otpSession.verifiedAt && 
@@ -1694,6 +1695,47 @@ export async function registerRoutes(
             message: "Please verify your email before registering"
           });
         }
+      }
+      
+      // For open_anonymous mode: ALWAYS create new registration (no email uniqueness check)
+      // Multiple registrations per email are allowed
+      if (isAnonymousMode) {
+        // Create new registration without checking for existing one
+        const newRegistration = await storage.createRegistration({
+          eventId: event.id,
+          email: normalizedEmail,
+          firstName: req.body.firstName || "",
+          lastName: req.body.lastName || "",
+          phone: req.body.phone || null,
+          unicityId: req.body.unicityId || null,
+          gender: req.body.gender || null,
+          dateOfBirth: req.body.dateOfBirth ? new Date(req.body.dateOfBirth) : null,
+          passportNumber: req.body.passportNumber || null,
+          passportCountry: req.body.passportCountry || null,
+          passportExpiration: req.body.passportExpiration ? new Date(req.body.passportExpiration) : null,
+          emergencyContact: req.body.emergencyContact || null,
+          emergencyContactPhone: req.body.emergencyContactPhone || null,
+          shirtSize: req.body.shirtSize || null,
+          pantSize: req.body.pantSize || null,
+          dietaryRestrictions: Array.isArray(req.body.dietaryRestrictions) ? req.body.dietaryRestrictions : [],
+          adaAccommodations: req.body.adaAccommodations || false,
+          adaAccommodationsAt: req.body.adaAccommodations ? new Date() : null,
+          adaAccommodationsIp: req.body.adaAccommodations ? String(clientIp) : null,
+          roomType: req.body.roomType || null,
+          termsAccepted: req.body.termsAccepted || false,
+          termsAcceptedAt: req.body.termsAccepted ? new Date() : null,
+          termsAcceptedIp: req.body.termsAccepted ? String(clientIp) : null,
+          verifiedByHydra: false, // Anonymous registrations are never Hydra-verified
+          language: req.body.language || "en",
+          formData: req.body.formData || null,
+        });
+        
+        return res.status(201).json({
+          success: true,
+          registration: newRegistration,
+          isAnonymous: true,
+          message: "Registration created successfully. Note: This registration cannot be edited after submission."
+        });
       }
       
       const existingReg = await storage.getRegistrationByEmail(event.id, normalizedEmail);

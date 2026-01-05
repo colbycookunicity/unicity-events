@@ -421,6 +421,16 @@ export default function RegistrationPage() {
   };
   const openVerifiedMode = isOpenVerifiedMode();
 
+  // Check if this is open_anonymous mode (no verification, no email uniqueness, no edits after submission)
+  const isOpenAnonymousMode = (): boolean => {
+    const mode = event?.registrationMode;
+    if (mode === "open_anonymous") return true;
+    // Legacy fallback: open_anonymous = !requiresVerification && !requiresQualification
+    if (!mode && event?.requiresVerification === false && event?.requiresQualification === false) return true;
+    return false;
+  };
+  const openAnonymousMode = isOpenAnonymousMode();
+
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
   
   useEffect(() => {
@@ -502,13 +512,14 @@ export default function RegistrationPage() {
     consumeToken();
   }, [prePopulatedToken, prePopulatedEmail, params.eventId, tokenConsumed, isConsumingToken]);
 
-  // Skip to form if pre-populated, verification not required, or open_verified mode
+  // Skip to form if pre-populated, verification not required, open_verified, or open_anonymous mode
   // For open_verified: form is visible immediately, OTP verification gates submission
+  // For open_anonymous: form is visible immediately, NO verification at all
   useEffect(() => {
-    if (skipVerification || (event && !requiresVerification) || openVerifiedMode) {
+    if (skipVerification || (event && !requiresVerification) || openVerifiedMode || openAnonymousMode) {
       setVerificationStep("form");
     }
-  }, [skipVerification, event, requiresVerification, openVerifiedMode]);
+  }, [skipVerification, event, requiresVerification, openVerifiedMode, openAnonymousMode]);
 
   // Check for existing verified session on page load (for refresh persistence)
   // Also checks attendee token from /my-events authentication
@@ -1185,7 +1196,8 @@ export default function RegistrationPage() {
     
     // For open_verified mode: check if email is verified before submitting
     // If not verified, trigger OTP flow instead of calling mutation
-    if (openVerifiedMode && !isEmailVerified && !skipVerification && !verifiedProfile) {
+    // Note: open_anonymous mode skips ALL verification - goes straight to submission
+    if (openVerifiedMode && !openAnonymousMode && !isEmailVerified && !skipVerification && !verifiedProfile) {
       // Store the form data and trigger OTP verification
       setPendingSubmissionData(data);
       setVerificationEmail(data.email);
@@ -1622,6 +1634,17 @@ export default function RegistrationPage() {
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {/* Anonymous mode warning - no edits after submission */}
+        {openAnonymousMode && (
+          <div className="flex items-center gap-2 p-3 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 text-sm mb-4" data-testid="text-anonymous-warning">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>
+              {language === "es" 
+                ? "Importante: La informacion no puede ser editada despues de enviar. Por favor revise cuidadosamente antes de enviar."
+                : "Important: Information cannot be edited after submission. Please review carefully before submitting."}
+            </span>
+          </div>
+        )}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             {/* Personal Information Section */}

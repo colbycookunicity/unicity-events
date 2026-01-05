@@ -2378,3 +2378,53 @@ Behavior should remain identical after this change. Verify:
 6. Submitting without verification triggers OTP dialog
 7. After OTP verification, registration saves automatically
 8. Duplicate registration by same email updates existing record
+
+### open_anonymous Mode Implementation (January 2026)
+
+The `open_anonymous` mode provides a fully open registration experience where:
+- Anyone can register without verification
+- NO email verification or authentication required
+- Multiple registrations per email are allowed (no uniqueness enforcement)
+- Email is treated as a contact field only
+- No user-initiated edits after submission (admin-only edits)
+
+**User Flow:**
+1. User visits registration page → Form is visible immediately
+2. User fills out form → No verification prompts
+3. User submits → Registration created immediately
+4. Warning displayed: "Information cannot be edited after submission"
+5. Each submission creates a NEW registration record
+
+**Frontend Implementation (RegistrationPage.tsx):**
+- `openAnonymousMode` helper detects when event uses this mode
+- `useEffect` sets `verificationStep` to "form" immediately for open_anonymous events
+- `onSubmit` skips all verification checks for anonymous mode
+- Warning banner displayed at top of form explaining no edits after submission
+- No OTP dialog triggered, no session checks
+
+**Backend Implementation (routes.ts):**
+- Registration endpoint checks `isAnonymousMode` flag
+- If true: skips OTP validation entirely
+- Creates new registration without checking for existing one (no UPSERT)
+- Response includes `isAnonymous: true` flag
+- No email uniqueness constraint enforced
+
+**Key Differences from open_verified:**
+| Aspect | open_verified | open_anonymous |
+|--------|---------------|----------------|
+| OTP Required | Yes (before submit) | No |
+| Email Uniqueness | Yes (UPSERT) | No (always create) |
+| User Edits | Yes (via OTP) | No (admin only) |
+| Multiple Registrations | No | Yes |
+
+**Security:**
+- No authentication = no edit capability for users
+- All edits must go through admin interface
+- Email is contact info only, not identity
+
+**open_anonymous Mode Testing:**
+1. Form visible immediately (no email prompt, no OTP)
+2. Warning banner appears about no edits after submission
+3. Submit without verification succeeds
+4. Same email can register multiple times (creates new records)
+5. No edit links or return-to-edit capability for users
