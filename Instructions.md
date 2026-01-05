@@ -2047,3 +2047,195 @@ JOIN registrations r ON sa.registration_id = r.id
 JOIN swag_items si ON sa.swag_item_id = si.id
 ORDER BY sa.created_at DESC;
 ```
+
+## Event Registration + Verification Flow Documentation (January 2026)
+
+This document describes the current registration and OTP verification flow for event registration pages at `/register/:eventId`.
+
+### Key Files Involved
+
+| File | Purpose |
+|------|---------|
+| `client/src/pages/RegistrationPage.tsx` | Frontend registration page component |
+| `server/routes.ts` | Backend API endpoints for OTP and registration |
+| `server/storage.ts` | Database operations for registrations, OTP sessions, qualifiers |
+| `shared/schema.ts` | Database schema definitions (events, registrations, otp_sessions) |
+
+### Database Schema Properties
+
+**events table:**
+- `requiresQualification` (boolean, default: false) - If true, only users in `qualified_registrants` can register
+- `requiresVerification` (boolean, default: true) - If true, email OTP verification is required before showing the form
+
+**qualified_registrants table:**
+- Links emails to events they are pre-authorized to register for
+- Checked when `event.requiresQualification = true`
+
+### Flow Diagram
+
+```
+User visits /register/:eventId
+         │
+         ▼
+┌────────────────────────────────────────┐
+│  Fetch Event Data (public endpoint)    │
+└────────────────────────────────────────┘
+         │
+         ▼
+┌────────────────────────────────────────┐
+│  Check URL Params                      │
+│  - ?uid=xxx&email=xxx → skip verify    │
+│  - ?token=xxx → consume redirect token │
+└────────────────────────────────────────┘
+         │
+         ▼
+┌──────────────────────────────────────────────────────────────────┐
+│  Determine if verification required:                              │
+│  requiresVerification = (event.requiresVerification === true      │
+│                         OR event.requiresQualification === true)  │
+│                         AND NOT skipVerification (URL params)     │
+└──────────────────────────────────────────────────────────────────┘
+         │
+         ├─────── verification NOT required ───────┐
+         │                                         │
+         ▼                                         ▼
+┌───────────────────────────────┐     ┌────────────────────────────┐
+│  Step 1: Email Input Screen   │     │  Go directly to Form Step  │
+│  (verificationStep = "email") │     │  (verificationStep = "form")│
+└───────────────────────────────┘     └────────────────────────────┘
+         │
+         │ User enters email, clicks "Send Code"
+         ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  POST /api/register/otp/generate                                   │
+│  { email, eventId }                                                │
+│                                                                    │
+│  Backend Flow:                                                     │
+│  1. Validate event exists and status = "published"                 │
+│  2. IF event.requiresQualification = true:                         │
+│     - Check qualified_registrants table for email                  │
+│     - Check registrations table for existing registration          │
+│     - If NEITHER found → 403 "You are not qualified..."            │  ◀── OTP never sent
+│  3. Send OTP via Hydra API (production) or dev code (dev)          │
+│  4. Create otp_sessions record with eventId scope                  │
+└───────────────────────────────────────────────────────────────────┘
+         │
+         ├─────── 403 Not Qualified ──────────────┐
+         │                                         │
+         ▼                                         ▼
+┌───────────────────────────────┐     ┌────────────────────────────┐
+│  Step 2: OTP Input Screen     │     │  Error Toast Displayed     │
+│  (verificationStep = "otp")   │     │  "You are not qualified..."│
+└───────────────────────────────┘     └────────────────────────────┘
+         │
+         │ User enters 6-digit code
+         ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  POST /api/register/otp/validate                                   │
+│  { email, code, eventId }                                          │
+│                                                                    │
+│  Backend Flow:                                                     │
+│  1. Find otp_sessions by email + eventId scope                     │
+│  2. Validate code via Hydra API or dev code                        │
+│  3. Mark session as verified                                       │
+│  4. Return profile data (unicityId, firstName, lastName, etc.)     │
+│  5. Special case: "Customer not found" in Hydra →                  │
+│     Check qualified_registrants and use their data                 │
+└───────────────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌───────────────────────────────┐
+│  Step 3: Registration Form    │
+│  (verificationStep = "form")  │
+│  - Identity fields locked     │
+│  - Custom fields editable     │
+└───────────────────────────────┘
+         │
+         │ User submits form
+         ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  POST /api/registrations                                           │
+│  - Creates or updates registration in database                     │
+│  - Sends confirmation email via Iterable                           │
+└───────────────────────────────────────────────────────────────────┘
+```
+
+### Conditions for Form Visibility
+
+| Condition | Form Shown? | Notes |
+|-----------|-------------|-------|
+| `requiresVerification=false` AND `requiresQualification=false` | Immediately | No verification step |
+| `requiresVerification=true` AND user verified | Yes | After OTP verification |
+| `requiresQualification=true` AND user qualified AND verified | Yes | Must verify, must be in qualified list |
+| `requiresQualification=true` AND user NOT qualified | No | 403 error at OTP generate step |
+| URL has `?uid=xxx&email=xxx` params | Yes | Pre-populated, verification skipped |
+
+### When Email Verification is Triggered
+
+1. **Explicit**: User clicks "Send Code" button on email input screen
+2. **API Call**: `POST /api/register/otp/generate` with `{ email, eventId }`
+3. **Pre-check**: If `event.requiresQualification=true`, backend checks qualification BEFORE calling Hydra
+
+### How requiresQualification is Checked
+
+**Backend (server/routes.ts line 373-384):**
+```javascript
+if (event.requiresQualification) {
+  const normalizedEmail = email.toLowerCase().trim();
+  const qualifier = await storage.getQualifiedRegistrantByEmail(event.id, normalizedEmail);
+  const existingRegistration = await storage.getRegistrationByEmail(event.id, normalizedEmail);
+  
+  if (!qualifier && !existingRegistration) {
+    return res.status(403).json({ 
+      error: `You are not qualified for this event...` 
+    });
+  }
+}
+```
+
+### What Happens When User is NOT Pre-Authorized
+
+1. User enters email on `/register/:eventId`
+2. Clicks "Send Code"
+3. Backend receives `POST /api/register/otp/generate`
+4. Backend checks `event.requiresQualification`
+5. If true, queries `qualified_registrants` table
+6. User email NOT found → immediate 403 response
+7. **OTP is NEVER sent** - Hydra API is never called
+8. Frontend displays error toast with message
+
+### Why OTP Emails Fail to Send (Non-Qualified Path)
+
+**Root Cause:** The OTP email is not failing - it's never attempted.
+
+The server rejects the request at the qualification check (step 5-6 above) BEFORE reaching the Hydra API call that sends the actual OTP email.
+
+**Code flow:**
+1. Line 374: `if (event.requiresQualification) {`
+2. Line 376-377: Check qualifier and existing registration
+3. Line 379-383: If neither found, return 403 immediately
+4. Lines 386-432: Hydra API call is AFTER this check - never reached
+
+### Shared Logic Between Qualified and Non-Qualified Flows
+
+| Component | Shared? | Notes |
+|-----------|---------|-------|
+| OTP generate endpoint | Partially | Same endpoint, but qualification check gates Hydra call |
+| OTP validate endpoint | Yes | Same validation logic for both |
+| Registration form | Yes | Same component renders for all |
+| Registration submission | Yes | Same POST /api/registrations endpoint |
+| Session management | Yes | Same otp_sessions table with eventId scope |
+
+### Potential Issues / Coupling Observed
+
+1. **Qualification check blocks OTP entirely**: When `requiresQualification=true`, non-qualified users get a 403 at OTP generate - they cannot even verify their email. This is intentional for closed events.
+
+2. **Two sources of truth for "allowed to register"**:
+   - `qualified_registrants` table (pre-authorized list)
+   - `registrations` table (existing registration allows updates)
+   
+3. **Frontend error handling**: The 403 response is displayed as an error toast, but it's a valid business rule, not an error. Consider a friendlier UX for closed events.
+
+4. **Event-scoped OTP sessions**: The `customerData.registrationEventId` field scopes OTP sessions to specific events, preventing cross-event session reuse.
+
+5. **Hydra "Customer not found" fallback**: If Hydra validates OTP but doesn't have the customer, the backend checks the qualified list and uses that data instead. This handles new users who are pre-qualified but not in Hydra's system.
