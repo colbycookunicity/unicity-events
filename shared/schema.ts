@@ -212,6 +212,9 @@ export const registrations = pgTable("registrations", {
   verifiedByHydra: boolean("verified_by_hydra").default(false),
   // Admin notes
   notes: text("notes"),
+  // Multi-attendee order grouping (for open_anonymous mode)
+  orderId: varchar("order_id"), // UUID to group attendees in same submission
+  attendeeIndex: integer("attendee_index"), // 0-based index within order
   // Timestamps
   registeredAt: timestamp("registered_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
