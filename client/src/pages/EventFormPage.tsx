@@ -75,6 +75,7 @@ const eventFormSchema = z.object({
   slug: z.string().max(50).optional().or(z.literal("")),
   formTemplateId: z.string().optional(),
   formFields: z.array(formFieldSchema).optional(),
+  defaultLanguage: z.enum(["en", "es"]).default("en"),
 });
 
 // Form template type
@@ -132,6 +133,7 @@ export default function EventFormPage() {
       slug: "",
       formTemplateId: "",
       formFields: [],
+      defaultLanguage: "en",
     },
   });
 
@@ -159,6 +161,7 @@ export default function EventFormPage() {
         qualificationEndDate: formatDateForInput(event.qualificationEndDate),
         slug: event.slug || "",
         formTemplateId: (event as any).formTemplateId || "",
+        defaultLanguage: ((event as any).defaultLanguage as EventFormData["defaultLanguage"]) || "en",
       });
       // Load custom fields if present
       if ((event as any).formFields) {
@@ -1140,6 +1143,31 @@ export default function EventFormPage() {
                       </FormControl>
                       <FormDescription>
                         Leave empty to use the event ID. Spaces and capitals will be auto-converted.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="defaultLanguage"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Default Language</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger className="max-w-xs" data-testid="select-default-language">
+                            <SelectValue placeholder="Select default language" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="en">English</SelectItem>
+                          <SelectItem value="es">Spanish</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        The language public pages (landing, registration) will load in by default. Visitors can still switch languages manually.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

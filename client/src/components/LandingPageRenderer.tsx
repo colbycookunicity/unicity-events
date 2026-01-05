@@ -1,7 +1,9 @@
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Event, EventPage, EventPageSection } from "@shared/schema";
 import { SectionRenderer } from "@/components/landing-sections";
 import { Loader2 } from "lucide-react";
+import { useLanguage, type Language } from "@/lib/i18n";
 
 interface LandingPageData {
   page: EventPage;
@@ -15,10 +17,27 @@ interface LandingPageRendererProps {
 }
 
 export function LandingPageRenderer({ eventSlug, isPreview }: LandingPageRendererProps) {
+  const { setLanguage } = useLanguage();
+  const languageInitializedRef = useRef(false);
+  
   const { data, isLoading, error } = useQuery<LandingPageData>({
     queryKey: ['/api/public/event-pages', eventSlug],
     enabled: !!eventSlug,
   });
+  
+  // Set initial language from event's defaultLanguage on first load
+  useEffect(() => {
+    if (data?.event && !languageInitializedRef.current) {
+      const eventDefaultLanguage = (data.event as any).defaultLanguage as Language;
+      if (eventDefaultLanguage === 'en' || eventDefaultLanguage === 'es') {
+        const userHasManuallySelected = localStorage.getItem('language');
+        if (!userHasManuallySelected) {
+          setLanguage(eventDefaultLanguage);
+        }
+      }
+      languageInitializedRef.current = true;
+    }
+  }, [data?.event, setLanguage]);
 
   if (isLoading) {
     return (

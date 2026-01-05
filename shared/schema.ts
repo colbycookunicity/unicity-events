@@ -159,6 +159,8 @@ export const events = pgTable("events", {
   registrationLayout: text("registration_layout").notNull().default("standard"),
   /** @deprecated Use registrationMode instead. Kept for backward compatibility during migration. */
   requiresVerification: boolean("requires_verification").notNull().default(true),
+  // Default language for public pages (en or es) - only affects initial page load
+  defaultLanguage: text("default_language").notNull().default("en"),
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   lastModified: timestamp("last_modified").defaultNow().notNull(),

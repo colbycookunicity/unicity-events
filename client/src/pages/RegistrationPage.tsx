@@ -390,6 +390,25 @@ export default function RegistrationPage() {
   // Store event info for thank you page (preserves data after mutation/refetch)
   const [savedEventInfo, setSavedEventInfo] = useState<{ name: string; nameEs?: string; startDate?: string } | null>(null);
 
+  // Track if we've initialized language from event default (only do this once)
+  const languageInitializedRef = useRef(false);
+  
+  // Set initial language from event's defaultLanguage on first load
+  useEffect(() => {
+    const eventData = pageData?.event;
+    if (eventData && !languageInitializedRef.current) {
+      const eventDefaultLanguage = (eventData as any).defaultLanguage;
+      if (eventDefaultLanguage === 'en' || eventDefaultLanguage === 'es') {
+        // Only set if user hasn't already manually selected a language for this session
+        const userHasManuallySelected = localStorage.getItem('language');
+        if (!userHasManuallySelected) {
+          setLanguage(eventDefaultLanguage);
+        }
+      }
+      languageInitializedRef.current = true;
+    }
+  }, [pageData?.event, setLanguage]);
+
   // Custom form fields data (for events with custom form fields)
   const [customFormData, setCustomFormData] = useState<Record<string, any>>({});
 
