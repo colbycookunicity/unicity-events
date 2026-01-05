@@ -2327,6 +2327,44 @@ The legacy fields (`requiresQualification`, `requiresVerification`) are preserve
 | `server/routes.ts` | Updated to derive from `registrationMode`, sync legacy fields |
 | `client/src/pages/RegistrationPage.tsx` | Updated to use `registrationMode` for verification logic |
 
+### open_verified Mode Implementation (January 2026)
+
+The `open_verified` mode provides a streamlined registration experience where:
+- Anyone can register (no qualification list required)
+- Email verification (OTP) is required BEFORE saving the registration
+- One registration per email per event is enforced
+
+**User Flow:**
+1. User visits registration page → Form is immediately visible (no upfront verification step)
+2. User fills out form and clicks submit
+3. If email not verified → OTP dialog appears, code is sent to email
+4. User enters 6-digit OTP code
+5. On successful verification → Registration is saved automatically
+6. User sees success/thank you page
+
+**Frontend Implementation (RegistrationPage.tsx):**
+- `openVerifiedMode` helper detects when event uses this mode
+- `useEffect` sets `verificationStep` to "form" immediately for open_verified events
+- `onSubmit` checks `isEmailVerified` state before calling mutation
+- If not verified: stores form data in `pendingSubmissionData`, triggers `showOtpDialog`
+- `handleOpenVerifiedSendOtp()` sends OTP to user's email
+- `handleOpenVerifiedVerifyOtp()` validates OTP and auto-submits registration
+- `renderOtpDialog()` provides inline OTP verification UI
+- Error handler catches `VERIFICATION_REQUIRED` (403) as safety net
+
+**Backend Implementation (routes.ts):**
+- Registration endpoint checks `requiresVerification` flag
+- If true, looks for valid OTP session for email+event combination
+- Valid session: within 30 minutes of verification
+- No valid session → Returns 403 with `code: "VERIFICATION_REQUIRED"`
+- Valid session → Proceeds with registration save
+
+**Security:**
+- OTP sessions are event-scoped (email + eventId)
+- Sessions expire 30 minutes after verification
+- One registration per email per event enforced by UPSERT pattern
+- Attendee tokens from `/my-events` portal are also accepted
+
 ### Testing
 
 Behavior should remain identical after this change. Verify:
@@ -2334,3 +2372,9 @@ Behavior should remain identical after this change. Verify:
 2. Open events still allow anyone to register with OTP
 3. Admin UI toggle for "Requires Qualification" still works correctly
 4. Public event API returns both `registrationMode` and legacy fields
+
+**open_verified Mode Testing:**
+5. Form visible immediately for open_verified events (no email prompt first)
+6. Submitting without verification triggers OTP dialog
+7. After OTP verification, registration saves automatically
+8. Duplicate registration by same email updates existing record

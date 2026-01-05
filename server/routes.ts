@@ -330,9 +330,9 @@ export async function registerRoutes(
         return res.json({ verified: false });
       }
 
-      // Check session hasn't expired (15-minute window)
+      // Check session hasn't expired (30-minute window)
       const verifiedAt = session.verifiedAt ? new Date(session.verifiedAt) : null;
-      if (!verifiedAt || (Date.now() - verifiedAt.getTime()) > 15 * 60 * 1000) {
+      if (!verifiedAt || (Date.now() - verifiedAt.getTime()) > 30 * 60 * 1000) {
         return res.json({ verified: false });
       }
 
@@ -812,9 +812,9 @@ export async function registerRoutes(
         return res.status(403).json({ error: "Email not verified. Please complete OTP verification first." });
       }
 
-      // Check session hasn't expired (verified sessions are valid for 15 minutes for security)
+      // Check session hasn't expired (verified sessions are valid for 30 minutes for security)
       const verifiedAt = session.verifiedAt ? new Date(session.verifiedAt) : null;
-      if (!verifiedAt || (Date.now() - verifiedAt.getTime()) > 15 * 60 * 1000) {
+      if (!verifiedAt || (Date.now() - verifiedAt.getTime()) > 30 * 60 * 1000) {
         return res.status(403).json({ error: "Session expired. Please verify again." });
       }
 
@@ -1665,6 +1665,37 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Email is required" });
       }
       
+      // For events requiring verification (qualified_verified or open_verified), 
+      // verify that the user has a valid OTP session before allowing registration
+      const effectiveMode = (event.registrationMode as RegistrationMode) || deriveRegistrationMode(event.requiresQualification, event.requiresVerification);
+      const { requiresVerification } = deriveRegistrationFlags(effectiveMode);
+      
+      if (requiresVerification) {
+        // Check for valid OTP session for this email+event combination
+        const otpSession = await storage.getOtpSessionForRegistration(normalizedEmail, event.id);
+        const isOtpVerified = otpSession && otpSession.verified && otpSession.verifiedAt && 
+          (Date.now() - new Date(otpSession.verifiedAt).getTime()) <= 30 * 60 * 1000;
+        
+        // Also check for attendee token (for returning users from /my-events)
+        let hasAttendeeToken = false;
+        const authHeader = req.headers.authorization;
+        const attendeeToken = authHeader?.split(" ")[1];
+        if (attendeeToken) {
+          const attendeeSession = await storage.getAttendeeSessionByToken(attendeeToken);
+          if (attendeeSession && attendeeSession.email.toLowerCase() === normalizedEmail) {
+            hasAttendeeToken = true;
+          }
+        }
+        
+        if (!isOtpVerified && !hasAttendeeToken) {
+          return res.status(403).json({ 
+            error: "Email verification required",
+            code: "VERIFICATION_REQUIRED",
+            message: "Please verify your email before registering"
+          });
+        }
+      }
+      
       const existingReg = await storage.getRegistrationByEmail(event.id, normalizedEmail);
       
       if (existingReg) {
@@ -1810,7 +1841,7 @@ export async function registerRoutes(
         const session = await storage.getOtpSessionForRegistration(email, event.id);
         if (session && session.verified) {
           const verifiedAt = session.verifiedAt ? new Date(session.verifiedAt) : null;
-          if (verifiedAt && (Date.now() - verifiedAt.getTime()) <= 15 * 60 * 1000) {
+          if (verifiedAt && (Date.now() - verifiedAt.getTime()) <= 30 * 60 * 1000) {
             isAuthenticated = true;
             authenticatedEmail = email;
           }

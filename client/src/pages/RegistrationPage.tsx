@@ -10,6 +10,7 @@ import "react-phone-number-input/style.css";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -295,6 +296,11 @@ export default function RegistrationPage() {
   const [verifiedByHydra, setVerifiedByHydra] = useState(false);
   const [isQualified, setIsQualified] = useState(true);
   const [qualificationMessage, setQualificationMessage] = useState("");
+  
+  // Open verified mode: form visible immediately, OTP required before submission
+  const [pendingSubmissionData, setPendingSubmissionData] = useState<RegistrationFormData | null>(null);
+  const [showOtpDialog, setShowOtpDialog] = useState(false);
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
 
   // Parse URL query params for pre-population (skip verification if pre-populated)
   const urlParams = new URLSearchParams(window.location.search);
@@ -404,6 +410,16 @@ export default function RegistrationPage() {
     return true;
   };
   const requiresVerification = getRequiresVerification() && !skipVerification;
+  
+  // Check if this is open_verified mode (form visible immediately, OTP gates submission)
+  const isOpenVerifiedMode = (): boolean => {
+    const mode = event?.registrationMode;
+    if (mode === "open_verified") return true;
+    // Legacy fallback: open_verified = requiresVerification && !requiresQualification
+    if (!mode && event?.requiresVerification && !event?.requiresQualification) return true;
+    return false;
+  };
+  const openVerifiedMode = isOpenVerifiedMode();
 
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
   
@@ -486,12 +502,13 @@ export default function RegistrationPage() {
     consumeToken();
   }, [prePopulatedToken, prePopulatedEmail, params.eventId, tokenConsumed, isConsumingToken]);
 
-  // Skip to form if pre-populated or verification not required
+  // Skip to form if pre-populated, verification not required, or open_verified mode
+  // For open_verified: form is visible immediately, OTP verification gates submission
   useEffect(() => {
-    if (skipVerification || (event && !requiresVerification)) {
+    if (skipVerification || (event && !requiresVerification) || openVerifiedMode) {
       setVerificationStep("form");
     }
-  }, [skipVerification, event, requiresVerification]);
+  }, [skipVerification, event, requiresVerification, openVerifiedMode]);
 
   // Check for existing verified session on page load (for refresh persistence)
   // Also checks attendee token from /my-events authentication
@@ -972,7 +989,25 @@ export default function RegistrationPage() {
         : t("registrationSuccess");
       toast({ title: t("success"), description: successMessage });
     },
-    onError: (error: any) => {
+    onError: (error: any, variables: RegistrationFormData) => {
+      // Check if this is a VERIFICATION_REQUIRED error (open_verified mode safety net)
+      // Handle both structured error object and error message string
+      const errorMsg = error.message || "";
+      const errorCode = error.code || "";
+      const isVerificationRequired = 
+        errorCode === "VERIFICATION_REQUIRED" ||
+        errorMsg.includes("VERIFICATION_REQUIRED") || 
+        errorMsg.includes("Email verification required");
+      
+      if (isVerificationRequired) {
+        // Store the form data and trigger OTP flow - suppress default toast
+        setPendingSubmissionData(variables);
+        setVerificationEmail(variables.email);
+        setShowOtpDialog(true);
+        handleOpenVerifiedSendOtp(variables.email);
+        return; // Don't show error toast, we're handling it with OTP flow
+      }
+      
       toast({
         title: t("error"),
         description: error.message || "Registration failed. Please try again.",
@@ -980,6 +1015,127 @@ export default function RegistrationPage() {
       });
     },
   });
+
+  // Send OTP for open_verified mode (form submission gated by verification)
+  const handleOpenVerifiedSendOtp = async (email: string) => {
+    if (!email || !email.includes("@")) {
+      toast({
+        title: language === "es" ? "Correo inválido" : "Invalid Email",
+        description: language === "es" ? "Por favor ingrese un correo electrónico válido" : "Please enter a valid email address",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsVerifying(true);
+    try {
+      const res = await apiRequest("POST", "/api/register/otp/generate", { 
+        email,
+        eventId: params.eventId,
+      });
+      const data = await res.json();
+      
+      toast({
+        title: language === "es" ? "Código enviado" : "Code Sent",
+        description: language === "es" ? `Código enviado a ${email}` : `Verification code sent to ${email}`,
+      });
+      
+      if (data.devCode) {
+        console.log("DEV MODE: Use code", data.devCode);
+      }
+    } catch (error: any) {
+      let errorMessage = "Failed to send verification code";
+      if (error.message) {
+        const jsonMatch = error.message.match(/\{.*\}/);
+        if (jsonMatch) {
+          try {
+            const parsed = JSON.parse(jsonMatch[0]);
+            errorMessage = parsed.error || errorMessage;
+          } catch {
+            errorMessage = error.message;
+          }
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      toast({
+        title: t("error"),
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  // Verify OTP for open_verified mode and complete registration
+  const handleOpenVerifiedVerifyOtp = async () => {
+    if (otpCode.length !== 6) {
+      toast({
+        title: language === "es" ? "Código inválido" : "Invalid Code",
+        description: language === "es" ? "Por favor ingrese el código de 6 dígitos" : "Please enter the 6-digit code",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!pendingSubmissionData) {
+      toast({
+        title: t("error"),
+        description: "No pending registration data. Please try again.",
+        variant: "destructive",
+      });
+      setShowOtpDialog(false);
+      return;
+    }
+
+    setIsVerifying(true);
+    try {
+      const email = pendingSubmissionData.email;
+      const res = await apiRequest("POST", "/api/register/otp/validate", {
+        email,
+        code: otpCode,
+        eventId: params.eventId,
+      });
+      const data = await res.json();
+      
+      if (data.verified) {
+        setIsEmailVerified(true);
+        setVerifiedByHydra(data.verifiedByHydra || false);
+        setShowOtpDialog(false);
+        setOtpCode("");
+        
+        // Store verified email in sessionStorage for page refresh persistence
+        if (params.eventId) {
+          sessionStorage.setItem(`reg_verified_email_${params.eventId}`, email);
+        }
+        
+        toast({
+          title: language === "es" ? "Verificado" : "Verified",
+          description: language === "es" ? "Su correo ha sido verificado" : "Your email has been verified",
+        });
+        
+        // Now complete the registration
+        if (event) {
+          setSavedEventInfo({
+            name: event.name,
+            nameEs: event.nameEs,
+            startDate: event.startDate,
+          });
+        }
+        registerMutation.mutate(pendingSubmissionData);
+      }
+    } catch (error: any) {
+      toast({
+        title: language === "es" ? "Código inválido" : "Invalid Code",
+        description: error.message || "Please check your code and try again",
+        variant: "destructive",
+      });
+      setOtpCode("");
+    } finally {
+      setIsVerifying(false);
+    }
+  };
 
   const onSubmit = (data: RegistrationFormData) => {
     // Validate required custom fields before submission (only fields shown in Additional Information)
@@ -1027,15 +1183,32 @@ export default function RegistrationPage() {
       }
     }
     
-    // Save event info before mutation (preserves data for thank you page)
-    if (event) {
-      setSavedEventInfo({
-        name: event.name,
-        nameEs: event.nameEs,
-        startDate: event.startDate,
-      });
+    // For open_verified mode: check if email is verified before submitting
+    // If not verified, trigger OTP flow instead of calling mutation
+    if (openVerifiedMode && !isEmailVerified && !skipVerification && !verifiedProfile) {
+      // Store the form data and trigger OTP verification
+      setPendingSubmissionData(data);
+      setVerificationEmail(data.email);
+      setShowOtpDialog(true);
+      handleOpenVerifiedSendOtp(data.email);
+      // Explicitly prevent mutation from firing
+      return;
     }
-    registerMutation.mutate(data);
+    
+    // Helper to actually submit registration - only called when verified
+    const submitRegistration = (formData: RegistrationFormData) => {
+      // Save event info before mutation (preserves data for thank you page)
+      if (event) {
+        setSavedEventInfo({
+          name: event.name,
+          nameEs: event.nameEs,
+          startDate: event.startDate,
+        });
+      }
+      registerMutation.mutate(formData);
+    };
+    
+    submitRegistration(data);
   };
 
   const getEventName = () => {
@@ -2154,9 +2327,90 @@ export default function RegistrationPage() {
     </Card>
   );
 
+  // OTP Verification Dialog for open_verified mode
+  const renderOtpDialog = () => (
+    <Dialog open={showOtpDialog} onOpenChange={(open) => {
+      if (!open) {
+        setShowOtpDialog(false);
+        setOtpCode("");
+      }
+    }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Mail className="h-5 w-5" />
+            {language === "es" ? "Verificar Correo" : "Verify Email"}
+          </DialogTitle>
+          <DialogDescription>
+            {language === "es" 
+              ? `Ingrese el código de 6 dígitos enviado a ${verificationEmail}`
+              : `Enter the 6-digit code sent to ${verificationEmail}`}
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="flex flex-col items-center gap-4 py-4">
+          <InputOTP
+            value={otpCode}
+            onChange={setOtpCode}
+            maxLength={6}
+            data-testid="input-otp-code"
+          >
+            <InputOTPGroup>
+              <InputOTPSlot index={0} />
+              <InputOTPSlot index={1} />
+              <InputOTPSlot index={2} />
+              <InputOTPSlot index={3} />
+              <InputOTPSlot index={4} />
+              <InputOTPSlot index={5} />
+            </InputOTPGroup>
+          </InputOTP>
+          
+          <Button
+            variant="link"
+            onClick={() => handleOpenVerifiedSendOtp(verificationEmail)}
+            disabled={isVerifying}
+            className="text-sm"
+            data-testid="button-resend-otp"
+          >
+            {language === "es" ? "Reenviar código" : "Resend code"}
+          </Button>
+        </div>
+        
+        <DialogFooter className="flex gap-2 sm:gap-0">
+          <Button
+            variant="outline"
+            onClick={() => {
+              setShowOtpDialog(false);
+              setOtpCode("");
+            }}
+            data-testid="button-cancel-otp"
+          >
+            {language === "es" ? "Cancelar" : "Cancel"}
+          </Button>
+          <Button
+            onClick={handleOpenVerifiedVerifyOtp}
+            disabled={isVerifying || otpCode.length !== 6}
+            data-testid="button-verify-otp"
+          >
+            {isVerifying ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                {language === "es" ? "Verificando..." : "Verifying..."}
+              </>
+            ) : (
+              language === "es" ? "Verificar y Registrar" : "Verify & Register"
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+
   // Standard layout - default, form centered on page
   if (layout === "standard") {
     return (
+      <>
+      {renderOtpDialog()}
       <div className="min-h-screen bg-background relative">
         {renderHeader()}
         
@@ -2203,6 +2457,7 @@ export default function RegistrationPage() {
           </footer>
         </div>
       </div>
+      </>
     );
   }
 
@@ -2210,6 +2465,8 @@ export default function RegistrationPage() {
   // Uses natural page scrolling - no nested scroll containers
   if (layout === "split") {
     return (
+      <>
+      {renderOtpDialog()}
       <div className="min-h-screen bg-background">
         {/* Mobile: stacked layout, Desktop: side-by-side */}
         <div className="flex flex-col lg:flex-row lg:min-h-screen">
@@ -2332,13 +2589,16 @@ export default function RegistrationPage() {
           </div>
         </div>
       </div>
+      </>
     );
   }
 
   // Hero-background layout - bright hero image with event info below
   return (
-    <div className="min-h-screen bg-card">
-      {renderHeader()}
+    <>
+      {renderOtpDialog()}
+      <div className="min-h-screen bg-card">
+        {renderHeader()}
       
       {/* Hero Image - bright and prominent */}
       {heroImageUrl && (
@@ -2397,5 +2657,6 @@ export default function RegistrationPage() {
         </div>
       </div>
     </div>
+    </>
   );
 }
