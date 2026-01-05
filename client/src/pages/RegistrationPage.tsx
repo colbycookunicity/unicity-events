@@ -393,6 +393,15 @@ export default function RegistrationPage() {
   // Custom form fields data (for events with custom form fields)
   const [customFormData, setCustomFormData] = useState<Record<string, any>>({});
 
+  // Multi-attendee support for open_anonymous mode
+  const [ticketCount, setTicketCount] = useState(1);
+  const [additionalAttendees, setAdditionalAttendees] = useState<Array<{
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone?: string;
+  }>>([]);
+
   // Derive verification requirement from registrationMode (or legacy fields for backward compat)
   // - qualified_verified: requiresQualification=true, requiresVerification=true
   // - open_verified: requiresQualification=false, requiresVerification=true
@@ -946,15 +955,43 @@ export default function RegistrationPage() {
 
   const registerMutation = useMutation({
     mutationFn: async (data: RegistrationFormData) => {
-      const payload = {
+      // Build primary attendee payload
+      const primaryAttendee = {
         ...data,
         language,
         dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth).toISOString() : null,
         passportExpiration: data.passportExpiration ? new Date(data.passportExpiration).toISOString() : null,
         formData: Object.keys(customFormData).length > 0 ? customFormData : undefined,
         verifiedByHydra,
-        existingRegistrationId,
       };
+      
+      // For multi-attendee open_anonymous mode, build attendees array
+      const isMultiAttendee = openAnonymousMode && ticketCount > 1 && additionalAttendees.length > 0;
+      
+      let payload: any;
+      if (isMultiAttendee) {
+        // Build attendees array with primary + additional attendees
+        const attendees = [
+          primaryAttendee,
+          ...additionalAttendees.map(att => ({
+            email: att.email,
+            firstName: att.firstName,
+            lastName: att.lastName,
+            phone: att.phone || null,
+            language,
+            termsAccepted: true, // Inherit from primary
+          }))
+        ];
+        payload = {
+          email: data.email, // Primary contact email (required by API)
+          attendees,
+        };
+      } else {
+        payload = {
+          ...primaryAttendee,
+          existingRegistrationId,
+        };
+      }
       
       // For PUT updates, include attendee token in Authorization header
       if (existingRegistrationId) {
@@ -989,15 +1026,24 @@ export default function RegistrationPage() {
       setIsSuccess(true);
       // Check if the response indicates an update vs create
       let wasUpdated = existingRegistrationId ? true : false;
+      let registrationCount = 1;
       try {
         const result = await response.json();
         if (result.wasUpdated) wasUpdated = true;
+        if (result.ticketCount) registrationCount = result.ticketCount;
       } catch {
         // Ignore JSON parse errors
       }
-      const successMessage = wasUpdated
-        ? (language === "es" ? "Registro actualizado exitosamente" : "Registration updated successfully")
-        : t("registrationSuccess");
+      let successMessage: string;
+      if (wasUpdated) {
+        successMessage = language === "es" ? "Registro actualizado exitosamente" : "Registration updated successfully";
+      } else if (registrationCount > 1) {
+        successMessage = language === "es" 
+          ? `${registrationCount} registros creados exitosamente` 
+          : `${registrationCount} registrations created successfully`;
+      } else {
+        successMessage = t("registrationSuccess");
+      }
       toast({ title: t("success"), description: successMessage });
     },
     onError: (error: any, variables: RegistrationFormData) => {
@@ -1188,6 +1234,26 @@ export default function RegistrationPage() {
           description: language === "es" 
             ? `Por favor complete: ${missingFields.join(", ")}`
             : `Please complete: ${missingFields.join(", ")}`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    
+    // Validate additional attendees for multi-attendee anonymous mode
+    if (openAnonymousMode && ticketCount > 1 && additionalAttendees.length > 0) {
+      const invalidAttendees: string[] = [];
+      additionalAttendees.forEach((att, idx) => {
+        if (!att.firstName?.trim() || !att.lastName?.trim() || !att.email?.trim()) {
+          invalidAttendees.push(`${language === "es" ? "Asistente" : "Attendee"} ${idx + 2}`);
+        }
+      });
+      if (invalidAttendees.length > 0) {
+        toast({
+          title: language === "es" ? "Informacion incompleta" : "Incomplete Information",
+          description: language === "es"
+            ? `Por favor complete todos los campos requeridos para: ${invalidAttendees.join(", ")}`
+            : `Please complete all required fields for: ${invalidAttendees.join(", ")}`,
           variant: "destructive",
         });
         return;
@@ -1643,6 +1709,47 @@ export default function RegistrationPage() {
                 ? "Importante: La informacion no puede ser editada despues de enviar. Por favor revise cuidadosamente antes de enviar."
                 : "Important: Information cannot be edited after submission. Please review carefully before submitting."}
             </span>
+          </div>
+        )}
+        
+        {/* Multi-attendee ticket count selector for open_anonymous mode */}
+        {openAnonymousMode && (
+          <div className="mb-6 p-4 border rounded-md bg-muted/30">
+            <label className="block text-sm font-medium mb-2">
+              {language === "es" ? "Numero de registros" : "Number of Registrations"}
+            </label>
+            <div className="flex items-center gap-4">
+              <Select 
+                value={String(ticketCount)} 
+                onValueChange={(val) => {
+                  const newCount = parseInt(val, 10);
+                  setTicketCount(newCount);
+                  // Adjust additional attendees array
+                  if (newCount > 1) {
+                    const newAttendees = Array.from({ length: newCount - 1 }, (_, i) => 
+                      additionalAttendees[i] || { firstName: "", lastName: "", email: "", phone: "" }
+                    );
+                    setAdditionalAttendees(newAttendees);
+                  } else {
+                    setAdditionalAttendees([]);
+                  }
+                }}
+              >
+                <SelectTrigger className="w-24" data-testid="select-ticket-count">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (
+                    <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span className="text-sm text-muted-foreground">
+                {language === "es" 
+                  ? "Seleccione cuantas personas desea registrar"
+                  : "Select how many people you want to register"}
+              </span>
+            </div>
           </div>
         )}
         <Form {...form}>
@@ -2330,6 +2437,93 @@ export default function RegistrationPage() {
                   </FormItem>
                 )}
               />
+            )}
+
+            {/* Additional Attendees Section - only for multi-attendee anonymous mode */}
+            {openAnonymousMode && ticketCount > 1 && additionalAttendees.length > 0 && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium border-b pb-2">
+                  {language === "es" ? "Asistentes Adicionales" : "Additional Attendees"}
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  {language === "es" 
+                    ? `Por favor ingrese la informacion para los ${additionalAttendees.length} asistente(s) adicional(es).`
+                    : `Please enter information for the ${additionalAttendees.length} additional attendee(s).`}
+                </p>
+                {additionalAttendees.map((attendee, index) => (
+                  <div key={index} className="p-4 border rounded-md bg-muted/20 space-y-3">
+                    <div className="font-medium text-sm">
+                      {language === "es" ? `Asistente ${index + 2}` : `Attendee ${index + 2}`}
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div>
+                        <label className="block text-sm font-medium mb-1">
+                          {language === "es" ? "Nombre" : "First Name"} *
+                        </label>
+                        <Input
+                          value={attendee.firstName}
+                          onChange={(e) => {
+                            const newAttendees = [...additionalAttendees];
+                            newAttendees[index] = { ...newAttendees[index], firstName: e.target.value };
+                            setAdditionalAttendees(newAttendees);
+                          }}
+                          placeholder={language === "es" ? "Nombre" : "First name"}
+                          data-testid={`input-attendee-${index + 2}-firstName`}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">
+                          {language === "es" ? "Apellido" : "Last Name"} *
+                        </label>
+                        <Input
+                          value={attendee.lastName}
+                          onChange={(e) => {
+                            const newAttendees = [...additionalAttendees];
+                            newAttendees[index] = { ...newAttendees[index], lastName: e.target.value };
+                            setAdditionalAttendees(newAttendees);
+                          }}
+                          placeholder={language === "es" ? "Apellido" : "Last name"}
+                          data-testid={`input-attendee-${index + 2}-lastName`}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div>
+                        <label className="block text-sm font-medium mb-1">
+                          {language === "es" ? "Correo electronico" : "Email"} *
+                        </label>
+                        <Input
+                          type="email"
+                          value={attendee.email}
+                          onChange={(e) => {
+                            const newAttendees = [...additionalAttendees];
+                            newAttendees[index] = { ...newAttendees[index], email: e.target.value };
+                            setAdditionalAttendees(newAttendees);
+                          }}
+                          placeholder={language === "es" ? "correo@ejemplo.com" : "email@example.com"}
+                          data-testid={`input-attendee-${index + 2}-email`}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">
+                          {language === "es" ? "Telefono" : "Phone"} 
+                        </label>
+                        <Input
+                          type="tel"
+                          value={attendee.phone || ""}
+                          onChange={(e) => {
+                            const newAttendees = [...additionalAttendees];
+                            newAttendees[index] = { ...newAttendees[index], phone: e.target.value };
+                            setAdditionalAttendees(newAttendees);
+                          }}
+                          placeholder={language === "es" ? "Telefono (opcional)" : "Phone (optional)"}
+                          data-testid={`input-attendee-${index + 2}-phone`}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
 
             <Button

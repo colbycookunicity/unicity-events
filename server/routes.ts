@@ -1699,42 +1699,92 @@ export async function registerRoutes(
       
       // For open_anonymous mode: ALWAYS create new registration (no email uniqueness check)
       // Multiple registrations per email are allowed
+      // Supports multi-attendee submissions via attendees array
       if (isAnonymousMode) {
-        // Create new registration without checking for existing one
-        const newRegistration = await storage.createRegistration({
-          eventId: event.id,
-          email: normalizedEmail,
-          firstName: req.body.firstName || "",
-          lastName: req.body.lastName || "",
-          phone: req.body.phone || null,
-          unicityId: req.body.unicityId || null,
-          gender: req.body.gender || null,
-          dateOfBirth: req.body.dateOfBirth ? new Date(req.body.dateOfBirth) : null,
-          passportNumber: req.body.passportNumber || null,
-          passportCountry: req.body.passportCountry || null,
-          passportExpiration: req.body.passportExpiration ? new Date(req.body.passportExpiration) : null,
-          emergencyContact: req.body.emergencyContact || null,
-          emergencyContactPhone: req.body.emergencyContactPhone || null,
-          shirtSize: req.body.shirtSize || null,
-          pantSize: req.body.pantSize || null,
-          dietaryRestrictions: Array.isArray(req.body.dietaryRestrictions) ? req.body.dietaryRestrictions : [],
-          adaAccommodations: req.body.adaAccommodations || false,
-          adaAccommodationsAt: req.body.adaAccommodations ? new Date() : null,
-          adaAccommodationsIp: req.body.adaAccommodations ? String(clientIp) : null,
-          roomType: req.body.roomType || null,
-          termsAccepted: req.body.termsAccepted || false,
-          termsAcceptedAt: req.body.termsAccepted ? new Date() : null,
-          termsAcceptedIp: req.body.termsAccepted ? String(clientIp) : null,
-          verifiedByHydra: false, // Anonymous registrations are never Hydra-verified
-          language: req.body.language || "en",
-          formData: req.body.formData || null,
-        });
+        // Generate a unique order ID for this submission
+        const orderId = crypto.randomUUID();
+        
+        // Check if this is a multi-attendee submission
+        const attendeesData = req.body.attendees;
+        const isMultiAttendee = Array.isArray(attendeesData) && attendeesData.length > 0;
+        
+        // Build list of attendees to create
+        const attendeesToCreate = isMultiAttendee ? attendeesData : [req.body];
+        
+        // Validate we have at least one attendee
+        if (attendeesToCreate.length === 0) {
+          return res.status(400).json({ error: "At least one attendee is required" });
+        }
+        
+        // Create all registrations with the same orderId
+        const createdRegistrations = [];
+        try {
+          for (let i = 0; i < attendeesToCreate.length; i++) {
+            const attendee = attendeesToCreate[i];
+            const attendeeEmail = (attendee.email || normalizedEmail).trim().toLowerCase();
+            
+            // Validate required fields for each attendee
+            if (!attendee.firstName?.trim() || !attendee.lastName?.trim() || !attendeeEmail) {
+              throw new Error(`Attendee ${i + 1} is missing required fields (firstName, lastName, or email)`);
+            }
+            
+            const newRegistration = await storage.createRegistration({
+              eventId: event.id,
+              email: attendeeEmail,
+              firstName: attendee.firstName || "",
+              lastName: attendee.lastName || "",
+              phone: attendee.phone || null,
+              unicityId: attendee.unicityId || null,
+              gender: attendee.gender || null,
+              dateOfBirth: attendee.dateOfBirth ? new Date(attendee.dateOfBirth) : null,
+              passportNumber: attendee.passportNumber || null,
+              passportCountry: attendee.passportCountry || null,
+              passportExpiration: attendee.passportExpiration ? new Date(attendee.passportExpiration) : null,
+              emergencyContact: attendee.emergencyContact || null,
+              emergencyContactPhone: attendee.emergencyContactPhone || null,
+              shirtSize: attendee.shirtSize || null,
+              pantSize: attendee.pantSize || null,
+              dietaryRestrictions: Array.isArray(attendee.dietaryRestrictions) ? attendee.dietaryRestrictions : [],
+              adaAccommodations: attendee.adaAccommodations || false,
+              adaAccommodationsAt: attendee.adaAccommodations ? new Date() : null,
+              adaAccommodationsIp: attendee.adaAccommodations ? String(clientIp) : null,
+              roomType: attendee.roomType || null,
+              termsAccepted: attendee.termsAccepted || false,
+              termsAcceptedAt: attendee.termsAccepted ? new Date() : null,
+              termsAcceptedIp: attendee.termsAccepted ? String(clientIp) : null,
+              verifiedByHydra: false, // Anonymous registrations are never Hydra-verified
+              language: attendee.language || req.body.language || "en",
+              formData: attendee.formData || null,
+              orderId: orderId,
+              attendeeIndex: i,
+            });
+            createdRegistrations.push(newRegistration);
+          }
+        } catch (error: any) {
+          // If any attendee fails, attempt to clean up already-created registrations
+          if (createdRegistrations.length > 0) {
+            console.error(`Multi-attendee registration failed after creating ${createdRegistrations.length} attendees. Cleaning up...`);
+            for (const reg of createdRegistrations) {
+              try {
+                await storage.deleteRegistration(reg.id);
+              } catch (deleteError) {
+                console.error(`Failed to delete registration ${reg.id} during cleanup:`, deleteError);
+              }
+            }
+          }
+          return res.status(400).json({ 
+            error: error.message || "Failed to create registrations",
+            partiallyCreated: createdRegistrations.length,
+          });
+        }
         
         return res.status(201).json({
           success: true,
-          registration: newRegistration,
+          orderId: orderId,
+          ticketCount: createdRegistrations.length,
+          registrations: createdRegistrations,
           isAnonymous: true,
-          message: "Registration created successfully. Note: This registration cannot be edited after submission."
+          message: `${createdRegistrations.length} registration(s) created successfully. Note: These registrations cannot be edited after submission.`
         });
       }
       

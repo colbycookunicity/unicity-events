@@ -2428,3 +2428,51 @@ The `open_anonymous` mode provides a fully open registration experience where:
 3. Submit without verification succeeds
 4. Same email can register multiple times (creates new records)
 5. No edit links or return-to-edit capability for users
+
+### Multi-Attendee Registration (open_anonymous mode only) - January 2026
+
+The open_anonymous mode supports registering multiple attendees in a single submission:
+
+**Data Model:**
+- `orderId`: UUID to group all attendees from the same submission
+- `attendeeIndex`: 0-based index within the order (primary registrant = 0)
+
+**User Flow:**
+1. User selects ticket count (1-10) from dropdown
+2. Primary attendee fills out full registration form
+3. Additional attendees require: first name, last name, email (phone optional)
+4. Submit creates all registrations atomically with same orderId
+5. Response includes orderId and ticketCount
+
+**Frontend Implementation:**
+- `ticketCount` state (1-10, default 1)
+- `additionalAttendees` array state for simplified attendee data
+- Ticket count selector shown only for open_anonymous events
+- Dynamic attendee forms rendered for ticketCount > 1
+- Validation ensures all additional attendees have required fields
+- Mutation builds attendees array and sends to API
+
+**Backend Implementation:**
+- Checks for `attendees` array in request body
+- Generates shared `orderId` (UUID) for the submission
+- Creates each registration with orderId and attendeeIndex
+- Returns `{ orderId, ticketCount, registrations[] }`
+
+**API Payload (multi-attendee):**
+```json
+{
+  "email": "primary@email.com",
+  "attendees": [
+    { "email": "primary@email.com", "firstName": "...", "lastName": "...", ...fullFields },
+    { "email": "guest2@email.com", "firstName": "...", "lastName": "...", "termsAccepted": true },
+    { "email": "guest3@email.com", "firstName": "...", "lastName": "...", "termsAccepted": true }
+  ]
+}
+```
+
+**Multi-Attendee Testing:**
+1. Ticket count selector appears for open_anonymous events
+2. Selecting > 1 shows additional attendee forms
+3. Validation prevents submit if additional attendee fields are empty
+4. Successful submit creates N registrations with same orderId
+5. All attendees appear in admin attendee list with correct orderId
