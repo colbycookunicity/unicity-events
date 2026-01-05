@@ -304,6 +304,20 @@ export class DatabaseStorage implements IStorage {
     // Get all registrations for this event to delete their related data
     const eventRegistrations = await db.select({ id: registrations.id }).from(registrations).where(eq(registrations.eventId, id));
     
+    // Get all printers for this event (needed for print logs cleanup)
+    const eventPrinters = await db.select({ id: printers.id }).from(printers).where(eq(printers.eventId, id));
+    
+    // Delete print logs first (references registrations, guests, and printers)
+    for (const reg of eventRegistrations) {
+      await db.delete(printLogs).where(eq(printLogs.registrationId, reg.id));
+    }
+    for (const printer of eventPrinters) {
+      await db.delete(printLogs).where(eq(printLogs.printerId, printer.id));
+    }
+    
+    // Delete printers for this event
+    await db.delete(printers).where(eq(printers.eventId, id));
+    
     // Delete all registration-related data (guests, flights, reimbursements)
     for (const reg of eventRegistrations) {
       await db.delete(guests).where(eq(guests.registrationId, reg.id));
