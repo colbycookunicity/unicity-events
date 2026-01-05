@@ -2649,6 +2649,17 @@ export async function registerRoutes(
     }
   });
 
+  // Get assignments by swag item
+  app.get("/api/swag-items/:swagItemId/assignments", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const assignments = await storage.getSwagAssignmentsByItem(req.params.swagItemId);
+      res.json(assignments);
+    } catch (error) {
+      console.error("Error fetching swag item assignments:", error);
+      res.status(500).json({ error: "Failed to fetch swag item assignments" });
+    }
+  });
+
   // Create a swag assignment
   app.post("/api/swag-assignments", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
     try {

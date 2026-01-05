@@ -33,6 +33,7 @@ import { useTranslation } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { Event, SwagItemWithStats, SwagAssignmentWithDetails, Registration } from "@shared/schema";
+import { CheckCircle } from "lucide-react";
 
 const SIZE_OPTIONS = ["XS", "S", "M", "L", "XL", "2XL", "3XL"];
 
@@ -73,6 +74,16 @@ export default function SwagPage() {
     queryKey: [`/api/registrations?eventId=${eventFilter}`],
     enabled: eventFilter !== "all" && assignDialogOpen,
   });
+
+  const { data: existingAssignments } = useQuery<SwagAssignmentWithDetails[]>({
+    queryKey: [`/api/swag-items/${itemToAssign?.id}/assignments`],
+    enabled: !!itemToAssign?.id && assignDialogOpen,
+  });
+
+  // Get set of registration IDs that already have this swag item assigned
+  const alreadyAssignedIds = new Set(
+    existingAssignments?.map(a => a.registrationId).filter(Boolean) as string[] || []
+  );
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
@@ -129,6 +140,7 @@ export default function SwagPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/events/${eventFilter}/swag-items`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/swag-items/${itemToAssign?.id}/assignments`] });
       setAssignDialogOpen(false);
       setItemToAssign(null);
       setSelectedRegistrations([]);
@@ -224,7 +236,11 @@ export default function SwagPage() {
 
   const selectAllRegistrations = () => {
     if (!registrations) return;
-    setSelectedRegistrations(registrations.map(r => r.id));
+    // Only select registrations that are not already assigned
+    const unassignedIds = registrations
+      .filter(r => !alreadyAssignedIds.has(r.id))
+      .map(r => r.id);
+    setSelectedRegistrations(unassignedIds);
   };
 
   const exportCSV = () => {
@@ -584,12 +600,17 @@ export default function SwagPage() {
               />
             </div>
 
-            <div className="flex justify-between items-center">
+            <div className="flex flex-wrap justify-between items-center gap-2">
               <span className="text-sm text-muted-foreground">
                 {selectedRegistrations.length} selected
+                {alreadyAssignedIds.size > 0 && (
+                  <span className="ml-2 text-xs">
+                    ({alreadyAssignedIds.size} already assigned)
+                  </span>
+                )}
               </span>
               <Button variant="ghost" size="sm" onClick={selectAllRegistrations}>
-                Select All
+                Select All Unassigned
               </Button>
             </div>
             
@@ -598,26 +619,48 @@ export default function SwagPage() {
                 <div className="p-4 text-center text-muted-foreground">
                   {assignSearch ? "No attendees match your search" : "No attendees found"}
                 </div>
-              ) : filteredRegistrations?.map(reg => (
-                <div
-                  key={reg.id}
-                  className={`flex items-center gap-3 p-3 border-b last:border-b-0 cursor-pointer hover-elevate ${
-                    selectedRegistrations.includes(reg.id) ? "bg-primary/10" : ""
-                  }`}
-                  onClick={() => toggleRegistration(reg.id)}
-                  data-testid={`row-assign-${reg.id}`}
-                >
-                  <div className={`h-5 w-5 rounded border flex items-center justify-center ${
-                    selectedRegistrations.includes(reg.id) ? "bg-primary border-primary text-primary-foreground" : "border-input"
-                  }`}>
-                    {selectedRegistrations.includes(reg.id) && <Check className="h-3 w-3" />}
+              ) : filteredRegistrations?.map(reg => {
+                const isAlreadyAssigned = alreadyAssignedIds.has(reg.id);
+                return (
+                  <div
+                    key={reg.id}
+                    className={`flex items-center gap-3 p-3 border-b last:border-b-0 ${
+                      isAlreadyAssigned 
+                        ? "opacity-60 cursor-not-allowed" 
+                        : "cursor-pointer hover-elevate"
+                    } ${
+                      selectedRegistrations.includes(reg.id) ? "bg-primary/10" : ""
+                    }`}
+                    onClick={() => !isAlreadyAssigned && toggleRegistration(reg.id)}
+                    data-testid={`row-assign-${reg.id}`}
+                  >
+                    <div className={`h-5 w-5 rounded border flex items-center justify-center ${
+                      isAlreadyAssigned 
+                        ? "bg-muted border-muted-foreground/30"
+                        : selectedRegistrations.includes(reg.id) 
+                          ? "bg-primary border-primary text-primary-foreground" 
+                          : "border-input"
+                    }`}>
+                      {isAlreadyAssigned ? (
+                        <CheckCircle className="h-3 w-3 text-muted-foreground" />
+                      ) : selectedRegistrations.includes(reg.id) ? (
+                        <Check className="h-3 w-3" />
+                      ) : null}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate flex items-center gap-2">
+                        {reg.firstName} {reg.lastName}
+                        {isAlreadyAssigned && (
+                          <Badge variant="secondary" className="text-xs">
+                            Already Assigned
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="text-sm text-muted-foreground truncate">{reg.email}</div>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">{reg.firstName} {reg.lastName}</div>
-                    <div className="text-sm text-muted-foreground truncate">{reg.email}</div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
           
