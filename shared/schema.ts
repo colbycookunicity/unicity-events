@@ -71,6 +71,38 @@ export type FormTemplate = typeof formTemplates.$inferSelect;
 export const registrationLayoutEnum = ["standard", "split", "hero-background"] as const;
 export type RegistrationLayout = typeof registrationLayoutEnum[number];
 
+// Registration mode enum - consolidates requiresQualification + requiresVerification
+// - qualified_verified: Only pre-qualified users can register, OTP verification required
+// - open_verified: Anyone can register, OTP verification required
+// - open_anonymous: Anyone can register, no verification (NOT YET ENABLED)
+export const registrationModeEnum = ["qualified_verified", "open_verified", "open_anonymous"] as const;
+export type RegistrationMode = typeof registrationModeEnum[number];
+
+// Helper to derive legacy boolean flags from registrationMode
+export function deriveRegistrationFlags(mode: RegistrationMode): { requiresQualification: boolean; requiresVerification: boolean } {
+  switch (mode) {
+    case "qualified_verified":
+      return { requiresQualification: true, requiresVerification: true };
+    case "open_verified":
+      return { requiresQualification: false, requiresVerification: true };
+    case "open_anonymous":
+      return { requiresQualification: false, requiresVerification: false };
+    default:
+      return { requiresQualification: false, requiresVerification: true };
+  }
+}
+
+// Helper to derive registrationMode from legacy boolean flags (for migration/compat)
+export function deriveRegistrationMode(requiresQualification: boolean | null | undefined, requiresVerification: boolean | null | undefined): RegistrationMode {
+  if (requiresQualification) {
+    return "qualified_verified";
+  }
+  if (requiresVerification === false) {
+    return "open_anonymous";
+  }
+  return "open_verified";
+}
+
 /**
  * @deprecated PHASE 4 COMPLETE (Dec 22, 2025)
  * This type is no longer used. All settings have been migrated to:
@@ -111,6 +143,10 @@ export const events = pgTable("events", {
   // Guest policy: not_allowed, allowed_free, allowed_paid
   guestPolicy: text("guest_policy").notNull().default("not_allowed"),
   buyInPrice: integer("buy_in_price"),
+  // Registration mode: consolidated field for qualification + verification logic
+  // Default to "open_verified" for backward compatibility with existing events
+  registrationMode: text("registration_mode").notNull().default("open_verified"),
+  /** @deprecated Use registrationMode instead. Kept for backward compatibility during migration. */
   requiresQualification: boolean("requires_qualification").default(false),
   qualificationStartDate: timestamp("qualification_start_date"),
   qualificationEndDate: timestamp("qualification_end_date"),
@@ -121,6 +157,7 @@ export const events = pgTable("events", {
   registrationSettings: jsonb("registration_settings").$type<RegistrationSettings>(),
   // CMS cutover columns (replace registrationSettings)
   registrationLayout: text("registration_layout").notNull().default("standard"),
+  /** @deprecated Use registrationMode instead. Kept for backward compatibility during migration. */
   requiresVerification: boolean("requires_verification").notNull().default(true),
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),

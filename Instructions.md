@@ -2262,3 +2262,75 @@ Re-verified the registration flow documentation against current code:
 - The multi-registration constraint uses an UPSERT pattern at registration submission (not at OTP stage)
 - If a user with an existing registration requests OTP, qualification check passes (line 377-378)
 - Registration updates are done via the same POST endpoint with `wasUpdated: true` response flag
+
+---
+
+## Registration Modes (January 2026)
+
+### Overview
+
+The `registrationMode` field consolidates the existing `requiresQualification` and `requiresVerification` boolean flags into a single, clearer enum-style field. This improves code clarity and maintainability without changing runtime behavior.
+
+### Registration Mode Values
+
+| Mode | requiresQualification | requiresVerification | Description |
+|------|----------------------|---------------------|-------------|
+| `qualified_verified` | true | true | Only pre-qualified users can register. OTP verification required. |
+| `open_verified` | false | true | Anyone can register. OTP verification required. |
+| `open_anonymous` | false | false | Anyone can register. No verification. (**Not enabled yet**) |
+
+### Default Mapping
+
+- Existing events with `requiresQualification=true` → `"qualified_verified"`
+- Existing events with `requiresQualification=false, requiresVerification=true` → `"open_verified"`
+- Existing events with `requiresQualification=false, requiresVerification=false` → `"open_anonymous"` (not enabled)
+- New events default to `"open_verified"`
+
+### Schema Changes
+
+**New field in `events` table:**
+```typescript
+registrationMode: text("registration_mode").notNull().default("open_verified")
+```
+
+**Helper functions in `shared/schema.ts`:**
+```typescript
+// Derive legacy flags from registrationMode
+deriveRegistrationFlags(mode: RegistrationMode): { requiresQualification: boolean; requiresVerification: boolean }
+
+// Derive registrationMode from legacy flags (for migration/compat)
+deriveRegistrationMode(requiresQualification, requiresVerification): RegistrationMode
+```
+
+### Backward Compatibility
+
+The legacy fields (`requiresQualification`, `requiresVerification`) are preserved and kept in sync with `registrationMode`:
+
+1. **When creating/updating events:**
+   - If `registrationMode` is provided, legacy fields are derived from it
+   - If only legacy fields are provided, `registrationMode` is derived from them
+   - All three fields are always kept in sync in the database
+
+2. **When reading events:**
+   - Backend returns all three fields (mode + legacy booleans)
+   - Frontend prefers `registrationMode` but falls back to legacy fields
+
+3. **Admin UI:**
+   - Currently uses legacy `requiresQualification` toggle
+   - Backend syncs this to the correct `registrationMode` automatically
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `shared/schema.ts` | Added `registrationModeEnum`, `RegistrationMode` type, helper functions, `registrationMode` column |
+| `server/routes.ts` | Updated to derive from `registrationMode`, sync legacy fields |
+| `client/src/pages/RegistrationPage.tsx` | Updated to use `registrationMode` for verification logic |
+
+### Testing
+
+Behavior should remain identical after this change. Verify:
+1. Qualified events still require qualification check at OTP generate
+2. Open events still allow anyone to register with OTP
+3. Admin UI toggle for "Requires Qualification" still works correctly
+4. Public event API returns both `registrationMode` and legacy fields

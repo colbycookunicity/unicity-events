@@ -72,10 +72,14 @@ type VerifiedProfile = {
   customerId?: number;
 };
 
+type RegistrationMode = "qualified_verified" | "open_verified" | "open_anonymous";
+
 type PublicEvent = Event & {
   formFields?: any;
   registrationLayout?: string;
+  registrationMode?: RegistrationMode;
   requiresVerification?: boolean;
+  requiresQualification?: boolean;
 };
 
 // Extended form field type that includes all template field properties
@@ -383,19 +387,23 @@ export default function RegistrationPage() {
   // Custom form fields data (for events with custom form fields)
   const [customFormData, setCustomFormData] = useState<Record<string, any>>({});
 
-  // Check if this event requires verification (default true if not set)
-  // IMPORTANT: If event requires qualification, we MUST require verification to check the qualified list
+  // Derive verification requirement from registrationMode (or legacy fields for backward compat)
+  // - qualified_verified: requiresQualification=true, requiresVerification=true
+  // - open_verified: requiresQualification=false, requiresVerification=true
+  // - open_anonymous: requiresQualification=false, requiresVerification=false (not enabled)
   const getRequiresVerification = (): boolean => {
+    const mode = event?.registrationMode;
+    if (mode) {
+      return mode !== "open_anonymous";
+    }
+    // Fallback to legacy fields for backward compatibility
     if (event?.requiresVerification !== undefined) {
       return event.requiresVerification;
     }
     // Default to true if not set
     return true;
   };
-  const requiresVerification = (
-    getRequiresVerification() || 
-    event?.requiresQualification === true
-  ) && !skipVerification;
+  const requiresVerification = getRequiresVerification() && !skipVerification;
 
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
   

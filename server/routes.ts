@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertEventSchema, insertRegistrationSchema, insertGuestSchema, insertFlightSchema, insertReimbursementSchema, insertSwagItemSchema, insertSwagAssignmentSchema, insertQualifiedRegistrantSchema, insertUserSchema, insertPrinterSchema, insertPrintLogSchema, userRoleEnum } from "@shared/schema";
+import { insertEventSchema, insertRegistrationSchema, insertGuestSchema, insertFlightSchema, insertReimbursementSchema, insertSwagItemSchema, insertSwagAssignmentSchema, insertQualifiedRegistrantSchema, insertUserSchema, insertPrinterSchema, insertPrintLogSchema, userRoleEnum, deriveRegistrationFlags, deriveRegistrationMode, type RegistrationMode } from "@shared/schema";
 import { z } from "zod";
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
@@ -371,7 +371,9 @@ export async function registerRoutes(
       }
       
       // Check if user is qualified for this event (or already registered)
-      if (event.requiresQualification) {
+      // Derive from registrationMode, fallback to legacy requiresQualification for backward compatibility
+      const { requiresQualification } = deriveRegistrationFlags((event.registrationMode as RegistrationMode) || deriveRegistrationMode(event.requiresQualification, event.requiresVerification));
+      if (requiresQualification) {
         const normalizedEmail = email.toLowerCase().trim();
         const qualifier = await storage.getQualifiedRegistrantByEmail(event.id, normalizedEmail);
         const existingRegistration = await storage.getRegistrationByEmail(event.id, normalizedEmail);
@@ -576,7 +578,11 @@ export async function registerRoutes(
       
       if (eventId) {
         const event = await storage.getEventByIdOrSlug(eventId);
-        if (event?.requiresQualification) {
+        // Derive from registrationMode, fallback to legacy flags for backward compatibility
+        const eventRequiresQualification = event 
+          ? deriveRegistrationFlags((event.registrationMode as RegistrationMode) || deriveRegistrationMode(event.requiresQualification, event.requiresVerification)).requiresQualification
+          : false;
+        if (event && eventRequiresQualification) {
           // Check if user already has a registration (pre-qualified list)
           const existingReg = await storage.getRegistrationByEmail(event.id, email);
           if (existingReg) {
@@ -1399,6 +1405,10 @@ export async function registerRoutes(
         }
       }
       
+      // Derive legacy flags from registrationMode for backward compatibility
+      const effectiveMode = (event.registrationMode as RegistrationMode) || deriveRegistrationMode(event.requiresQualification, event.requiresVerification);
+      const { requiresQualification, requiresVerification } = deriveRegistrationFlags(effectiveMode);
+      
       // Return public-safe event data including registration and qualification settings
       res.json({
         id: event.id,
@@ -1414,8 +1424,9 @@ export async function registerRoutes(
         buyInPrice: event.buyInPrice,
         formFields: effectiveFormFields,
         registrationLayout: event.registrationLayout,
-        requiresVerification: event.requiresVerification,
-        requiresQualification: event.requiresQualification,
+        registrationMode: effectiveMode,
+        requiresVerification,
+        requiresQualification,
         qualificationStartDate: event.qualificationStartDate,
         qualificationEndDate: event.qualificationEndDate,
       });
@@ -1444,6 +1455,14 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Buy-in price is required and must be greater than 0 when guests are paid" });
       }
       
+      // Determine registrationMode - if provided use it, otherwise derive from legacy fields
+      let registrationMode: RegistrationMode = req.body.registrationMode;
+      if (!registrationMode) {
+        registrationMode = deriveRegistrationMode(req.body.requiresQualification, req.body.requiresVerification);
+      }
+      // Derive legacy flags from mode for database consistency
+      const { requiresQualification, requiresVerification } = deriveRegistrationFlags(registrationMode);
+      
       const eventData: Record<string, unknown> = {
         ...req.body,
         slug: normalizedSlug,
@@ -1454,7 +1473,9 @@ export async function registerRoutes(
         qualificationEndDate: req.body.qualificationEndDate ? new Date(req.body.qualificationEndDate) : undefined,
         // Provide defaults for CMS fields that have database defaults but are required by Zod
         registrationLayout: req.body.registrationLayout || "standard",
-        requiresVerification: req.body.requiresVerification !== undefined ? req.body.requiresVerification : true,
+        registrationMode,
+        requiresQualification,
+        requiresVerification,
         guestPolicy,
         createdBy: req.user!.id,
       };
@@ -1523,9 +1544,22 @@ export async function registerRoutes(
           updates.buyInPrice = req.body.buyInPrice ? Math.round(parseFloat(String(req.body.buyInPrice))) : null;
         }
       }
-      if (req.body.requiresQualification !== undefined) updates.requiresQualification = req.body.requiresQualification;
+      // Handle registrationMode and legacy fields - keep them in sync
+      if (req.body.registrationMode !== undefined) {
+        updates.registrationMode = req.body.registrationMode;
+        // Sync legacy fields from the new mode
+        const { requiresQualification, requiresVerification } = deriveRegistrationFlags(req.body.registrationMode);
+        updates.requiresQualification = requiresQualification;
+        updates.requiresVerification = requiresVerification;
+      } else if (req.body.requiresQualification !== undefined || req.body.requiresVerification !== undefined) {
+        // Legacy fields being updated - derive mode and sync all fields
+        const mode = deriveRegistrationMode(req.body.requiresQualification, req.body.requiresVerification);
+        const { requiresQualification, requiresVerification } = deriveRegistrationFlags(mode);
+        updates.registrationMode = mode;
+        updates.requiresQualification = requiresQualification;
+        updates.requiresVerification = requiresVerification;
+      }
       if (req.body.registrationLayout !== undefined) updates.registrationLayout = req.body.registrationLayout;
-      if (req.body.requiresVerification !== undefined) updates.requiresVerification = req.body.requiresVerification;
       if (req.body.formFields !== undefined) updates.formFields = req.body.formFields;
       if (normalizedFormTemplateId !== undefined) updates.formTemplateId = normalizedFormTemplateId;
       if (normalizedSlug !== undefined) updates.slug = normalizedSlug;
