@@ -14,7 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
-import { MapPin, Calendar, ChevronRight, LogOut, Mail, Loader2, CheckCircle2, Clock, ShieldCheck } from "lucide-react";
+import { MapPin, Calendar, ChevronRight, LogOut, Mail, Loader2, CheckCircle2, Clock, ShieldCheck, CalendarX, ArrowLeft, HelpCircle } from "lucide-react";
 import unicityIcon from "@/assets/unicity-logo.png";
 import unicityLogoDark from "@/assets/unicity-logo-dark.png";
 import unicityLogoWhite from "@/assets/unicity-logo-white.png";
@@ -53,6 +53,7 @@ export default function AttendeeEventsPage() {
   const [otpCode, setOtpCode] = useState("");
   const [attendeeToken, setAttendeeToken] = useState<string | null>(null);
   const [attendeeEmail, setAttendeeEmail] = useState<string | null>(null);
+  const [noEventsFound, setNoEventsFound] = useState(false);
 
 
   useEffect(() => {
@@ -78,6 +79,13 @@ export default function AttendeeEventsPage() {
       });
     },
     onError: (error: any) => {
+      // Check if this is the "no events found" case - show friendly UI instead of error
+      const errorMessage = error.message || "";
+      if (errorMessage.toLowerCase().includes("no events found") || errorMessage.includes("403")) {
+        setNoEventsFound(true);
+        return;
+      }
+      // Show toast for other errors
       toast({
         title: t("Error", "Error"),
         description: error.message || t("Failed to send verification code", "Error al enviar código"),
@@ -229,7 +237,7 @@ export default function AttendeeEventsPage() {
       </header>
 
       <main className="container mx-auto py-8 px-4">
-        {step === "email" && (
+        {step === "email" && !noEventsFound && (
           <div className="max-w-md mx-auto">
             <Card>
               <CardHeader className="text-center space-y-4">
@@ -282,6 +290,58 @@ export default function AttendeeEventsPage() {
                     )}
                   </Button>
                 </form>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {step === "email" && noEventsFound && (
+          <div className="max-w-md mx-auto">
+            <Card>
+              <CardHeader className="text-center space-y-4">
+                <div className="mx-auto h-14 w-14 rounded-full bg-muted flex items-center justify-center">
+                  <CalendarX className="h-7 w-7 text-muted-foreground" />
+                </div>
+                <div>
+                  <CardTitle data-testid="text-no-events-title">
+                    {t("No events found for this email", "No se encontraron eventos para este correo")}
+                  </CardTitle>
+                  <CardDescription className="mt-3 space-y-2">
+                    <p>
+                      {t(
+                        "We don't see any upcoming events associated with this email.",
+                        "No vemos ningún evento próximo asociado a este correo electrónico."
+                      )}
+                    </p>
+                    <p className="text-xs">
+                      {t(
+                        "This usually means you haven't been registered for an event yet, or you may be using a different email than your invitation was sent to.",
+                        "Esto generalmente significa que aún no has sido registrado para un evento, o que estás usando un correo diferente al que se envió tu invitación."
+                      )}
+                    </p>
+                  </CardDescription>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Button 
+                  className="w-full"
+                  onClick={() => {
+                    setNoEventsFound(false);
+                    setEmail("");
+                  }}
+                  data-testid="button-try-different-email"
+                >
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  {t("Try a different email", "Intentar con otro correo")}
+                </Button>
+                <a 
+                  href="mailto:americasevent@unicity.com" 
+                  className="flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  data-testid="link-contact-support"
+                >
+                  <HelpCircle className="h-4 w-4" />
+                  {t("Contact event support", "Contactar soporte de eventos")}
+                </a>
               </CardContent>
             </Card>
           </div>
