@@ -2239,3 +2239,26 @@ The server rejects the request at the qualification check (step 5-6 above) BEFOR
 4. **Event-scoped OTP sessions**: The `customerData.registrationEventId` field scopes OTP sessions to specific events, preventing cross-event session reuse.
 
 5. **Hydra "Customer not found" fallback**: If Hydra validates OTP but doesn't have the customer, the backend checks the qualified list and uses that data instead. This handles new users who are pre-qualified but not in Hydra's system.
+
+---
+
+### Audit Log
+
+**January 5, 2026 - Audit confirmed – no drift detected**
+
+Re-verified the registration flow documentation against current code:
+
+| Aspect | Documented | Current Code | Status |
+|--------|------------|--------------|--------|
+| Form visibility logic | `requiresVerification OR requiresQualification AND NOT skipVerification` | RegistrationPage.tsx lines 395-398 | ✓ Match |
+| OTP generate endpoint | `/api/register/otp/generate` with qualification pre-check | routes.ts lines 354-438 | ✓ Match |
+| Qualification check | Lines 373-384 check `qualified_registrants` + `registrations` tables | routes.ts lines 373-384 | ✓ Match |
+| 403 for non-qualified | Returns before Hydra call, OTP never sent | routes.ts line 380 | ✓ Match |
+| URL param skip | `?uid=xxx&email=xxx` skips verification | RegistrationPage.tsx line 317 | ✓ Match |
+| Event-scoped sessions | `customerData.registrationEventId` stored | routes.ts line 431 | ✓ Match |
+| Multi-registration | UPSERT pattern - existing registrations updated, not duplicated | routes.ts lines 1627-1688 | ✓ Match |
+
+**Additional notes from audit:**
+- The multi-registration constraint uses an UPSERT pattern at registration submission (not at OTP stage)
+- If a user with an existing registration requests OTP, qualification check passes (line 377-378)
+- Registration updates are done via the same POST endpoint with `wasUpdated: true` response flag
