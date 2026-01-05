@@ -1,0 +1,50 @@
+Goal:
+Fix swag assignment persistence so assigned swag is correctly saved, retrievable, and reliable.
+
+Read Instructions.md and all swag-related frontend, API, and database files fully before making changes.
+
+Context:
+• Swag assignments are created via an admin UI
+• Swag assignments should be persisted in the `swag_assignments` table
+• The `swag_assignments` table is currently empty
+• Assignments are not being saved at all
+• The issue may exist in UI state handling, API wiring, or database insert logic
+• Existing swag data models and tables should be reused
+
+Scope:
+• Swag assignment UI
+• API endpoints or service logic responsible for saving swag assignments
+• Database insert and retrieval logic for `swag_assignments`
+
+What to investigate:
+1. Trace the swag assignment flow end-to-end (UI → API → database)
+2. Verify the swag assignment action triggers an API call
+3. Confirm the request payload includes all required assignment data
+4. Verify the backend handler receives the payload correctly
+5. Confirm database insert logic for `swag_assignments` exists and is executed
+6. Identify why no records are being written
+7. Fix the persistence logic so assignments are saved correctly
+8. Verify assigned swag can be retrieved after reload
+
+Rules (critical):
+• Do NOT refactor unrelated code
+• Do NOT change database schema unless absolutely required
+• Do NOT add new UI unless necessary to complete the fix
+• Use existing services, routes, and models where possible
+• Keep changes minimal and scoped to swag assignment functionality
+• Log errors clearly if assignment saving fails
+
+Testing requirements:
+• Assign swag via the admin UI
+• Verify record is written to `swag_assignments`
+• Reload and confirm assignment persists
+• Confirm no duplicate or partial records are created
+• Validate retrieval logic returns correct assignments
+
+Output:
+• Swag assignments are saved correctly to `swag_assignments`
+• Assignments persist across reloads
+• No regression to existing functionality
+• Clear logging for assignment creation failures
+
+Write all findings, root cause, and fixes to Instructions.md.

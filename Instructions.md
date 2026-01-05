@@ -1981,3 +1981,69 @@ The codebase already has a partial Iterable integration with the foundation in p
 4. Test end-to-end email delivery
 
 The architecture is clean and follows good patterns - no major refactoring needed, just completion of existing integration.
+
+## Swag Assignment Investigation (January 2026)
+
+### Issue Reported
+User reported that swag assignments are not persisting - they assign swag via the admin UI, but the assignments don't appear on the attendee's profile even though the swag management page shows "2 Assigned".
+
+### Investigation Findings
+
+#### Code Flow Trace
+1. **UI**: SwagPage.tsx → `handleBulkAssign()` → `bulkAssignMutation`
+2. **API**: POST `/api/swag-assignments/bulk` in routes.ts
+3. **Storage**: `storage.createSwagAssignment()` in storage.ts
+4. **Database**: INSERT into `swag_assignments` table
+
+#### Observations
+- The `swag_assignments` table schema is correct with all required columns
+- The storage layer correctly inserts and returns assignments
+- The assigned count on swag items is calculated from the swag_assignments table
+- The attendee profile queries `/api/registrations/:registrationId/swag-assignments`
+
+#### Possible Causes
+1. **Size validation gap**: If a swag item requires a size but none is selected, the assignment could fail silently (FIXED - now validates on frontend)
+2. **Caching**: React Query cache might not be invalidated after assignment
+3. **Registration ID mismatch**: The 2 assignments might be for different registrations, not James Dean
+
+#### Fixes Applied
+1. Added frontend validation to require size selection when swag item has `sizeRequired=true`
+2. Added comprehensive backend logging for:
+   - Bulk assignment requests (request body, registration IDs)
+   - Assignment creation success/failure per registration
+   - Assignment fetching with details
+3. Added frontend debug logging when viewing attendee swag assignments
+4. Added loading/error states to the swag assignments display
+
+#### Debugging Steps for Production
+1. Open browser DevTools → Console tab
+2. Navigate to Attendees page, select the event
+3. Click on James Dean's row to open the drawer
+4. Check console for `[Swag Debug]` messages showing:
+   - Attendee ID and email
+   - Assignments array (should show data or empty array)
+   - Loading/error states
+
+5. Try assigning swag again via Swag Management page
+6. Check Network tab for the POST request to `/api/swag-assignments/bulk`
+   - Verify the request body contains correct `registrationIds`
+   - Check the response for created assignments
+
+#### Query to Verify Production Data
+Run this in the production database to check swag assignments:
+```sql
+SELECT 
+  sa.id as assignment_id,
+  sa.registration_id,
+  r.email,
+  r.first_name,
+  r.last_name,
+  si.name as swag_item_name,
+  sa.size,
+  sa.status,
+  sa.created_at
+FROM swag_assignments sa
+JOIN registrations r ON sa.registration_id = r.id
+JOIN swag_items si ON sa.swag_item_id = si.id
+ORDER BY sa.created_at DESC;
+```

@@ -259,10 +259,17 @@ export default function AttendeesPage() {
   // Use appropriate qualifiers based on filter
   const qualifiers = eventFilter === "all" ? allQualifiers : eventQualifiers;
 
-  const { data: swagAssignments } = useQuery<SwagAssignmentWithDetails[]>({
+  const { data: swagAssignments, isLoading: swagLoading, error: swagError } = useQuery<SwagAssignmentWithDetails[]>({
     queryKey: [`/api/registrations/${selectedAttendee?.id}/swag-assignments`],
     enabled: !!selectedAttendee && drawerOpen,
   });
+  
+  // Debug logging for swag assignments
+  if (drawerOpen && selectedAttendee) {
+    console.log('[Swag Debug] Attendee:', selectedAttendee.id, selectedAttendee.email);
+    console.log('[Swag Debug] Assignments:', swagAssignments);
+    console.log('[Swag Debug] Loading:', swagLoading, 'Error:', swagError);
+  }
 
   const selectedEvent = useMemo(() => 
     events?.find(e => e.id === eventFilter),
@@ -1745,7 +1752,11 @@ export default function AttendeesPage() {
                   <Shirt className="h-4 w-4" />
                   Swag Assignments
                 </h4>
-                {swagAssignments && swagAssignments.length > 0 ? (
+                {swagLoading ? (
+                  <p className="text-sm text-muted-foreground">Loading swag assignments...</p>
+                ) : swagError ? (
+                  <p className="text-sm text-destructive">Error loading swag assignments</p>
+                ) : swagAssignments && swagAssignments.length > 0 ? (
                   <div className="space-y-2">
                     {swagAssignments.map((assignment) => (
                       <div 

@@ -2449,7 +2449,18 @@ export async function registerRoutes(
   // Get assignments by event
   app.get("/api/events/:eventId/swag-assignments", authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
+      console.log(`[Swag] Fetching all assignments for event: ${req.params.eventId}`);
       const assignments = await storage.getSwagAssignmentsByEvent(req.params.eventId);
+      console.log(`[Swag] Found ${assignments.length} total assignments for event ${req.params.eventId}`);
+      if (assignments.length > 0) {
+        console.log(`[Swag] Assignment details:`, assignments.map(a => ({
+          id: a.id,
+          registrationId: a.registrationId,
+          registrationEmail: a.registration?.email,
+          swagItemId: a.swagItemId,
+          swagItemName: a.swagItem?.name,
+        })));
+      }
       res.json(assignments);
     } catch (error) {
       console.error("Error fetching swag assignments:", error);
@@ -2460,7 +2471,9 @@ export async function registerRoutes(
   // Get assignments by registration
   app.get("/api/registrations/:registrationId/swag-assignments", authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
+      console.log(`[Swag] Fetching assignments for registration: ${req.params.registrationId}`);
       const assignments = await storage.getSwagAssignmentsByRegistration(req.params.registrationId);
+      console.log(`[Swag] Found ${assignments.length} assignments for registration ${req.params.registrationId}`);
       res.json(assignments);
     } catch (error) {
       console.error("Error fetching swag assignments:", error);
