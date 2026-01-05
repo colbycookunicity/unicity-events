@@ -674,18 +674,21 @@ export default function RegistrationPage() {
       }
     } catch (error: any) {
       // Parse error message - may contain JSON like "403: {"error":"..."}"
-      let errorMessage = "Failed to send verification code";
+      let errorMessage = language === "es" 
+        ? "No se pudo enviar el código de verificación"
+        : "Unable to send verification code";
       if (error.message) {
-        const jsonMatch = error.message.match(/\{.*\}/);
+        let msg = error.message.replace(/^\d{3}:\s*/, "");
+        const jsonMatch = msg.match(/\{.*\}/);
         if (jsonMatch) {
           try {
             const parsed = JSON.parse(jsonMatch[0]);
             errorMessage = parsed.error || errorMessage;
           } catch {
-            errorMessage = error.message;
+            // Keep default message
           }
-        } else {
-          errorMessage = error.message;
+        } else if (!msg.includes("fetch") && !msg.includes("{")) {
+          errorMessage = msg;
         }
       }
       toast({
@@ -1065,9 +1068,27 @@ export default function RegistrationPage() {
         return; // Don't show error toast, we're handling it with OTP flow
       }
       
+      // Make error message more user-friendly
+      let userMessage = error.message || "";
+      // Remove HTTP status codes from message
+      userMessage = userMessage.replace(/^\d{3}:\s*/, "");
+      // Parse JSON error if present
+      try {
+        const jsonMatch = userMessage.match(/\{.*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          userMessage = parsed.error || userMessage;
+        }
+      } catch {}
+      // Fallback message
+      if (!userMessage || userMessage.includes("{") || userMessage.includes("fetch")) {
+        userMessage = language === "es" 
+          ? "No se pudo completar el registro. Por favor intente de nuevo."
+          : "Unable to complete registration. Please try again.";
+      }
       toast({
         title: t("error"),
-        description: error.message || "Registration failed. Please try again.",
+        description: userMessage,
         variant: "destructive",
       });
     },
@@ -1101,18 +1122,21 @@ export default function RegistrationPage() {
         console.log("DEV MODE: Use code", data.devCode);
       }
     } catch (error: any) {
-      let errorMessage = "Failed to send verification code";
+      let errorMessage = language === "es" 
+        ? "No se pudo enviar el código de verificación"
+        : "Unable to send verification code";
       if (error.message) {
-        const jsonMatch = error.message.match(/\{.*\}/);
+        let msg = error.message.replace(/^\d{3}:\s*/, "");
+        const jsonMatch = msg.match(/\{.*\}/);
         if (jsonMatch) {
           try {
             const parsed = JSON.parse(jsonMatch[0]);
             errorMessage = parsed.error || errorMessage;
           } catch {
-            errorMessage = error.message;
+            // Keep default message
           }
-        } else {
-          errorMessage = error.message;
+        } else if (!msg.includes("fetch") && !msg.includes("{")) {
+          errorMessage = msg;
         }
       }
       toast({

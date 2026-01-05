@@ -380,7 +380,7 @@ export async function registerRoutes(
         
         if (!qualifier && !existingRegistration) {
           return res.status(403).json({ 
-            error: `You are not qualified for this event. The email "${normalizedEmail}" was not found in the qualified list. If you believe this is an error, please contact americasevent@unicity.com` 
+            error: `We couldn't find your email "${normalizedEmail}" in the list of qualified attendees for this event. If you believe this is an error, please contact americasevent@unicity.com for assistance.` 
           });
         }
       }
@@ -614,7 +614,7 @@ export async function registerRoutes(
             } else {
               // Not in qualified list
               isQualified = false;
-              qualificationMessage = "You are not on the qualified registrants list for this event.";
+              qualificationMessage = "Your email is not on the qualified attendees list for this event. Please contact support if you believe this is an error.";
             }
           }
         }
@@ -2102,7 +2102,7 @@ export async function registerRoutes(
       res.json(registration);
     } catch (error) {
       console.error("Check-in error:", error);
-      res.status(500).json({ error: "Failed to check in" });
+      res.status(500).json({ error: "Unable to complete check-in. Please try again." });
     }
   });
 
@@ -3699,7 +3699,7 @@ export async function registerRoutes(
       res.status(201).json(printLog);
     } catch (error) {
       console.error("Error creating print job:", error);
-      res.status(500).json({ error: "Failed to create print job" });
+      res.status(500).json({ error: "Unable to print badge. Please try again." });
     }
   });
 
