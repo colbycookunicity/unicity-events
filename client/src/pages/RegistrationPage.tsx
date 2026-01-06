@@ -421,43 +421,14 @@ export default function RegistrationPage() {
     phone?: string;
   }>>([]);
 
-  // Derive verification requirement from registrationMode (or legacy fields for backward compat)
-  // - qualified_verified: requiresQualification=true, requiresVerification=true
-  // - open_verified: requiresQualification=false, requiresVerification=true
-  // - open_anonymous: requiresQualification=false, requiresVerification=false (not enabled)
-  const getRequiresVerification = (): boolean => {
-    const mode = event?.registrationMode;
-    if (mode) {
-      return mode !== "open_anonymous";
-    }
-    // Fallback to legacy fields for backward compatibility
-    if (event?.requiresVerification !== undefined) {
-      return event.requiresVerification;
-    }
-    // Default to true if not set
-    return true;
-  };
-  const requiresVerification = getRequiresVerification() && !skipVerification;
-  
-  // Check if this is open_verified mode (form visible immediately, OTP gates submission)
-  const isOpenVerifiedMode = (): boolean => {
-    const mode = event?.registrationMode;
-    if (mode === "open_verified") return true;
-    // Legacy fallback: open_verified = requiresVerification && !requiresQualification
-    if (!mode && event?.requiresVerification && !event?.requiresQualification) return true;
-    return false;
-  };
-  const openVerifiedMode = isOpenVerifiedMode();
-
-  // Check if this is open_anonymous mode (no verification, no email uniqueness, no edits after submission)
-  const isOpenAnonymousMode = (): boolean => {
-    const mode = event?.registrationMode;
-    if (mode === "open_anonymous") return true;
-    // Legacy fallback: open_anonymous = !requiresVerification && !requiresQualification
-    if (!mode && event?.requiresVerification === false && event?.requiresQualification === false) return true;
-    return false;
-  };
-  const openAnonymousMode = isOpenAnonymousMode();
+  // registrationMode is the sole source of truth - no legacy fallbacks
+  // - qualified_verified: OTP required, must be on qualified list, email unique per event
+  // - open_verified: OTP required, no qualification, email unique per event
+  // - open_anonymous: no OTP, email may be reused, multiple registrations allowed
+  const registrationMode = event?.registrationMode || "open_verified";
+  const requiresVerification = (registrationMode !== "open_anonymous") && !skipVerification;
+  const openVerifiedMode = registrationMode === "open_verified";
+  const openAnonymousMode = registrationMode === "open_anonymous";
 
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
   
