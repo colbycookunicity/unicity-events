@@ -126,53 +126,6 @@ export class IterableService {
     }
   }
 
-  async upsertUser(email: string, dataFields: Record<string, any> = {}, userId?: string): Promise<EmailResult> {
-    if (!isConfigured()) {
-      log('info', `Skipping upsertUser - ITERABLE_API_KEY not configured`);
-      return { success: false, error: 'ITERABLE_API_KEY not configured' };
-    }
-
-    log('info', `Upserting user: ${email}`);
-
-    try {
-      await this.request('POST', '/users/update', {
-        email,
-        userId,
-        dataFields,
-      });
-      log('info', `Success: User upserted ${email}`);
-      return { success: true };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      log('error', `Failed: upsertUser for ${email}`, { error: errorMessage });
-      return { success: false, error: errorMessage };
-    }
-  }
-
-  async trackEvent(email: string, eventName: string, dataFields: Record<string, any> = {}): Promise<EmailResult> {
-    if (!isConfigured()) {
-      log('info', `Skipping trackEvent - ITERABLE_API_KEY not configured`);
-      return { success: false, error: 'ITERABLE_API_KEY not configured' };
-    }
-
-    log('info', `Tracking event: ${eventName} for ${email}`);
-
-    try {
-      await this.request('POST', '/events/track', {
-        email,
-        eventName,
-        dataFields,
-        createdAt: Date.now(),
-      });
-      log('info', `Success: Event tracked ${eventName} for ${email}`);
-      return { success: true };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      log('error', `Failed: trackEvent ${eventName} for ${email}`, { error: errorMessage });
-      return { success: false, error: errorMessage };
-    }
-  }
-
   async sendRegistrationConfirmation(
     email: string,
     registration: any,
