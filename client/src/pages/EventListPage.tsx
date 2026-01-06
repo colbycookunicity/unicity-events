@@ -30,10 +30,9 @@ const parseLocalDate = (dateStr: string | Date | null | undefined) => {
 // Strip HTML tags for plain text preview
 const stripHtml = (html: string | null | undefined): string => {
   if (!html) return "";
-  // Create a temporary element to parse HTML and extract text
-  const tmp = document.createElement("div");
-  tmp.innerHTML = html;
-  return tmp.textContent || tmp.innerText || "";
+  // Use DOMParser for safe HTML text extraction
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  return doc.body.textContent || "";
 };
 
 interface AttendeeEventInfo {
