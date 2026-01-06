@@ -1439,6 +1439,15 @@ export async function registerRoutes(
 
   app.post("/api/events", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
     try {
+      // Validate date range: end date must be >= start date
+      if (req.body.startDate && req.body.endDate) {
+        const startDate = new Date(req.body.startDate);
+        const endDate = new Date(req.body.endDate);
+        if (endDate < startDate) {
+          return res.status(400).json({ error: "End date must be equal to or later than start date" });
+        }
+      }
+      
       // Normalize slug: empty/whitespace -> null
       const normalizedSlug = req.body.slug?.trim() || null;
       
@@ -1605,6 +1614,19 @@ export async function registerRoutes(
       if (req.body.endDate) updates.endDate = new Date(req.body.endDate);
       if (req.body.qualificationStartDate) updates.qualificationStartDate = new Date(req.body.qualificationStartDate);
       if (req.body.qualificationEndDate) updates.qualificationEndDate = new Date(req.body.qualificationEndDate);
+      
+      // Validate date range: end date must be >= start date
+      // Need to consider both provided dates and existing event dates
+      if (updates.startDate || updates.endDate) {
+        const existingEvent = await storage.getEvent(req.params.id);
+        if (existingEvent) {
+          const effectiveStartDate = updates.startDate as Date || existingEvent.startDate;
+          const effectiveEndDate = updates.endDate as Date || existingEvent.endDate;
+          if (effectiveStartDate && effectiveEndDate && effectiveEndDate < effectiveStartDate) {
+            return res.status(400).json({ error: "End date must be equal to or later than start date" });
+          }
+        }
+      }
       
       const event = await storage.updateEvent(req.params.id, updates);
       if (!event) {

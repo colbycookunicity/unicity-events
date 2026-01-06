@@ -76,7 +76,18 @@ const eventFormSchema = z.object({
   formTemplateId: z.string().optional(),
   formFields: z.array(formFieldSchema).optional(),
   defaultLanguage: z.enum(["en", "es"]).default("en"),
-});
+}).refine(
+  (data) => {
+    if (data.startDate && data.endDate) {
+      return new Date(data.endDate) >= new Date(data.startDate);
+    }
+    return true;
+  },
+  {
+    message: "End date must be equal to or later than start date",
+    path: ["endDate"],
+  }
+);
 
 // Form template type
 interface FormTemplate {
