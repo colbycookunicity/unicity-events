@@ -371,8 +371,8 @@ export async function registerRoutes(
       }
       
       // Check if user is qualified for this event (or already registered)
-      // registrationMode is the sole source of truth
-      const mode = event.registrationMode as RegistrationMode;
+      // registrationMode is the sole source of truth - default to open_verified for safety
+      const mode: RegistrationMode = (event.registrationMode as RegistrationMode) || "open_verified";
       const requiresQualification = mode === "qualified_verified";
       if (requiresQualification) {
         const normalizedEmail = email.toLowerCase().trim();
@@ -1405,8 +1405,8 @@ export async function registerRoutes(
         }
       }
       
-      // registrationMode is the sole source of truth - derive behavior flags from it
-      const registrationMode = event.registrationMode as RegistrationMode;
+      // registrationMode is the sole source of truth - default to open_verified for safety
+      const registrationMode: RegistrationMode = (event.registrationMode as RegistrationMode) || "open_verified";
       const requiresQualification = registrationMode === "qualified_verified";
       const requiresVerification = registrationMode === "qualified_verified" || registrationMode === "open_verified";
       
@@ -1719,8 +1719,8 @@ export async function registerRoutes(
       
       // For events requiring verification (qualified_verified or open_verified), 
       // verify that the user has a valid OTP session before allowing registration
-      // registrationMode is the sole source of truth
-      const registrationMode = event.registrationMode as RegistrationMode;
+      // registrationMode is the sole source of truth - default to open_verified for safety
+      const registrationMode: RegistrationMode = (event.registrationMode as RegistrationMode) || "open_verified";
       const requiresVerification = registrationMode === "qualified_verified" || registrationMode === "open_verified";
       const isAnonymousMode = registrationMode === "open_anonymous";
       
