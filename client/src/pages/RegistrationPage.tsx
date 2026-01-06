@@ -82,6 +82,7 @@ type PublicEvent = Event & {
   registrationMode?: RegistrationMode;
   requiresVerification?: boolean;
   requiresQualification?: boolean;
+  defaultLanguage?: 'en' | 'es';
 };
 
 // Extended form field type that includes all template field properties
@@ -398,20 +399,20 @@ export default function RegistrationPage() {
   
   // Set initial language from event's defaultLanguage on first load
   // This is the source of truth for public registration pages - always apply event's language
+  // Priority: use the direct event query (which includes defaultLanguage from /api/events/:id/public)
   useEffect(() => {
-    const eventData = pageData?.event || event;
     const currentEventId = params.eventId;
     
     // Only initialize language once per event (not on every re-render or navigation)
-    if (eventData && currentEventId && languageInitializedForEventRef.current !== currentEventId) {
-      const eventDefaultLanguage = (eventData as any).defaultLanguage as 'en' | 'es' | undefined;
+    if (event && currentEventId && languageInitializedForEventRef.current !== currentEventId) {
+      const eventDefaultLanguage = event.defaultLanguage as 'en' | 'es' | undefined;
       if (eventDefaultLanguage === 'en' || eventDefaultLanguage === 'es') {
         // For public registration pages, event's defaultLanguage is always the source of truth on initial load
         setLanguage(eventDefaultLanguage);
       }
       languageInitializedForEventRef.current = currentEventId;
     }
-  }, [pageData?.event, event, params.eventId, setLanguage]);
+  }, [event, params.eventId, setLanguage]);
 
   // Custom form fields data (for events with custom form fields)
   const [customFormData, setCustomFormData] = useState<Record<string, any>>({});

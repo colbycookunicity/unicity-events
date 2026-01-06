@@ -1430,6 +1430,7 @@ export async function registerRoutes(
         requiresQualification,
         qualificationStartDate: event.qualificationStartDate,
         qualificationEndDate: event.qualificationEndDate,
+        defaultLanguage: event.defaultLanguage,
       });
     } catch (error) {
       console.error("Get public event error:", error);
