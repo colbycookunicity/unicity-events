@@ -18,7 +18,13 @@ export interface BadgeData {
 }
 
 export interface PrintJobRequest {
-  printerId: string;
+  printerId?: string;
+  printer?: {
+    id: string;
+    name: string;
+    ipAddress: string;
+    port: number;
+  };
   badge: BadgeData;
 }
 

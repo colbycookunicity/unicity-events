@@ -161,6 +161,7 @@ export default function AttendeesPage() {
   });
   
   const [selectedPeople, setSelectedPeople] = useState<Set<string>>(new Set());
+  const [selectedPrinterId, setSelectedPrinterId] = useState<string>("");
   
   const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(() => {
     try {
@@ -271,6 +272,35 @@ export default function AttendeesPage() {
       const response = await fetch(`/api/registrations/${selectedAttendee?.id}/print-logs`);
       if (!response.ok) throw new Error("Failed to fetch print logs");
       return response.json();
+    },
+  });
+
+  const { data: eventPrinters } = useQuery<Printer[]>({
+    queryKey: ['/api/events', selectedAttendee?.eventId, 'printers'],
+    enabled: !!selectedAttendee && drawerOpen,
+    queryFn: async () => {
+      const response = await fetch(`/api/events/${selectedAttendee?.eventId}/printers`);
+      if (!response.ok) throw new Error("Failed to fetch printers");
+      return response.json();
+    },
+  });
+
+  const printBadgeMutation = useMutation({
+    mutationFn: async (data: { registrationId: string; printerId: string }) => {
+      const response = await apiRequest("POST", "/api/print-bridge/print", data);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Badge sent to printer" });
+      queryClient.invalidateQueries({ queryKey: ['/api/registrations', selectedAttendee?.id, 'print-logs'] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Print failed",
+        description: error.message,
+        variant: "destructive",
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/registrations', selectedAttendee?.id, 'print-logs'] });
     },
   });
   
@@ -1838,6 +1868,50 @@ export default function AttendeesPage() {
                 ) : (
                   <p className="text-sm text-muted-foreground">No badge prints yet</p>
                 )}
+              </div>
+
+              <Separator />
+
+              <div className="space-y-3">
+                <h4 className="font-medium flex items-center gap-2">
+                  <PrinterIcon className="h-4 w-4" />
+                  Print Badge
+                </h4>
+                <div className="flex gap-2">
+                  <Select
+                    value={selectedPrinterId}
+                    onValueChange={setSelectedPrinterId}
+                  >
+                    <SelectTrigger className="flex-1" data-testid="select-printer">
+                      <SelectValue placeholder="Select printer..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {eventPrinters && eventPrinters.length > 0 ? (
+                        eventPrinters.map((printer) => (
+                          <SelectItem key={printer.id} value={printer.id}>
+                            {printer.name} {printer.status === "online" ? "(Online)" : printer.status === "offline" ? "(Offline)" : ""}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="none" disabled>No printers configured</SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    onClick={() => {
+                      if (selectedAttendee && selectedPrinterId) {
+                        printBadgeMutation.mutate({
+                          registrationId: selectedAttendee.id,
+                          printerId: selectedPrinterId,
+                        });
+                      }
+                    }}
+                    disabled={!selectedPrinterId || printBadgeMutation.isPending}
+                    data-testid="button-print-badge"
+                  >
+                    {printBadgeMutation.isPending ? "Printing..." : "Print Badge"}
+                  </Button>
+                </div>
               </div>
 
               <div className="flex gap-2 pt-4">

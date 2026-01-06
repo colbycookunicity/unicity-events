@@ -140,10 +140,10 @@ app.delete("/printers/:printerId", (req: Request, res: Response) => {
 });
 
 app.post("/print", async (req: Request, res: Response) => {
-  const { printerId, badge } = req.body as PrintJobRequest;
+  const { printerId, printer: printerInfo, badge } = req.body as PrintJobRequest;
 
-  if (!printerId || !badge) {
-    return sendError(res, 400, "INVALID_REQUEST", "Missing required fields: printerId, badge");
+  if (!badge) {
+    return sendError(res, 400, "INVALID_REQUEST", "Missing required field: badge");
   }
 
   if (!badge.firstName || !badge.lastName || !badge.eventName || !badge.registrationId) {
@@ -155,9 +155,29 @@ app.post("/print", async (req: Request, res: Response) => {
     );
   }
 
-  const printer = getPrinter(printerId);
-  if (!printer) {
-    return sendError(res, 404, "PRINTER_NOT_FOUND", `Printer ${printerId} not found`);
+  let printer: Printer | undefined;
+
+  if (printerInfo) {
+    printer = {
+      id: printerInfo.id,
+      name: printerInfo.name,
+      ipAddress: printerInfo.ipAddress,
+      port: printerInfo.port || 9100,
+      status: "unknown",
+    };
+    const existingPrinter = getPrinter(printerInfo.id);
+    if (!existingPrinter) {
+      addPrinter(printer);
+    } else {
+      printer = existingPrinter;
+    }
+  } else if (printerId) {
+    printer = getPrinter(printerId);
+    if (!printer) {
+      return sendError(res, 404, "PRINTER_NOT_FOUND", `Printer ${printerId} not found`);
+    }
+  } else {
+    return sendError(res, 400, "INVALID_REQUEST", "Missing required field: printerId or printer");
   }
 
   let zpl: string;
@@ -175,7 +195,7 @@ app.post("/print", async (req: Request, res: Response) => {
 
   const job: PrintJob = {
     jobId: uuidv4(),
-    printerId,
+    printerId: printer.id,
     status: "pending",
     badge,
     zpl,
@@ -196,7 +216,7 @@ app.post("/print", async (req: Request, res: Response) => {
       completedAt: new Date(),
       retryCount: result.retryCount,
     });
-    updatePrinter(printerId, { status: "online", lastSeen: new Date() });
+    updatePrinter(printer.id, { status: "online", lastSeen: new Date() });
 
     console.log(`[Print] Job ${job.jobId} completed successfully`);
   } else {
@@ -206,7 +226,7 @@ app.post("/print", async (req: Request, res: Response) => {
       errorMessage: result.error,
       retryCount: result.retryCount,
     });
-    updatePrinter(printerId, { status: "offline" });
+    updatePrinter(printer.id, { status: "offline" });
 
     console.log(`[Print] Job ${job.jobId} failed: ${result.error}`);
   }

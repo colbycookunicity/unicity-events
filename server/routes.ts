@@ -4049,6 +4049,132 @@ export async function registerRoutes(
     }
   });
 
+  // Forward print job to print bridge (proxy endpoint)
+  app.post("/api/print-bridge/print", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const { registrationId, printerId, guestId } = req.body;
+
+      if (!registrationId || !printerId) {
+        return res.status(400).json({ error: "Missing registrationId or printerId" });
+      }
+
+      const registration = await storage.getRegistration(registrationId);
+      if (!registration) {
+        return res.status(404).json({ error: "Registration not found" });
+      }
+
+      const event = await storage.getEvent(registration.eventId);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      const printer = await storage.getPrinter(printerId);
+      if (!printer) {
+        return res.status(404).json({ error: "Printer not found" });
+      }
+
+      const badgeData = {
+        firstName: registration.firstName,
+        lastName: registration.lastName,
+        eventName: event.name,
+        registrationId: registration.id,
+        eventId: event.id,
+        unicityId: registration.unicityId || undefined,
+        role: undefined,
+      };
+
+      const printLog = await storage.createPrintLog({
+        registrationId,
+        guestId: guestId || null,
+        printerId,
+        status: "pending",
+        zplSnapshot: null,
+        requestedBy: req.user!.id,
+      });
+
+      const bridgeUrl = process.env.PRINT_BRIDGE_URL || "http://127.0.0.1:3100";
+
+      try {
+        await storage.updatePrintLog(printLog.id, { status: "sent", sentAt: new Date() });
+
+        const bridgeResponse = await fetch(`${bridgeUrl}/print`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            printer: {
+              id: printer.id,
+              name: printer.name,
+              ipAddress: printer.ipAddress,
+              port: printer.port || 9100,
+            },
+            badge: badgeData,
+          }),
+        });
+
+        const bridgeResult = await bridgeResponse.json();
+
+        if (bridgeResponse.ok) {
+          await storage.updatePrintLog(printLog.id, { 
+            status: "success", 
+            completedAt: new Date(),
+            retryCount: bridgeResult.retryCount || 0,
+          });
+          await storage.recordBadgePrint(registrationId);
+          await storage.updatePrinter(printerId, { status: "online" });
+
+          res.json({
+            success: true,
+            jobId: bridgeResult.jobId,
+            printLogId: printLog.id,
+          });
+        } else {
+          await storage.updatePrintLog(printLog.id, {
+            status: "failed",
+            errorMessage: bridgeResult.details || bridgeResult.error || "Print failed",
+            completedAt: new Date(),
+          });
+          await storage.updatePrinter(printerId, { status: "offline" });
+
+          res.status(500).json({
+            success: false,
+            error: bridgeResult.error || "Print failed",
+            details: bridgeResult.details,
+            printLogId: printLog.id,
+          });
+        }
+      } catch (fetchError) {
+        const errorMsg = fetchError instanceof Error ? fetchError.message : "Bridge connection failed";
+        await storage.updatePrintLog(printLog.id, {
+          status: "failed",
+          errorMessage: `Bridge error: ${errorMsg}`,
+          completedAt: new Date(),
+        });
+
+        res.status(503).json({
+          success: false,
+          error: "Print bridge unavailable",
+          details: errorMsg,
+          printLogId: printLog.id,
+        });
+      }
+    } catch (error) {
+      console.error("Error forwarding to print bridge:", error);
+      res.status(500).json({ error: "Failed to process print request" });
+    }
+  });
+
+  // Check print bridge health
+  app.get("/api/print-bridge/health", authenticateToken, async (_req: AuthenticatedRequest, res) => {
+    try {
+      const bridgeUrl = process.env.PRINT_BRIDGE_URL || "http://127.0.0.1:3100";
+      const response = await fetch(`${bridgeUrl}/health`, { method: "GET" });
+      const health = await response.json();
+      res.json({ connected: true, ...health });
+    } catch (error) {
+      res.json({ connected: false, error: "Print bridge not reachable" });
+    }
+  });
+
   // Update print job status (called after sending to bridge)
   app.patch("/api/print-logs/:id", authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
