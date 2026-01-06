@@ -10,9 +10,23 @@ function getBaseUrl(): string {
 function buildEventUrl(event: any): string {
   const baseUrl = getBaseUrl();
   if (event.slug) {
-    return `${baseUrl}/events/${event.slug}`;
+    return `${baseUrl}/register/${event.slug}`;
   }
-  return `${baseUrl}/events/${event.id}`;
+  return `${baseUrl}/register/${event.id}`;
+}
+
+function formatDate(dateStr: string | Date | null | undefined, language: string = 'en'): string {
+  if (!dateStr) return '';
+  const date = typeof dateStr === 'string' ? new Date(dateStr) : dateStr;
+  if (isNaN(date.getTime())) return '';
+  
+  const options: Intl.DateTimeFormatOptions = { 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  };
+  const locale = language === 'es' ? 'es-ES' : 'en-US';
+  return date.toLocaleDateString(locale, options);
 }
 
 export interface EmailResult {
@@ -198,7 +212,7 @@ export class IterableService {
         eventId: event.id,
         eventName,
         eventUrl: buildEventUrl(event),
-        eventStartDate: event.startDate,
+        eventStartDate: formatDate(event.startDate, language),
         registrationId: registration.id,
         language,
       },
@@ -225,7 +239,7 @@ export class IterableService {
         eventId: event.id,
         eventName,
         eventUrl: buildEventUrl(event),
-        eventStartDate: event.startDate,
+        eventStartDate: formatDate(event.startDate, language),
         registrationId: registration.id,
         language,
       },
@@ -252,7 +266,7 @@ export class IterableService {
         eventId: event.id,
         eventName,
         eventUrl: buildEventUrl(event),
-        eventStartDate: event.startDate,
+        eventStartDate: formatDate(event.startDate, language),
         registrationId: registration.id,
         language,
       },
@@ -279,7 +293,7 @@ export class IterableService {
         eventId: event.id,
         eventName,
         eventUrl: buildEventUrl(event),
-        eventStartDate: event.startDate,
+        eventStartDate: formatDate(event.startDate, language),
         registrationId: registration.id,
         language,
       },

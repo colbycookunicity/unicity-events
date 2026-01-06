@@ -2991,7 +2991,7 @@ export async function registerRoutes(
             lastName: qualifier.lastName,
           },
           event,
-          'en'
+          event.defaultLanguage || 'en'
         ).catch(err => {
           console.error('[Iterable] Failed to send qualification granted email:', err);
         });
@@ -3044,6 +3044,7 @@ export async function registerRoutes(
       // Send qualification granted emails for all imported registrants (non-blocking)
       const event = await storage.getEvent(eventId);
       if (event && created.length > 0) {
+        const emailLanguage = event.defaultLanguage || 'en';
         for (const qualifier of created) {
           if (qualifier.email) {
             iterableService.sendQualificationGranted(
@@ -3054,7 +3055,7 @@ export async function registerRoutes(
                 lastName: qualifier.lastName,
               },
               event,
-              'en'
+              emailLanguage
             ).catch(err => {
               console.error(`[Iterable] Failed to send qualification granted email to ${qualifier.email}:`, err);
             });
