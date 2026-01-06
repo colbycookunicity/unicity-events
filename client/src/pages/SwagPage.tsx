@@ -138,9 +138,15 @@ export default function SwagPage() {
       const response = await apiRequest("POST", "/api/swag-assignments/bulk", data);
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: [`/api/events/${eventFilter}/swag-items`] });
       queryClient.invalidateQueries({ queryKey: [`/api/swag-items/${itemToAssign?.id}/assignments`] });
+      // Invalidate swag assignments for all affected registrations so attendee drawer shows updated data
+      variables.registrationIds.forEach(regId => {
+        queryClient.invalidateQueries({ queryKey: [`/api/registrations/${regId}/swag-assignments`] });
+      });
+      // Also invalidate event-level swag assignments
+      queryClient.invalidateQueries({ queryKey: [`/api/events/${eventFilter}/swag-assignments`] });
       setAssignDialogOpen(false);
       setItemToAssign(null);
       setSelectedRegistrations([]);
