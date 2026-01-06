@@ -1498,6 +1498,34 @@ export async function registerRoutes(
       
       const data = insertEventSchema.parse(eventData);
       const event = await storage.createEvent(data);
+      
+      // Auto-create required event pages (login, registration, thank_you)
+      const pageTypes = ['login', 'registration', 'thank_you'];
+      for (const pType of pageTypes) {
+        try {
+          const page = await storage.createEventPage({
+            eventId: event.id,
+            pageType: pType,
+            status: 'draft'
+          });
+          
+          // Create default sections for each page
+          const defaultSections = getDefaultSectionsForPageType(pType, event);
+          for (let i = 0; i < defaultSections.length; i++) {
+            await storage.createEventPageSection({
+              pageId: page.id,
+              type: defaultSections[i].type,
+              position: i,
+              isEnabled: true,
+              content: defaultSections[i].content
+            });
+          }
+        } catch (pageError) {
+          // Log but don't fail event creation if page creation fails
+          console.error(`Failed to create ${pType} page for event ${event.id}:`, pageError);
+        }
+      }
+      
       res.status(201).json(event);
     } catch (error) {
       console.error("Create event error:", error);
