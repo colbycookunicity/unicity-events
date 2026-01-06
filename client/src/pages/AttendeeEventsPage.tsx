@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLanguage } from "@/lib/i18n";
+import { getMapUrl } from "@/lib/utils";
 import { useTheme } from "@/components/ThemeProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -535,10 +536,17 @@ export default function AttendeeEventsPage() {
                               {formatEventDates(event.startDate, event.endDate)}
                             </span>
                             {event.location && (
-                              <span className="flex items-center gap-1">
+                              <a 
+                                href={getMapUrl(event.location)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 hover:text-primary hover:underline transition-colors"
+                                onClick={(e) => e.stopPropagation()}
+                                data-testid={`link-location-${event.id}`}
+                              >
                                 <MapPin className="h-4 w-4" />
                                 {event.location}
-                              </span>
+                              </a>
                             )}
                           </div>
                           {event.lastUpdated && (

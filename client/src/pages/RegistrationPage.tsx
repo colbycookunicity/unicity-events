@@ -23,6 +23,7 @@ import unicityLogoWhite from "@/assets/unicity-logo-white.png";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useTranslation, useLanguage } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
+import { getMapUrl } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { format, parseISO } from "date-fns";
 import type { Event, EventPage, EventPageSection, IntroSectionContent, ThankYouSectionContent, HeroSectionContent, FormSectionContent } from "@shared/schema";
@@ -1579,10 +1580,17 @@ export default function RegistrationPage() {
         </span>
       )}
       {event.location && (
-        <span className="flex items-center gap-1.5">
+        <a 
+          href={getMapUrl(event.location)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`flex items-center gap-1.5 hover:underline transition-colors ${forHero ? "hover:text-white" : "hover:text-primary"}`}
+          onClick={(e) => e.stopPropagation()}
+          data-testid="link-event-location"
+        >
           <MapPin className="h-4 w-4" />
           {event.location}
-        </span>
+        </a>
       )}
     </div>
   );
@@ -2813,10 +2821,17 @@ export default function RegistrationPage() {
                     </div>
                   )}
                   {event?.location && (
-                    <div className="flex items-center gap-1 whitespace-nowrap">
+                    <a 
+                      href={getMapUrl(event.location)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 whitespace-nowrap hover:text-primary hover:underline transition-colors"
+                      onClick={(e) => e.stopPropagation()}
+                      data-testid="link-header-location"
+                    >
                       <MapPin className="w-4 h-4 shrink-0" />
                       <span>{event.location}</span>
-                    </div>
+                    </a>
                   )}
                 </div>
                 {/* Right: Actions */}
@@ -2917,7 +2932,16 @@ export default function RegistrationPage() {
             {event.location && (
               <div className="flex items-center gap-2">
                 <span className="font-semibold">Location:</span>
-                <span>{event.location}</span>
+                <a 
+                  href={getMapUrl(event.location)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-primary hover:underline transition-colors"
+                  onClick={(e) => e.stopPropagation()}
+                  data-testid="link-info-location"
+                >
+                  {event.location}
+                </a>
               </div>
             )}
           </div>
