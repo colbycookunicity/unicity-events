@@ -393,24 +393,25 @@ export default function RegistrationPage() {
   // Store event info for thank you page (preserves data after mutation/refetch)
   const [savedEventInfo, setSavedEventInfo] = useState<{ name: string; nameEs?: string; startDate?: string } | null>(null);
 
-  // Track if we've initialized language from event default (only do this once)
-  const languageInitializedRef = useRef(false);
+  // Track which event we've initialized language for (to handle navigation between events)
+  const languageInitializedForEventRef = useRef<string | null>(null);
   
   // Set initial language from event's defaultLanguage on first load
+  // This is the source of truth for public registration pages - always apply event's language
   useEffect(() => {
-    const eventData = pageData?.event;
-    if (eventData && !languageInitializedRef.current) {
-      const eventDefaultLanguage = (eventData as any).defaultLanguage;
+    const eventData = pageData?.event || event;
+    const currentEventId = params.eventId;
+    
+    // Only initialize language once per event (not on every re-render or navigation)
+    if (eventData && currentEventId && languageInitializedForEventRef.current !== currentEventId) {
+      const eventDefaultLanguage = (eventData as any).defaultLanguage as 'en' | 'es' | undefined;
       if (eventDefaultLanguage === 'en' || eventDefaultLanguage === 'es') {
-        // Only set if user hasn't already manually selected a language for this session
-        const userHasManuallySelected = localStorage.getItem('language');
-        if (!userHasManuallySelected) {
-          setLanguage(eventDefaultLanguage);
-        }
+        // For public registration pages, event's defaultLanguage is always the source of truth on initial load
+        setLanguage(eventDefaultLanguage);
       }
-      languageInitializedRef.current = true;
+      languageInitializedForEventRef.current = currentEventId;
     }
-  }, [pageData?.event, setLanguage]);
+  }, [pageData?.event, event, params.eventId, setLanguage]);
 
   // Custom form fields data (for events with custom form fields)
   const [customFormData, setCustomFormData] = useState<Record<string, any>>({});
