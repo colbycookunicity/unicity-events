@@ -177,13 +177,6 @@ export default function LandingEditorPage() {
     enabled: !!eventId,
   });
 
-  const createPageMutation = useMutation({
-    mutationFn: () => apiRequest('POST', `/api/events/${eventId}/pages/${pageType}`, {}),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/events', eventId, 'pages', pageType] });
-    },
-  });
-
   const addSectionMutation = useMutation({
     mutationFn: (type: string) => 
       apiRequest('POST', `/api/events/${eventId}/pages/${pageType}/sections`, { type, content: {} }),

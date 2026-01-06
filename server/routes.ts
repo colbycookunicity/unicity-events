@@ -1499,10 +1499,16 @@ export async function registerRoutes(
       const data = insertEventSchema.parse(eventData);
       const event = await storage.createEvent(data);
       
-      // Auto-create required event pages (login, registration, thank_you)
+      // Auto-create required event pages (login, registration, thank_you) - idempotent
       const pageTypes = ['login', 'registration', 'thank_you'];
       for (const pType of pageTypes) {
         try {
+          // Check if page already exists (idempotent)
+          const existingPage = await storage.getEventPageByEventId(event.id, pType);
+          if (existingPage) {
+            continue; // Page already exists, skip creation
+          }
+          
           const page = await storage.createEventPage({
             eventId: event.id,
             pageType: pType,
@@ -1521,7 +1527,7 @@ export async function registerRoutes(
             });
           }
         } catch (pageError) {
-          // Log but don't fail event creation if page creation fails
+          // Log but don't fail event creation if page creation fails (handles race conditions)
           console.error(`Failed to create ${pType} page for event ${event.id}:`, pageError);
         }
       }
