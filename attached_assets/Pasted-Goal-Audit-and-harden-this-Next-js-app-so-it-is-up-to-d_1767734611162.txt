@@ -1,0 +1,113 @@
+Goal:
+Audit and harden this Next.js app so it is up-to-date and not vulnerable to common security issues (env leaks, unauthenticated API routes, client-trusted data, open redirects, unsafe server actions), including recent Next.js/React RSC security advisories.
+
+Instructions:
+• Research the entire codebase (App Router and/or Pages Router)
+• Identify security risks, suspicious injections, and outdated patterns
+• Upgrade/patch Next.js + React safely (keep functionality intact)
+• Apply fixes directly where safe; if risky, document instead of guessing
+• Write a concise security report to Instructions.md (issues found, fixes applied, remaining risks, follow-ups)
+
+Hard requirements:
+- Do NOT log process.env anywhere
+- Do NOT trust any client-provided IDs, role flags, headers, cookies, query params, or redirects without server-side verification
+- Any mutating route/action must enforce BOTH authentication + authorization
+
+Work plan (execute all):
+
+0) Baseline & dependency patching
+- Identify current Next.js router type(s): /app, /pages, middleware.ts usage, server actions usage.
+- Run: npm ci (or pnpm i / yarn) + npm audit (or pnpm audit) and record results.
+- Patch Next.js/React per current security guidance:
+  - If Next.js is in 15.x/16.x App Router world, ensure it is upgraded to a patched release line (don’t stay on known-vulnerable patch versions).
+  - If the repo includes the official fixer, run: npx fix-react2shell-next (and commit the deterministic bumps it makes).
+- Ensure lockfile is committed and installs are deterministic (no floating versions causing supply-chain surprises).
+
+1) Environment Variables audit
+- Search the whole repo for: NEXT_PUBLIC_, process.env, .env, .env.local, .env.* usage.
+- Flag any secret accidentally exposed via NEXT_PUBLIC_* or used in client components.
+- Confirm .env*, *.pem, credentials, service account files are gitignored.
+- Remove any env logging and redact any accidental debug prints.
+
+2) API Routes & Server Actions (authN + authZ)
+- Inventory ALL:
+  - /app/api/** route handlers
+  - /pages/api/** routes (if present)
+  - any “use server” server actions
+- For each mutating endpoint/action:
+  - Require authentication (session/JWT/etc).
+  - Require authorization (ownership/role checks) server-side.
+  - Return proper 401/403 with consistent error shape.
+- Remove trust in:
+  - headers like x-user-id / x-role / x-forwarded-* (unless verified by platform and still revalidated)
+  - client cookies that aren’t signed/verified
+  - query params/body IDs without server lookup & ownership checks
+- Explicitly validate method (GET/POST/etc) and reject others.
+
+3) Input validation (zod)
+- Add zod schemas (or equivalent) for every request body + query params for:
+  - route handlers
+  - server actions
+  - webhook handlers
+- Reject unknown fields (strip=false / strict parsing). Don’t silently accept extra fields.
+- Validate content-type where relevant (e.g., JSON only for JSON endpoints).
+
+4) Redirect & URL safety
+- Search for all redirects:
+  - next/navigation redirect()
+  - NextResponse.redirect()
+  - res.redirect()
+  - callbackUrl/returnTo/next params
+- Prevent open redirects:
+  - Never redirect directly to user-provided full URLs.
+  - Implement allowlist-based redirect destinations (paths only, or same-origin only).
+  - Normalize and validate before redirecting.
+
+5) Webhooks & external integrations
+- Inventory all inbound webhooks (Stripe, email providers, etc.)
+- Ensure signature verification exists and is enforced BEFORE parsing/acting.
+- Reject unsigned, malformed, or replayed requests (timestamp tolerance if provider supports it).
+
+6) Dangerous patterns / injection checks
+- Search for:
+  - eval, new Function, dangerouslySetInnerHTML
+  - raw markdown -> HTML rendering
+  - any dynamic <script src=...> injection
+  - any usage of next/script with remote src
+- If markdown/HTML is rendered, ensure sanitization (DOMPurify/isomorphic or trusted sanitizer) and safe config.
+- Specifically investigate for the kind of compromise described publicly:
+  - Scan built output patterns (if repo stores build artifacts, remove them)
+  - Search repo for suspicious script tags like pages.dev, min.js, obfuscated sources, or unexpected additions in:
+    - app/layout.tsx, app/head.tsx
+    - pages/_document.tsx, pages/_app.tsx
+    - any custom <Head> usage
+
+7) Headers & platform hardening
+- Add/verify security headers (via next.config or middleware):
+  - CSP (at minimum: default-src 'self'; script-src 'self' with strict allowances; object-src 'none'; base-uri 'self'; frame-ancestors 'none')
+  - X-Frame-Options (or frame-ancestors via CSP)
+  - X-Content-Type-Options: nosniff
+  - Referrer-Policy
+  - Permissions-Policy (basic tighten)
+  - HSTS if applicable (prod only)
+- Disable x-powered-by.
+- Ensure no debug/admin routes are publicly accessible (protect or remove).
+
+8) Middleware bypass risk check
+- If middleware is used for auth/authorization gating:
+  - Ensure route handlers ALSO enforce auth/authorization (middleware must not be the only control).
+  - Document any places where middleware was the only guard and fix them.
+
+9) Output + documentation
+- Create/Update Instructions.md with a short security report:
+  - App summary (router type, auth mechanism)
+  - Issues found (by checklist section)
+  - Fixes applied (with file paths)
+  - Remaining risks + why not fixed
+  - Follow-up actions (e.g., rotate secrets, add WAF rules, enable dependency scanning)
+- If the app was potentially online during known critical windows, explicitly recommend rotating secrets and redeploying from a clean environment.
+
+Deliverable expectations:
+- Commit safe fixes directly in code.
+- Don’t introduce breaking auth changes without documenting the behavior change and how to test it.
+- Keep diffs focused and explain any config/header changes clearly in Instructions.md.
