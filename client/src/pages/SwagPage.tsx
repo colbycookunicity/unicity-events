@@ -147,6 +147,10 @@ export default function SwagPage() {
       });
       // Also invalidate event-level swag assignments
       queryClient.invalidateQueries({ queryKey: [`/api/events/${eventFilter}/swag-assignments`] });
+      // Invalidate registrations list to update computed swag status (both URL and object-based query keys)
+      queryClient.invalidateQueries({ queryKey: [`/api/registrations?eventId=${eventFilter}`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/registrations", { eventId: eventFilter }] });
+      queryClient.invalidateQueries({ queryKey: ["/api/registrations"] });
       setAssignDialogOpen(false);
       setItemToAssign(null);
       setSelectedRegistrations([]);

@@ -2039,7 +2039,15 @@ export async function registerRoutes(
     try {
       const eventId = req.query.eventId as string | undefined;
       const registrations = await storage.getRegistrations(eventId);
-      res.json(registrations);
+      
+      // Compute swag status dynamically from actual assignments
+      const registrationIdsWithSwag = await storage.getRegistrationIdsWithSwagAssigned(eventId);
+      const registrationsWithComputedSwagStatus = registrations.map(reg => ({
+        ...reg,
+        swagStatus: registrationIdsWithSwag.has(reg.id) ? "assigned" : "pending"
+      }));
+      
+      res.json(registrationsWithComputedSwagStatus);
     } catch (error) {
       console.error("Get registrations error:", error);
       res.status(500).json({ error: "Failed to get registrations" });
@@ -2049,7 +2057,15 @@ export async function registerRoutes(
   app.get("/api/registrations/recent", authenticateToken, async (req, res) => {
     try {
       const registrations = await storage.getRecentRegistrations(10);
-      res.json(registrations);
+      
+      // Compute swag status dynamically from actual assignments
+      const registrationIdsWithSwag = await storage.getRegistrationIdsWithSwagAssigned();
+      const registrationsWithComputedSwagStatus = registrations.map(reg => ({
+        ...reg,
+        swagStatus: registrationIdsWithSwag.has(reg.id) ? "assigned" : "pending"
+      }));
+      
+      res.json(registrationsWithComputedSwagStatus);
     } catch (error) {
       console.error("Get recent registrations error:", error);
       res.status(500).json({ error: "Failed to get recent registrations" });
@@ -2062,7 +2078,12 @@ export async function registerRoutes(
       if (!registration) {
         return res.status(404).json({ error: "Registration not found" });
       }
-      res.json(registration);
+      
+      // Compute swag status dynamically from actual assignments
+      const swagAssignments = await storage.getSwagAssignmentsByRegistration(registration.id);
+      const computedSwagStatus = swagAssignments.length > 0 ? "assigned" : "pending";
+      
+      res.json({ ...registration, swagStatus: computedSwagStatus });
     } catch (error) {
       console.error("Get registration error:", error);
       res.status(500).json({ error: "Failed to get registration" });

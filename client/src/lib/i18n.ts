@@ -93,6 +93,7 @@ const translations = {
     notComing: "Not Coming",
     checkedIn: "Checked In",
     pending: "Pending",
+    assigned: "Assigned",
     completed: "Completed",
     processing: "Processing",
     
@@ -204,6 +205,7 @@ const translations = {
     notComing: "No Asistira",
     checkedIn: "Registrado",
     pending: "Pendiente",
+    assigned: "Asignado",
     completed: "Completado",
     processing: "Procesando",
     

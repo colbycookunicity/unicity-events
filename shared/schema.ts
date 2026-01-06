@@ -21,7 +21,7 @@ export const registrationStatusEnum = ["qualified", "registered", "not_coming", 
 export type RegistrationStatus = typeof registrationStatusEnum[number];
 
 // Swag status enum
-export const swagStatusEnum = ["pending", "picked_up"] as const;
+export const swagStatusEnum = ["pending", "assigned", "picked_up"] as const;
 export type SwagStatus = typeof swagStatusEnum[number];
 
 // Guest policy enum (event-level setting)

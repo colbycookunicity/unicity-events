@@ -116,6 +116,7 @@ export interface IStorage {
   getSwagAssignmentsByRegistration(registrationId: string): Promise<SwagAssignmentWithDetails[]>;
   getSwagAssignmentsByGuest(guestId: string): Promise<SwagAssignmentWithDetails[]>;
   getSwagAssignmentsByEvent(eventId: string): Promise<SwagAssignmentWithDetails[]>;
+  getRegistrationIdsWithSwagAssigned(eventId?: string): Promise<Set<string>>;
   createSwagAssignment(assignment: InsertSwagAssignment): Promise<SwagAssignment>;
   updateSwagAssignment(id: string, data: Partial<InsertSwagAssignment>): Promise<SwagAssignment | undefined>;
   deleteSwagAssignment(id: string): Promise<boolean>;
@@ -918,6 +919,24 @@ export class DatabaseStorage implements IStorage {
       
       return { ...assignment, swagItem: item, registration, guest };
     }));
+  }
+
+  async getRegistrationIdsWithSwagAssigned(eventId?: string): Promise<Set<string>> {
+    let assignments;
+    if (eventId && eventId !== "all") {
+      assignments = await db.select({ registrationId: swagAssignments.registrationId })
+        .from(swagAssignments)
+        .innerJoin(swagItems, eq(swagAssignments.swagItemId, swagItems.id))
+        .where(and(
+          eq(swagItems.eventId, eventId),
+          sql`${swagAssignments.registrationId} IS NOT NULL`
+        ));
+    } else {
+      assignments = await db.select({ registrationId: swagAssignments.registrationId })
+        .from(swagAssignments)
+        .where(sql`${swagAssignments.registrationId} IS NOT NULL`);
+    }
+    return new Set(assignments.map(a => a.registrationId).filter((id): id is string => id !== null));
   }
 
   async createSwagAssignment(assignment: InsertSwagAssignment): Promise<SwagAssignment> {
