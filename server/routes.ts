@@ -1564,6 +1564,7 @@ export async function registerRoutes(
       if (req.body.formFields !== undefined) updates.formFields = req.body.formFields;
       if (normalizedFormTemplateId !== undefined) updates.formTemplateId = normalizedFormTemplateId;
       if (normalizedSlug !== undefined) updates.slug = normalizedSlug;
+      if (req.body.defaultLanguage !== undefined) updates.defaultLanguage = req.body.defaultLanguage;
       
       // Handle dates
       if (req.body.startDate) updates.startDate = new Date(req.body.startDate);
