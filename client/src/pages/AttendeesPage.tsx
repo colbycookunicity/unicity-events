@@ -1586,8 +1586,9 @@ export default function AttendeesPage() {
                 filteredPeople.map((person) => (
                   <tr
                     key={person.id}
-                    className={`hover-elevate ${person.registration ? 'cursor-pointer' : ''}`}
+                    className={`hover:bg-muted/50 transition-colors ${person.registration ? 'cursor-pointer' : ''}`}
                     data-testid={`row-attendee-${person.id}`}
+                    onClick={() => person.registration && handleRowClick(person.registration)}
                   >
                     <td className="px-4 py-3 w-10" onClick={(e) => e.stopPropagation()}>
                       <Checkbox
@@ -1601,7 +1602,6 @@ export default function AttendeesPage() {
                       <td 
                         key={col.key} 
                         className="px-4 py-3"
-                        onClick={() => person.registration && handleRowClick(person.registration)}
                       >
                         {renderCell(person, col.key)}
                       </td>
