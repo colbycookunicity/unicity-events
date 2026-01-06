@@ -14,7 +14,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
-import { MapPin, Calendar, ChevronRight, LogOut, Mail, Loader2, CheckCircle2, Clock, ShieldCheck, CalendarX, ArrowLeft, HelpCircle } from "lucide-react";
+import { MapPin, Calendar, ChevronRight, LogOut, Mail, Loader2, CheckCircle2, Clock, ShieldCheck, CalendarX, ArrowLeft, HelpCircle, QrCode } from "lucide-react";
+import { QRCodeDialog } from "@/components/RegistrationQRCode";
 import unicityIcon from "@/assets/unicity-logo.png";
 import unicityLogoDark from "@/assets/unicity-logo-dark.png";
 import unicityLogoWhite from "@/assets/unicity-logo-white.png";
@@ -565,18 +566,36 @@ export default function AttendeeEventsPage() {
                               {t("Action needed", "Acción requerida")}
                             </Badge>
                           )}
-                          <Link href={`/register/${event.slug || event.id}`}>
-                            <Button 
-                              variant={event.registrationStatus === "registered" ? "outline" : "default"}
-                              className="gap-1"
-                              data-testid={`button-event-action-${event.id}`}
-                            >
-                              {event.registrationStatus === "registered" 
-                                ? t("View Registration", "Ver Registro")
-                                : t("Complete Registration", "Completar Registro")}
-                              <ChevronRight className="h-4 w-4" />
-                            </Button>
-                          </Link>
+                          <div className="flex items-center gap-2">
+                            {event.registrationStatus === "registered" && event.registrationId && (
+                              <QRCodeDialog
+                                registrationId={event.registrationId}
+                                eventName={getEventName(event)}
+                                t={t}
+                                trigger={
+                                  <Button 
+                                    variant="outline" 
+                                    size="icon"
+                                    data-testid={`button-qr-${event.id}`}
+                                  >
+                                    <QrCode className="h-4 w-4" />
+                                  </Button>
+                                }
+                              />
+                            )}
+                            <Link href={`/register/${event.slug || event.id}`}>
+                              <Button 
+                                variant={event.registrationStatus === "registered" ? "outline" : "default"}
+                                className="gap-1"
+                                data-testid={`button-event-action-${event.id}`}
+                              >
+                                {event.registrationStatus === "registered" 
+                                  ? t("View Registration", "Ver Registro")
+                                  : t("Complete Registration", "Completar Registro")}
+                                <ChevronRight className="h-4 w-4" />
+                              </Button>
+                            </Link>
+                          </div>
                           {event.registrationStatus !== "registered" && (
                             <p className="text-xs text-muted-foreground text-right max-w-[160px]">
                               {t("You're invited! Complete your registration.", "¡Estás invitado! Completa tu registro.")}

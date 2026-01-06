@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, CheckCircle, Calendar, MapPin, ExternalLink, Mail, ShieldCheck, AlertCircle, LogOut } from "lucide-react";
+import { Loader2, CheckCircle, Calendar, MapPin, ExternalLink, Mail, ShieldCheck, AlertCircle, LogOut, QrCode } from "lucide-react";
 import PhoneInput, { isPossiblePhoneNumber } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,6 +45,7 @@ interface CustomFormField {
 }
 
 import { IntroSection, ThankYouSection } from "@/components/landing-sections";
+import { RegistrationQRCode, QRCodeDialog } from "@/components/RegistrationQRCode";
 
 interface PageData {
   page: EventPage;
@@ -318,6 +319,8 @@ export default function RegistrationPage() {
   // Track existing registration for returning users
   const [existingRegistrationId, setExistingRegistrationId] = useState<string | null>(null);
   const [isLoadingExisting, setIsLoadingExisting] = useState(false);
+  // Track completed registration ID for thank-you page QR code
+  const [completedRegistrationId, setCompletedRegistrationId] = useState<string | null>(null);
   // Track which email+event combination we loaded data for (security: prevents cross-user/cross-event data leakage)
   const [loadedForKey, setLoadedForKey] = useState<string | null>(null);
   // Ref to prevent duplicate fetch calls during React concurrent mode/strict mode re-renders
@@ -1020,13 +1023,18 @@ export default function RegistrationPage() {
       // Check if the response indicates an update vs create
       let wasUpdated = existingRegistrationId ? true : false;
       let registrationCount = 1;
+      let regId: string | null = existingRegistrationId;
       try {
         const result = await response.json();
         if (result.wasUpdated) wasUpdated = true;
         if (result.ticketCount) registrationCount = result.ticketCount;
+        if (result.id) regId = result.id;
+        if (result.registrationId) regId = result.registrationId;
       } catch {
         // Ignore JSON parse errors
       }
+      // Store the registration ID for the thank-you page QR code
+      if (regId) setCompletedRegistrationId(regId);
       let successMessage: string;
       if (wasUpdated) {
         successMessage = language === "es" ? "Registro actualizado exitosamente" : "Registration updated successfully";
@@ -1475,7 +1483,25 @@ export default function RegistrationPage() {
         <div className="min-h-screen bg-background">
           {renderHeader()}
           <ThankYouSection content={content} />
-          <div className="max-w-md mx-auto p-6 text-center">
+          <div className="max-w-md mx-auto p-6 text-center space-y-6">
+            {completedRegistrationId && (
+              <div className="flex flex-col items-center gap-3">
+                <h3 className="text-sm font-medium text-foreground">
+                  {language === "es" ? "Tu Código QR de Registro" : "Your Check-In QR Code"}
+                </h3>
+                <RegistrationQRCode 
+                  registrationId={completedRegistrationId}
+                  eventName={eventName}
+                  size={180}
+                  showDownload={true}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {language === "es" 
+                    ? "Muestra este código en el registro para entrada rápida"
+                    : "Show this code at check-in for fast entry"}
+                </p>
+              </div>
+            )}
             <div className="text-sm text-muted-foreground">
               <p className="font-medium">{eventName}</p>
               {formattedDate && (
@@ -1506,6 +1532,26 @@ export default function RegistrationPage() {
                   ? "Su registro ha sido completado. Recibira un correo de confirmacion pronto."
                   : "Your registration has been completed. You will receive a confirmation email shortly."}
               </p>
+              
+              {completedRegistrationId && (
+                <div className="my-6 py-6 border-t border-b">
+                  <h3 className="text-sm font-medium text-foreground mb-4">
+                    {language === "es" ? "Tu Código QR de Registro" : "Your Check-In QR Code"}
+                  </h3>
+                  <RegistrationQRCode 
+                    registrationId={completedRegistrationId}
+                    eventName={eventName}
+                    size={180}
+                    showDownload={true}
+                  />
+                  <p className="text-xs text-muted-foreground mt-3">
+                    {language === "es" 
+                      ? "Muestra este código en el registro para entrada rápida"
+                      : "Show this code at check-in for fast entry"}
+                  </p>
+                </div>
+              )}
+              
               <div className="text-sm text-muted-foreground">
                 <p className="font-medium">{eventName}</p>
                 {formattedDate && (
