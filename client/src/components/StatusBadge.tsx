@@ -62,6 +62,11 @@ export function StatusBadge({ status, type = "registration" }: StatusBadgeProps)
           label: t("pending"),
           className: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400",
         };
+      case "assigned":
+        return {
+          label: t("assigned"),
+          className: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",
+        };
       case "picked_up":
         return {
           label: t("swagPickedUp"),
