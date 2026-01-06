@@ -116,7 +116,6 @@ export interface IStorage {
   getSwagAssignmentsByRegistration(registrationId: string): Promise<SwagAssignmentWithDetails[]>;
   getSwagAssignmentsByGuest(guestId: string): Promise<SwagAssignmentWithDetails[]>;
   getSwagAssignmentsByEvent(eventId: string): Promise<SwagAssignmentWithDetails[]>;
-  getSwagAssignmentCounts(registrationIds: string[]): Promise<Map<string, number>>;
   createSwagAssignment(assignment: InsertSwagAssignment): Promise<SwagAssignment>;
   updateSwagAssignment(id: string, data: Partial<InsertSwagAssignment>): Promise<SwagAssignment | undefined>;
   deleteSwagAssignment(id: string): Promise<boolean>;
@@ -919,26 +918,6 @@ export class DatabaseStorage implements IStorage {
       
       return { ...assignment, swagItem: item, registration, guest };
     }));
-  }
-
-  async getSwagAssignmentCounts(registrationIds: string[]): Promise<Map<string, number>> {
-    if (registrationIds.length === 0) return new Map();
-    
-    const counts = await db.select({
-      registrationId: swagAssignments.registrationId,
-      count: count(),
-    })
-    .from(swagAssignments)
-    .where(sql`${swagAssignments.registrationId} = ANY(${registrationIds})`)
-    .groupBy(swagAssignments.registrationId);
-    
-    const result = new Map<string, number>();
-    for (const row of counts) {
-      if (row.registrationId) {
-        result.set(row.registrationId, Number(row.count));
-      }
-    }
-    return result;
   }
 
   async createSwagAssignment(assignment: InsertSwagAssignment): Promise<SwagAssignment> {

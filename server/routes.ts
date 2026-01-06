@@ -2039,18 +2039,7 @@ export async function registerRoutes(
     try {
       const eventId = req.query.eventId as string | undefined;
       const registrations = await storage.getRegistrations(eventId);
-      
-      // Get swag assignment counts for all registrations
-      const regIds = registrations.map(r => r.id);
-      const swagCounts = await storage.getSwagAssignmentCounts(regIds);
-      
-      // Add assignedSwagCount to each registration
-      const registrationsWithSwagCount = registrations.map(reg => ({
-        ...reg,
-        assignedSwagCount: swagCounts.get(reg.id) || 0,
-      }));
-      
-      res.json(registrationsWithSwagCount);
+      res.json(registrations);
     } catch (error) {
       console.error("Get registrations error:", error);
       res.status(500).json({ error: "Failed to get registrations" });

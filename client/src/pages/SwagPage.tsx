@@ -606,33 +606,14 @@ export default function SwagPage() {
               />
             </div>
 
-            {existingAssignments && existingAssignments.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Already Assigned ({existingAssignments.length})</p>
-                <div className="border rounded-md bg-muted/30 max-h-[120px] overflow-auto">
-                  {existingAssignments.map(assignment => (
-                    <div key={assignment.id} className="flex items-center gap-2 p-2 border-b last:border-b-0 text-sm">
-                      <CheckCircle className="h-4 w-4 text-primary" />
-                      <span>
-                        {assignment.registration 
-                          ? `${assignment.registration.firstName} ${assignment.registration.lastName}`
-                          : assignment.guest
-                            ? `${assignment.guest.firstName} ${assignment.guest.lastName} (Guest)`
-                            : "Unknown"
-                        }
-                      </span>
-                      {assignment.size && (
-                        <Badge variant="secondary" className="text-xs ml-auto">{assignment.size}</Badge>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             <div className="flex flex-wrap justify-between items-center gap-2">
               <span className="text-sm text-muted-foreground">
                 {selectedRegistrations.length} selected
+                {alreadyAssignedIds.size > 0 && (
+                  <span className="ml-2 text-xs">
+                    ({alreadyAssignedIds.size} already assigned)
+                  </span>
+                )}
               </span>
               <Button variant="ghost" size="sm" onClick={selectAllRegistrations}>
                 Select All Unassigned

@@ -97,7 +97,6 @@ const translations = {
     processing: "Processing",
     
     // Swag
-    assigned: "Assigned",
     swagPickedUp: "Swag Picked Up",
     markSwagPickedUp: "Mark Swag Picked Up",
     
@@ -209,7 +208,6 @@ const translations = {
     processing: "Procesando",
     
     // Swag
-    assigned: "Asignado",
     swagPickedUp: "Articulos Recogidos",
     markSwagPickedUp: "Marcar Articulos Recogidos",
     

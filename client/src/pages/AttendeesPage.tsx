@@ -1152,13 +1152,8 @@ export default function AttendeesPage() {
         ) : (
           <span className="text-muted-foreground">Not Registered</span>
         );
-      case "swagStatus": {
-        if (!reg) return <span className="text-muted-foreground">-</span>;
-        const swagDisplayStatus = reg.swagStatus === "picked_up" 
-          ? "picked_up" 
-          : ((reg as any).assignedSwagCount > 0 ? "assigned" : "pending");
-        return <StatusBadge status={swagDisplayStatus} type="swag" />;
-      }
+      case "swagStatus":
+        return reg ? <StatusBadge status={reg.swagStatus || "pending"} type="swag" /> : <span className="text-muted-foreground">-</span>;
       case "shirtSize":
         return <span className="text-muted-foreground whitespace-nowrap">{reg?.shirtSize || "-"}</span>;
       case "pantSize":
@@ -1611,14 +1606,7 @@ export default function AttendeesPage() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Swag</p>
-                  <StatusBadge 
-                    status={
-                      selectedAttendee.swagStatus === "picked_up" 
-                        ? "picked_up" 
-                        : (swagAssignments && swagAssignments.length > 0 ? "assigned" : "pending")
-                    } 
-                    type="swag" 
-                  />
+                  <StatusBadge status={selectedAttendee.swagStatus || "pending"} type="swag" />
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Registered</p>
