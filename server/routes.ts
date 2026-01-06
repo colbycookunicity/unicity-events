@@ -371,8 +371,9 @@ export async function registerRoutes(
       }
       
       // Check if user is qualified for this event (or already registered)
-      // Derive from registrationMode, fallback to legacy requiresQualification for backward compatibility
-      const { requiresQualification } = deriveRegistrationFlags((event.registrationMode as RegistrationMode) || deriveRegistrationMode(event.requiresQualification, event.requiresVerification));
+      // registrationMode is the sole source of truth
+      const mode = event.registrationMode as RegistrationMode;
+      const requiresQualification = mode === "qualified_verified";
       if (requiresQualification) {
         const normalizedEmail = email.toLowerCase().trim();
         const qualifier = await storage.getQualifiedRegistrantByEmail(event.id, normalizedEmail);
@@ -578,10 +579,8 @@ export async function registerRoutes(
       
       if (eventId) {
         const event = await storage.getEventByIdOrSlug(eventId);
-        // Derive from registrationMode, fallback to legacy flags for backward compatibility
-        const eventRequiresQualification = event 
-          ? deriveRegistrationFlags((event.registrationMode as RegistrationMode) || deriveRegistrationMode(event.requiresQualification, event.requiresVerification)).requiresQualification
-          : false;
+        // registrationMode is the sole source of truth
+        const eventRequiresQualification = event?.registrationMode === "qualified_verified";
         if (event && eventRequiresQualification) {
           // Check if user already has a registration (pre-qualified list)
           const existingReg = await storage.getRegistrationByEmail(event.id, email);
@@ -1406,9 +1405,10 @@ export async function registerRoutes(
         }
       }
       
-      // Derive legacy flags from registrationMode for backward compatibility
-      const effectiveMode = (event.registrationMode as RegistrationMode) || deriveRegistrationMode(event.requiresQualification, event.requiresVerification);
-      const { requiresQualification, requiresVerification } = deriveRegistrationFlags(effectiveMode);
+      // registrationMode is the sole source of truth - derive behavior flags from it
+      const registrationMode = event.registrationMode as RegistrationMode;
+      const requiresQualification = registrationMode === "qualified_verified";
+      const requiresVerification = registrationMode === "qualified_verified" || registrationMode === "open_verified";
       
       // Return public-safe event data including registration and qualification settings
       res.json({
@@ -1425,7 +1425,7 @@ export async function registerRoutes(
         buyInPrice: event.buyInPrice,
         formFields: effectiveFormFields,
         registrationLayout: event.registrationLayout,
-        registrationMode: effectiveMode,
+        registrationMode,
         requiresVerification,
         requiresQualification,
         qualificationStartDate: event.qualificationStartDate,
@@ -1465,13 +1465,11 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Buy-in price is required and must be greater than 0 when guests are paid" });
       }
       
-      // Determine registrationMode - if provided use it, otherwise derive from legacy fields
-      let registrationMode: RegistrationMode = req.body.registrationMode;
-      if (!registrationMode) {
-        registrationMode = deriveRegistrationMode(req.body.requiresQualification, req.body.requiresVerification);
-      }
-      // Derive legacy flags from mode for database consistency
-      const { requiresQualification, requiresVerification } = deriveRegistrationFlags(registrationMode);
+      // registrationMode is required - no legacy fallback
+      const registrationMode: RegistrationMode = req.body.registrationMode || "open_verified";
+      // Derive legacy flags from mode for database consistency (schema still has these columns)
+      const requiresQualification = registrationMode === "qualified_verified";
+      const requiresVerification = registrationMode === "qualified_verified" || registrationMode === "open_verified";
       
       const eventData: Record<string, unknown> = {
         ...req.body,
@@ -1588,21 +1586,17 @@ export async function registerRoutes(
           updates.buyInPrice = req.body.buyInPrice ? Math.round(parseFloat(String(req.body.buyInPrice))) : null;
         }
       }
-      // Handle registrationMode and legacy fields - keep them in sync
+      // Handle registrationMode - it's the sole source of truth
+      // Legacy fields are kept in sync for database consistency only
       if (req.body.registrationMode !== undefined) {
         updates.registrationMode = req.body.registrationMode;
-        // Sync legacy fields from the new mode
-        const { requiresQualification, requiresVerification } = deriveRegistrationFlags(req.body.registrationMode);
-        updates.requiresQualification = requiresQualification;
-        updates.requiresVerification = requiresVerification;
-      } else if (req.body.requiresQualification !== undefined || req.body.requiresVerification !== undefined) {
-        // Legacy fields being updated - derive mode and sync all fields
-        const mode = deriveRegistrationMode(req.body.requiresQualification, req.body.requiresVerification);
-        const { requiresQualification, requiresVerification } = deriveRegistrationFlags(mode);
-        updates.registrationMode = mode;
+        // Sync legacy fields from the new mode (for database consistency)
+        const requiresQualification = req.body.registrationMode === "qualified_verified";
+        const requiresVerification = req.body.registrationMode === "qualified_verified" || req.body.registrationMode === "open_verified";
         updates.requiresQualification = requiresQualification;
         updates.requiresVerification = requiresVerification;
       }
+      // Ignore legacy fields in request body - registrationMode is the only way to set behavior
       if (req.body.registrationLayout !== undefined) updates.registrationLayout = req.body.registrationLayout;
       if (req.body.formFields !== undefined) updates.formFields = req.body.formFields;
       if (normalizedFormTemplateId !== undefined) updates.formTemplateId = normalizedFormTemplateId;
@@ -1725,9 +1719,10 @@ export async function registerRoutes(
       
       // For events requiring verification (qualified_verified or open_verified), 
       // verify that the user has a valid OTP session before allowing registration
-      const effectiveMode = (event.registrationMode as RegistrationMode) || deriveRegistrationMode(event.requiresQualification, event.requiresVerification);
-      const { requiresVerification } = deriveRegistrationFlags(effectiveMode);
-      const isAnonymousMode = effectiveMode === "open_anonymous";
+      // registrationMode is the sole source of truth
+      const registrationMode = event.registrationMode as RegistrationMode;
+      const requiresVerification = registrationMode === "qualified_verified" || registrationMode === "open_verified";
+      const isAnonymousMode = registrationMode === "open_anonymous";
       
       if (requiresVerification && !isAnonymousMode) {
         // Check for valid OTP session for this email+event combination
