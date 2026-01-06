@@ -211,25 +211,30 @@ function SortableFieldItem({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Label (English)</Label>
-              <Input
-                value={field.label}
-                onChange={(e) => onUpdate({ label: e.target.value })}
-                placeholder="Enter field label"
-                data-testid={`input-field-label-${fieldId}`}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Label (Spanish)</Label>
-              <Input
-                value={field.labelEs || ""}
-                onChange={(e) => onUpdate({ labelEs: e.target.value })}
-                placeholder="Ingrese la etiqueta"
-                data-testid={`input-field-label-es-${fieldId}`}
-              />
-            </div>
+          <div className="space-y-2">
+            <Label>Field Name</Label>
+            <Input
+              value={field.label}
+              onChange={(e) => onUpdate({ label: e.target.value })}
+              placeholder="Enter field name"
+              data-testid={`input-field-name-${fieldId}`}
+            />
+            <p className="text-xs text-muted-foreground">
+              This is the name shown to attendees in English
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Spanish Translation</Label>
+            <Input
+              value={field.labelEs || ""}
+              onChange={(e) => onUpdate({ labelEs: e.target.value })}
+              placeholder="Nombre del campo en español"
+              data-testid={`input-field-label-es-${fieldId}`}
+            />
+            <p className="text-xs text-muted-foreground">
+              Optional: Translation shown to Spanish-speaking attendees
+            </p>
           </div>
 
           {field.type !== "checkbox" && (
@@ -319,16 +324,31 @@ export function FormBuilder({ fields, onChange }: FormBuilderProps) {
     })
   );
 
+  const getDefaultLabel = (type: FormFieldDefinition["type"]): string => {
+    const defaults: Record<string, string> = {
+      text: "Text Field",
+      email: "Email Address",
+      phone: "Phone Number",
+      number: "Number",
+      select: "Dropdown",
+      checkbox: "Checkbox",
+      textarea: "Text Area",
+      date: "Date",
+    };
+    return defaults[type] || "New Field";
+  };
+
   const addField = (type: FormFieldDefinition["type"]) => {
+    const fieldId = `field_${Date.now()}`;
     const newField: FormFieldDefinition = {
-      id: `field_${Date.now()}`,
+      id: fieldId,
       type,
-      label: "",
+      label: getDefaultLabel(type),
       required: false,
       options: type === "select" ? [] : undefined,
     };
     onChange([...fields, newField]);
-    setExpandedId(newField.id);
+    setExpandedId(fieldId);
   };
 
   const updateField = (id: string, updates: Partial<FormFieldDefinition>) => {
