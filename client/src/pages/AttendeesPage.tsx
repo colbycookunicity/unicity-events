@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useSearch } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Search, Download, MoreHorizontal, Mail, Edit, Trash2, User, Shirt, Save, Pencil, ChevronUp, ChevronDown, Settings2, ArrowUpDown, Plus, Upload, Edit2, ArrowRightLeft, Copy, ExternalLink } from "lucide-react";
+import { Search, Download, MoreHorizontal, Mail, Edit, Trash2, User, Shirt, Save, Pencil, ChevronUp, ChevronDown, Settings2, ArrowUpDown, Plus, Upload, Edit2, ArrowRightLeft, Copy, ExternalLink, Printer, CheckCircle2, XCircle, Clock, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PhoneInput from "react-phone-number-input";
@@ -29,7 +29,7 @@ import { useTranslation } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
-import type { Registration, Event, SwagAssignmentWithDetails, QualifiedRegistrant, GuestAllowanceRule, FormTemplate } from "@shared/schema";
+import type { Registration, Event, SwagAssignmentWithDetails, QualifiedRegistrant, GuestAllowanceRule, FormTemplate, PrintLog, Printer } from "@shared/schema";
 
 // Helper to format date-only fields without timezone shift
 // Parses the date string and formats using UTC to avoid off-by-one errors
@@ -262,6 +262,16 @@ export default function AttendeesPage() {
   const { data: swagAssignments, isLoading: swagLoading, error: swagError } = useQuery<SwagAssignmentWithDetails[]>({
     queryKey: [`/api/registrations/${selectedAttendee?.id}/swag-assignments`],
     enabled: !!selectedAttendee && drawerOpen,
+  });
+
+  const { data: printLogs, isLoading: printLogsLoading } = useQuery<(PrintLog & { printer?: Printer })[]>({
+    queryKey: ['/api/registrations', selectedAttendee?.id, 'print-logs'],
+    enabled: !!selectedAttendee && drawerOpen,
+    queryFn: async () => {
+      const response = await fetch(`/api/registrations/${selectedAttendee?.id}/print-logs`);
+      if (!response.ok) throw new Error("Failed to fetch print logs");
+      return response.json();
+    },
   });
   
   // Debug logging for swag assignments
@@ -1782,6 +1792,51 @@ export default function AttendeesPage() {
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">No swag assigned yet</p>
+                )}
+              </div>
+
+              <Separator />
+
+              <div className="space-y-3">
+                <h4 className="font-medium flex items-center gap-2">
+                  <Printer className="h-4 w-4" />
+                  Badge Print History
+                </h4>
+                {printLogsLoading ? (
+                  <p className="text-sm text-muted-foreground">Loading print history...</p>
+                ) : printLogs && printLogs.length > 0 ? (
+                  <div className="space-y-2">
+                    {printLogs.map((log) => (
+                      <div 
+                        key={log.id} 
+                        className="flex items-center justify-between text-sm p-2 rounded-md bg-muted/50"
+                        data-testid={`print-log-${log.id}`}
+                      >
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-2">
+                            {log.status === 'success' && <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />}
+                            {log.status === 'failed' && <XCircle className="h-3.5 w-3.5 text-red-600" />}
+                            {log.status === 'pending' && <Clock className="h-3.5 w-3.5 text-yellow-600" />}
+                            {log.status === 'sent' && <Send className="h-3.5 w-3.5 text-blue-600" />}
+                            <span className="font-medium capitalize">{log.status}</span>
+                          </div>
+                          <span className="text-xs text-muted-foreground">
+                            {format(new Date(log.requestedAt), "MMM d, yyyy h:mm a")}
+                          </span>
+                          {log.errorMessage && (
+                            <span className="text-xs text-destructive">{log.errorMessage}</span>
+                          )}
+                        </div>
+                        <div className="text-right text-xs text-muted-foreground">
+                          {log.retryCount && log.retryCount > 0 && (
+                            <div>Retries: {log.retryCount}</div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No badge prints yet</p>
                 )}
               </div>
 

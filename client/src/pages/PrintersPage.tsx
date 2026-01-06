@@ -345,21 +345,36 @@ export default function PrintersPage() {
 
           {selectedEventId && printers && printers.length > 0 && (
             <div className="border rounded-md">
-              <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-4 p-3 border-b bg-muted/50 text-sm font-medium">
+              <div className="grid grid-cols-[1fr_1fr_1fr_auto_auto] gap-4 p-3 border-b bg-muted/50 text-sm font-medium">
                 <div>Name</div>
                 <div>Location</div>
                 <div>IP Address</div>
+                <div>Status</div>
                 <div>Actions</div>
               </div>
               {printers.map((printer) => (
                 <div
                   key={printer.id}
-                  className="grid grid-cols-[1fr_1fr_1fr_auto] gap-4 p-3 border-b last:border-b-0 items-center"
+                  className="grid grid-cols-[1fr_1fr_1fr_auto_auto] gap-4 p-3 border-b last:border-b-0 items-center"
                   data-testid={`row-printer-${printer.id}`}
                 >
                   <div className="font-medium">{printer.name}</div>
                   <div className="text-muted-foreground">{printer.location || "—"}</div>
                   <div className="font-mono text-sm">{printer.ipAddress}:{printer.port || 9100}</div>
+                  <div>
+                    <Badge 
+                      variant={printer.status === "online" ? "default" : "secondary"}
+                      className={printer.status === "online" ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" : ""}
+                    >
+                      {printer.status === "online" ? (
+                        <><Wifi className="h-3 w-3 mr-1" />Online</>
+                      ) : printer.status === "offline" ? (
+                        <><WifiOff className="h-3 w-3 mr-1" />Offline</>
+                      ) : (
+                        "Unknown"
+                      )}
+                    </Badge>
+                  </div>
                   <div className="flex items-center gap-1">
                     <Button
                       size="icon"
