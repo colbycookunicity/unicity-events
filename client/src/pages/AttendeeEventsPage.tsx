@@ -441,11 +441,18 @@ export default function AttendeeEventsPage() {
                 <h1 className="text-2xl font-bold" data-testid="text-attendee-welcome">
                   {t("My Events", "Mis Eventos")}
                 </h1>
-                <p className="text-muted-foreground">
-                  {attendeeEmail || eventsData?.email}
+                <p className="text-sm text-muted-foreground">
+                  {t("Logged in as", "Conectado como")} {attendeeEmail || eventsData?.email}
                 </p>
               </div>
             </div>
+            
+            <p className="text-muted-foreground">
+              {t(
+                "View your event registrations and complete any pending actions below.",
+                "Consulta tus registros de eventos y completa las acciones pendientes a continuación."
+              )}
+            </p>
 
             {eventsLoading && (
               <div className="space-y-4">
@@ -476,11 +483,28 @@ export default function AttendeeEventsPage() {
 
             {eventsData && eventsData.events.length === 0 && (
               <Card>
-                <CardContent className="p-6 text-center text-muted-foreground">
-                  {t(
-                    "No events found. You are not currently qualified for any events.",
-                    "No se encontraron eventos. No estás calificado para ningún evento actualmente."
-                  )}
+                <CardContent className="p-8 text-center space-y-4">
+                  <div className="mx-auto h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                    <CalendarX className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="font-medium">
+                      {t("No upcoming events", "No hay eventos próximos")}
+                    </h3>
+                    <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                      {t(
+                        "You don't have any events to register for yet. When you're invited to an event, it will appear here.",
+                        "Aún no tienes eventos para registrarte. Cuando seas invitado a un evento, aparecerá aquí."
+                      )}
+                    </p>
+                  </div>
+                  <a 
+                    href="mailto:americasevent@unicity.com" 
+                    className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <HelpCircle className="h-4 w-4" />
+                    {t("Questions? Contact event support", "¿Preguntas? Contacta soporte de eventos")}
+                  </a>
                 </CardContent>
               </Card>
             )}
@@ -523,22 +547,24 @@ export default function AttendeeEventsPage() {
                           )}
                         </div>
                         <div className="flex flex-col items-end gap-2 justify-center shrink-0">
-                          <Badge 
-                            variant={event.registrationStatus === "registered" ? "default" : "secondary"}
-                            data-testid={`badge-status-${event.id}`}
-                          >
-                            {event.registrationStatus === "registered" ? (
-                              <>
-                                <CheckCircle2 className="h-3 w-3 mr-1" />
-                                {t("Registered", "Registrado")}
-                              </>
-                            ) : (
-                              <>
-                                <Clock className="h-3 w-3 mr-1" />
-                                {t("Qualified", "Calificado")}
-                              </>
-                            )}
-                          </Badge>
+                          {event.registrationStatus === "registered" ? (
+                            <Badge 
+                              variant="default"
+                              data-testid={`badge-status-${event.id}`}
+                            >
+                              <CheckCircle2 className="h-3 w-3 mr-1" />
+                              {t("Registered", "Registrado")}
+                            </Badge>
+                          ) : (
+                            <Badge 
+                              variant="outline"
+                              className="border-amber-500/50 text-amber-600 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-950/20"
+                              data-testid={`badge-status-${event.id}`}
+                            >
+                              <Clock className="h-3 w-3 mr-1" />
+                              {t("Action needed", "Acción requerida")}
+                            </Badge>
+                          )}
                           <Link href={`/register/${event.slug || event.id}`}>
                             <Button 
                               variant={event.registrationStatus === "registered" ? "outline" : "default"}
@@ -546,11 +572,16 @@ export default function AttendeeEventsPage() {
                               data-testid={`button-event-action-${event.id}`}
                             >
                               {event.registrationStatus === "registered" 
-                                ? t("View / Edit", "Ver / Editar")
-                                : t("Register", "Registrar")}
+                                ? t("View Registration", "Ver Registro")
+                                : t("Complete Registration", "Completar Registro")}
                               <ChevronRight className="h-4 w-4" />
                             </Button>
                           </Link>
+                          {event.registrationStatus !== "registered" && (
+                            <p className="text-xs text-muted-foreground text-right max-w-[160px]">
+                              {t("You're invited! Complete your registration.", "¡Estás invitado! Completa tu registro.")}
+                            </p>
+                          )}
                         </div>
                       </div>
                     </CardContent>
