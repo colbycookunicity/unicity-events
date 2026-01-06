@@ -51,6 +51,7 @@ export interface IStorage {
   getRegistration(id: string): Promise<RegistrationWithDetails | undefined>;
   getRegistrationByEmail(eventId: string, email: string): Promise<Registration | undefined>;
   getRegistrationWithDetailsByEmail(eventId: string, email: string): Promise<RegistrationWithDetails | undefined>;
+  getRegistrationByUnicityId(eventId: string, unicityId: string): Promise<Registration | undefined>;
   getRecentRegistrations(limit?: number): Promise<Registration[]>;
   getRegistrationsByUser(email: string): Promise<RegistrationWithDetails[]>;
   createRegistration(registration: InsertRegistration): Promise<Registration>;
@@ -60,6 +61,7 @@ export interface IStorage {
   transferRegistration(id: string, targetEventId: string, transferredBy: string): Promise<Registration | undefined>;
 
   // Guests
+  getGuest(id: string): Promise<Guest | undefined>;
   getGuestsByRegistration(registrationId: string): Promise<Guest[]>;
   createGuest(guest: InsertGuest): Promise<Guest>;
   updateGuest(id: string, data: Partial<InsertGuest>): Promise<Guest | undefined>;
@@ -406,6 +408,12 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
+  async getRegistrationByUnicityId(eventId: string, unicityId: string): Promise<Registration | undefined> {
+    const [reg] = await db.select().from(registrations)
+      .where(and(eq(registrations.eventId, eventId), eq(registrations.unicityId, unicityId)));
+    return reg || undefined;
+  }
+
   async getRecentRegistrations(limit = 10): Promise<Registration[]> {
     return db.select().from(registrations).orderBy(desc(registrations.createdAt)).limit(limit);
   }
@@ -484,6 +492,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Guests
+  async getGuest(id: string): Promise<Guest | undefined> {
+    const [guest] = await db.select().from(guests).where(eq(guests.id, id));
+    return guest || undefined;
+  }
+
   async getGuestsByRegistration(registrationId: string): Promise<Guest[]> {
     return db.select().from(guests).where(eq(guests.registrationId, registrationId));
   }

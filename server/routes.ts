@@ -3237,6 +3237,185 @@ export async function registerRoutes(
     }
   });
 
+  // ========================================
+  // Public Guest Registration Routes
+  // ========================================
+
+  // Get event info for guest registration (public)
+  app.get("/api/public/events/:eventIdOrSlug/guest-registration-info", async (req, res) => {
+    try {
+      const event = await storage.getEventByIdOrSlug(req.params.eventIdOrSlug);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      // Check if event allows guests
+      if (event.guestPolicy === "not_allowed") {
+        return res.status(400).json({ error: "This event does not allow guests" });
+      }
+
+      // Check if event is published
+      if (event.status !== "published" && event.status !== "private") {
+        return res.status(400).json({ error: "Event is not available for registration" });
+      }
+
+      res.json({
+        id: event.id,
+        name: event.name,
+        nameEs: event.nameEs,
+        startDate: event.startDate,
+        endDate: event.endDate,
+        location: event.location,
+        guestPolicy: event.guestPolicy,
+        buyInPrice: event.buyInPrice,
+        defaultLanguage: event.defaultLanguage,
+      });
+    } catch (error) {
+      console.error("Error fetching guest registration info:", error);
+      res.status(500).json({ error: "Failed to fetch event info" });
+    }
+  });
+
+  // Lookup a qualifier/attendee by Unicity ID for guest registration (public)
+  app.post("/api/public/events/:eventIdOrSlug/lookup-qualifier", async (req, res) => {
+    try {
+      const { unicityId } = req.body;
+      if (!unicityId) {
+        return res.status(400).json({ error: "Unicity ID is required" });
+      }
+
+      const event = await storage.getEventByIdOrSlug(req.params.eventIdOrSlug);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      // Check if event allows guests
+      if (event.guestPolicy === "not_allowed") {
+        return res.status(400).json({ error: "This event does not allow guests" });
+      }
+
+      // Look up the registration by Unicity ID
+      const registration = await storage.getRegistrationByUnicityId(event.id, unicityId);
+      if (!registration) {
+        return res.status(404).json({ error: "No registered attendee found with this Unicity ID" });
+      }
+
+      // Return limited info for privacy
+      res.json({
+        registrationId: registration.id,
+        firstName: registration.firstName,
+        lastName: registration.lastName,
+        unicityId: registration.unicityId,
+      });
+    } catch (error) {
+      console.error("Error looking up qualifier:", error);
+      res.status(500).json({ error: "Failed to look up attendee" });
+    }
+  });
+
+  // Register a guest and create Stripe checkout session (public)
+  app.post("/api/public/events/:eventIdOrSlug/register-guest", async (req, res) => {
+    try {
+      const { registrationId, firstName, lastName, email, phone, shirtSize, dietaryRestrictions } = req.body;
+
+      if (!registrationId || !firstName || !lastName || !email) {
+        return res.status(400).json({ error: "Registration ID, first name, last name, and email are required" });
+      }
+
+      const event = await storage.getEventByIdOrSlug(req.params.eventIdOrSlug);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      // Check if event allows guests
+      if (event.guestPolicy === "not_allowed") {
+        return res.status(400).json({ error: "This event does not allow guests" });
+      }
+
+      // Verify the registration exists and belongs to this event
+      const registration = await storage.getRegistration(registrationId);
+      if (!registration || registration.eventId !== event.id) {
+        return res.status(404).json({ error: "Registration not found" });
+      }
+
+      // Determine if guest is paid or complimentary based on event policy
+      const isPaidGuest = event.guestPolicy === "allowed_paid" || event.guestPolicy === "allowed_mixed";
+      const requiresPayment = isPaidGuest && event.buyInPrice && event.buyInPrice > 0;
+
+      // Create the guest record
+      const guest = await storage.createGuest({
+        registrationId,
+        firstName,
+        lastName,
+        email,
+        phone: phone || null,
+        shirtSize: shirtSize || null,
+        dietaryRestrictions: dietaryRestrictions || null,
+        isComplimentary: !requiresPayment,
+        amountPaidCents: requiresPayment ? event.buyInPrice! * 100 : 0,
+        paymentStatus: requiresPayment ? "pending" : "not_required",
+      });
+
+      // If payment is required, create a Stripe checkout session
+      if (requiresPayment) {
+        const host = req.headers.host || 'localhost:5000';
+        const protocol = req.headers['x-forwarded-proto'] || 'http';
+        const baseUrl = `${protocol}://${host}`;
+        const eventSlug = event.slug || event.id;
+
+        const session = await stripeService.createCheckoutSessionForGuest(
+          guest.id,
+          `${firstName} ${lastName}`,
+          event.buyInPrice! * 100,
+          event.name,
+          `${baseUrl}/events/${eventSlug}/guest-payment-success?session_id={CHECKOUT_SESSION_ID}&guest_id=${guest.id}`,
+          `${baseUrl}/events/${eventSlug}/guest-register?canceled=true`
+        );
+
+        return res.status(201).json({
+          guest,
+          checkoutUrl: session.url,
+          requiresPayment: true,
+        });
+      }
+
+      // No payment required
+      res.status(201).json({
+        guest,
+        checkoutUrl: null,
+        requiresPayment: false,
+      });
+    } catch (error) {
+      console.error("Error registering guest:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid guest data", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to register guest" });
+    }
+  });
+
+  // Verify guest payment (public - called after Stripe redirect)
+  app.post("/api/public/verify-guest-payment", async (req, res) => {
+    try {
+      const { sessionId, guestId } = req.body;
+      if (!sessionId || !guestId) {
+        return res.status(400).json({ error: "Session ID and guest ID are required" });
+      }
+
+      const success = await stripeService.handlePaymentSuccess(sessionId);
+      
+      if (success) {
+        const updatedGuest = await storage.getGuest(guestId);
+        res.json({ success: true, guest: updatedGuest });
+      } else {
+        res.status(400).json({ error: "Payment verification failed" });
+      }
+    } catch (error) {
+      console.error("Error verifying guest payment:", error);
+      res.status(500).json({ error: "Failed to verify payment" });
+    }
+  });
+
   /**
    * @deprecated Use /api/events/:eventId/pages/:pageType instead
    * Legacy single-page route - defaults to registration page type
