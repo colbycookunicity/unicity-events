@@ -2476,3 +2476,159 @@ The open_anonymous mode supports registering multiple attendees in a single subm
 3. Validation prevents submit if additional attendee fields are empty
 4. Successful submit creates N registrations with same orderId
 5. All attendees appear in admin attendee list with correct orderId
+
+---
+
+# Print Bridge Readiness Assessment (January 2026)
+
+## Overview
+
+Verified the Events app and Print Bridge setup for on-site Zebra badge printing at Vegas environment. The system is designed for iPad Safari check-in connecting to a local Print Bridge laptop which communicates with Zebra printers over TCP 9100.
+
+## Architecture
+
+```
+┌─────────────┐     HTTPS      ┌────────────────────┐
+│   iPad      │ ──────────────▶│  events.unicity.com │
+│ (Check-in)  │                │   (Cloud App)       │
+└─────────────┘                └────────────────────┘
+       │                                 
+       │ HTTP (local network)            
+       ▼                                 
+┌─────────────────────────────────────────────────────┐
+│              Print Bridge (venue laptop)            │
+│              http://192.168.x.x:3100                │
+└─────────────────────────────────────────────────────┘
+       │                                 
+       │ TCP Port 9100 (ZPL raw)         
+       ▼                                 
+┌─────────────┐  ┌─────────────┐  ┌─────────────┐
+│   Zebra 1   │  │   Zebra 2   │  │   Zebra 3   │
+└─────────────┘  └─────────────┘  └─────────────┘
+```
+
+## Readiness Checklist
+
+### What is Ready
+
+| Component | Status | Location |
+|-----------|--------|----------|
+| Print Bridge service | Complete | `print-bridge/` folder |
+| Health check endpoint | Complete | `GET /health` in `print-bridge/src/index.ts` |
+| ZPL badge rendering | Complete | `print-bridge/src/zpl.ts` |
+| TCP 9100 printer communication | Complete | `print-bridge/src/printer.ts` |
+| CORS support | Complete | Configurable via `ALLOWED_ORIGINS` env var |
+| Bridge URL storage | Complete | localStorage `print-bridge-url` key |
+| PrintersPage UI | Complete | `client/src/pages/PrintersPage.tsx` |
+| Bridge connectivity check | Complete | `checkBridgeStatus()` function |
+| CheckInPage print workflow | Complete | Direct fetch to bridge URL |
+| Database schema (printers, print_logs) | Complete | `shared/schema.ts` |
+| Server-side print proxy | Complete | `/api/print-bridge/print` in `server/routes.ts` |
+| Retry logic for failed prints | Complete | 3 retries with backoff in `printer.ts` |
+| Test print functionality | Complete | `POST /printers/:id/test` |
+
+### What is Missing
+
+| Item | Status | Action Required |
+|------|--------|-----------------|
+| Mixed content handling | Needs testing | iPad Safari may block HTTP requests from HTTPS page |
+| ALLOWED_ORIGINS config | Not set | Set in Print Bridge `.env` file on-site |
+| PRINT_BRIDGE_URL env var | Uses fallback | Set in cloud app for server-side proxy fallback |
+
+### What Must Be Tested On-Site
+
+1. **Mixed Content Blocker**: Verify iPad Safari allows fetch to `http://192.168.x.x:3100` from `https://events.unicity.com`
+   - If blocked, may need to use the server-side proxy instead
+   - Alternative: Run Print Bridge with self-signed HTTPS cert
+
+2. **Network Connectivity**: Confirm iPads can reach Print Bridge laptop IP on port 3100
+
+3. **Printer Discovery**: Test that Zebra printers respond on TCP 9100
+
+4. **ZPL Badge Layout**: Print test badges and verify layout on 4x6 labels
+
+5. **Error Handling**: Test printer offline scenarios and retry behavior
+
+6. **Performance**: Verify print latency is acceptable for check-in flow
+
+## Configuration Required On-Site
+
+### Print Bridge Laptop (.env file)
+
+```bash
+# print-bridge/.env
+PORT=3100
+ALLOWED_ORIGINS=https://events.unicity.com,https://your-app.replit.app
+PRINTER_TIMEOUT_MS=5000
+MAX_RETRIES=3
+```
+
+### iPad Configuration
+
+1. Open Check-In page
+2. Go to Printers page
+3. Enter Print Bridge URL: `http://192.168.x.x:3100`
+4. Click "Check Connection" to verify health
+5. Add printers with their IP addresses
+
+## Potential Blockers
+
+### 1. Mixed Content (High Risk)
+
+**Issue**: Safari on iOS aggressively blocks HTTP requests from HTTPS pages.
+
+**Workarounds**:
+- **Option A**: Use server-side proxy (`/api/print-bridge/print`) - already implemented
+- **Option B**: Run Print Bridge with self-signed HTTPS cert
+- **Option C**: Access app via HTTP during event (not recommended)
+
+### 2. Local Network Firewall
+
+**Issue**: Venue network may block port 3100 or 9100.
+
+**Solution**: Pre-test with IT team, ensure all devices on same VLAN.
+
+### 3. Printer IP Changes
+
+**Issue**: DHCP may reassign printer IPs.
+
+**Solution**: Configure static IPs or DHCP reservations for printers.
+
+## No Code Changes Made
+
+Per constraints, no production code was added. This is a readiness assessment only.
+
+## Next Steps
+
+1. **Pre-Event Setup (1-2 hours)**
+   - Install Node.js on venue laptop
+   - Clone/copy `print-bridge/` folder
+   - Configure `.env` with correct origins
+   - Start service with `npm run start`
+
+2. **Printer Setup**
+   - Connect Zebra printers to venue network
+   - Note IP addresses
+   - Add printers in app via PrintersPage
+
+3. **Test Cycle**
+   - Send test prints from PrintersPage
+   - Verify badge layout
+   - Test full check-in flow with print
+
+4. **Fallback Plan**
+   - If direct browser-to-bridge fails, use server-side proxy
+   - Set `PRINT_BRIDGE_URL` env var on cloud app to point to bridge
+   - Cloud app will forward print requests
+
+## Files Reference
+
+| File | Purpose |
+|------|---------|
+| `print-bridge/README.md` | Full setup and API documentation |
+| `print-bridge/src/index.ts` | Main service with all endpoints |
+| `print-bridge/src/zpl.ts` | Badge ZPL template |
+| `print-bridge/src/printer.ts` | TCP 9100 communication |
+| `client/src/pages/PrintersPage.tsx` | Bridge config UI |
+| `client/src/pages/CheckInPage.tsx` | Check-in with print button |
+| `server/routes.ts` (lines 4055-4170) | Server-side print proxy |
