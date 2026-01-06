@@ -1,4 +1,5 @@
-import { getStripeSync } from './stripeClient';
+import { getStripeSync, getUncachableStripeClient } from './stripeClient';
+import { stripeService } from './stripeService';
 
 export class WebhookHandlers {
   static async processWebhook(payload: Buffer, signature: string, uuid: string): Promise<void> {
@@ -11,6 +12,30 @@ export class WebhookHandlers {
       );
     }
 
+    // Get Stripe client to verify and parse the event
+    const stripe = await getUncachableStripeClient();
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    
+    let event;
+    if (webhookSecret) {
+      try {
+        event = stripe.webhooks.constructEvent(payload, signature, webhookSecret);
+      } catch (err) {
+        console.error('Webhook signature verification failed:', err);
+        throw err;
+      }
+    } else {
+      // If no webhook secret, parse the event directly (less secure, but functional)
+      event = JSON.parse(payload.toString());
+    }
+
+    // Handle custom payment events
+    const result = await stripeService.handleWebhookEvent(event);
+    if (result.handled) {
+      console.log(`Custom webhook handler processed: ${result.type}`);
+    }
+
+    // Also pass to Stripe sync for other events
     const sync = await getStripeSync();
     await sync.processWebhook(payload, signature, uuid);
   }

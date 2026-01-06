@@ -217,6 +217,11 @@ export const registrations = pgTable("registrations", {
   // Multi-attendee order grouping (for open_anonymous mode)
   orderId: varchar("order_id"), // UUID to group attendees in same submission
   attendeeIndex: integer("attendee_index"), // 0-based index within order
+  // Payment info
+  paymentStatus: text("payment_status").default("not_required"), // not_required, pending, paid, failed
+  paymentIntentId: text("payment_intent_id"),
+  amountPaidCents: integer("amount_paid_cents"),
+  paidAt: timestamp("paid_at"),
   // Timestamps
   registeredAt: timestamp("registered_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

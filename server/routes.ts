@@ -2266,6 +2266,88 @@ export async function registerRoutes(
     }
   });
 
+  // Initiate payment for a registration
+  app.post("/api/registrations/:id/initiate-payment", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const registration = await storage.getRegistration(req.params.id);
+      if (!registration) {
+        return res.status(404).json({ error: "Registration not found" });
+      }
+
+      // Check if already paid
+      if (registration.paymentStatus === 'paid') {
+        return res.status(400).json({ error: "Registration is already paid" });
+      }
+
+      const event = await storage.getEvent(registration.eventId);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      // Check if event requires payment
+      if (!event.buyInPrice || event.buyInPrice <= 0) {
+        return res.status(400).json({ error: "This event does not require payment" });
+      }
+
+      // Build success/cancel URLs
+      const host = req.headers.host || 'localhost:5000';
+      const protocol = req.headers['x-forwarded-proto'] || 'http';
+      const baseUrl = `${protocol}://${host}`;
+
+      // Update registration to pending payment status
+      await storage.updateRegistration(registration.id, {
+        paymentStatus: 'pending',
+        amountPaidCents: event.buyInPrice * 100,
+      });
+
+      const session = await stripeService.createCheckoutSessionForRegistration(
+        registration.id,
+        `${registration.firstName} ${registration.lastName}`,
+        event.buyInPrice * 100,
+        event.name,
+        `${baseUrl}/my-dashboard?payment=success&registration_id=${registration.id}&session_id={CHECKOUT_SESSION_ID}`,
+        `${baseUrl}/my-dashboard?payment=canceled&registration_id=${registration.id}`
+      );
+
+      res.json({ checkoutUrl: session.url });
+    } catch (error) {
+      console.error("Initiate payment error:", error);
+      res.status(500).json({ error: "Failed to initiate payment" });
+    }
+  });
+
+  // Verify registration payment (after Stripe redirect)
+  app.post("/api/registrations/:id/verify-payment", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { sessionId } = req.body;
+      if (!sessionId) {
+        return res.status(400).json({ error: "Session ID is required" });
+      }
+
+      const registration = await storage.getRegistration(req.params.id);
+      if (!registration) {
+        return res.status(404).json({ error: "Registration not found" });
+      }
+
+      // Check if already paid (idempotency)
+      if (registration.paymentStatus === 'paid') {
+        return res.json({ success: true, message: "Payment already confirmed" });
+      }
+
+      const result = await stripeService.handlePaymentSuccess(sessionId);
+      
+      if (result.success) {
+        const updatedRegistration = await storage.getRegistration(req.params.id);
+        res.json({ success: true, registration: updatedRegistration });
+      } else {
+        res.status(400).json({ error: "Payment verification failed" });
+      }
+    } catch (error) {
+      console.error("Verify payment error:", error);
+      res.status(500).json({ error: "Failed to verify payment" });
+    }
+  });
+
   // My Registrations (for authenticated users)
   app.get("/api/my-registrations", authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
