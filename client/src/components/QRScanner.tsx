@@ -3,23 +3,33 @@ import { Scanner, IDetectedBarcode } from "@yudiel/react-qr-scanner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Camera, CameraOff, RefreshCw, SwitchCamera, AlertCircle } from "lucide-react";
+import { Camera, CameraOff, RefreshCw, SwitchCamera, AlertCircle, Pause } from "lucide-react";
+
+export function parseQRCode(rawData: string): { registrationId: string | null; raw: string } {
+  if (rawData.startsWith("REG:")) {
+    return { registrationId: rawData.replace("REG:", ""), raw: rawData };
+  } else if (rawData.match(/^[0-9a-f-]{36}$/i)) {
+    return { registrationId: rawData, raw: rawData };
+  }
+  return { registrationId: null, raw: rawData };
+}
 
 interface QRScannerProps {
   onScan: (registrationId: string) => void;
   onError?: (error: string) => void;
   isProcessing?: boolean;
   disabled?: boolean;
+  paused?: boolean;
 }
 
-export function QRScanner({ onScan, onError, isProcessing = false, disabled = false }: QRScannerProps) {
+export function QRScanner({ onScan, onError, isProcessing = false, disabled = false, paused = false }: QRScannerProps) {
   const [isActive, setIsActive] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastScanned, setLastScanned] = useState<string | null>(null);
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
 
   const handleScan = useCallback((detectedCodes: IDetectedBarcode[]) => {
-    if (disabled || isProcessing || !isActive) return;
+    if (disabled || isProcessing || !isActive || paused) return;
     
     const code = detectedCodes[0];
     if (!code?.rawValue) return;
@@ -38,7 +48,7 @@ export function QRScanner({ onScan, onError, isProcessing = false, disabled = fa
       setError("Invalid QR code format. Please scan a registration QR code.");
       onError?.("Invalid QR code format");
     }
-  }, [onScan, onError, isProcessing, disabled, isActive, lastScanned]);
+  }, [onScan, onError, isProcessing, disabled, isActive, lastScanned, paused]);
 
   const handleError = useCallback((err: unknown) => {
     const errorMessage = err instanceof Error ? err.message : String(err);
@@ -116,7 +126,16 @@ export function QRScanner({ onScan, onError, isProcessing = false, disabled = fa
           }}
         />
         
-        {isProcessing && (
+        {paused && (
+          <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
+            <div className="text-white text-center">
+              <Pause className="h-12 w-12 mx-auto mb-2 opacity-70" />
+              <p className="text-sm opacity-70">Scanner Paused</p>
+            </div>
+          </div>
+        )}
+        
+        {isProcessing && !paused && (
           <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
             <div className="text-white text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-2 border-white border-t-transparent mx-auto mb-2" />

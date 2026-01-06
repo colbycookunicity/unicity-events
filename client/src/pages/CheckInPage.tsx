@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Search, CheckCircle, User, Shirt, Package, Printer } from "lucide-react";
+import { Search, CheckCircle, User, Shirt, Package, Printer, QrCode, X, AlertTriangle, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,14 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
 import type { Registration, Event, Printer as PrinterType } from "@shared/schema";
+import { QRScanner, parseQRCode } from "@/components/QRScanner";
+
+type ScanMode = "list" | "scan";
+type ScanResult = {
+  registration: Registration | null;
+  error: string | null;
+  alreadyCheckedIn: boolean;
+};
 
 export default function CheckInPage() {
   const { t } = useTranslation();
@@ -33,6 +41,12 @@ export default function CheckInPage() {
   const [bridgeUrl] = useState<string>(() => 
     localStorage.getItem("print-bridge-url") || ""
   );
+  
+  // QR Scan mode state
+  const [scanMode, setScanMode] = useState<ScanMode>("list");
+  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
+  const [isProcessingScan, setIsProcessingScan] = useState(false);
+  const [scannerPaused, setScannerPaused] = useState(false);
 
   const { data: events } = useQuery<Event[]>({
     queryKey: ["/api/events"],
@@ -163,6 +177,156 @@ export default function CheckInPage() {
     }
   };
 
+  // Handle QR code scan
+  const handleQRScan = useCallback(async (rawData: string) => {
+    if (isProcessingScan || !selectedEvent) return;
+    
+    setIsProcessingScan(true);
+    setScannerPaused(true);
+    
+    try {
+      const parsed = parseQRCode(rawData);
+      if (!parsed.registrationId) {
+        setScanResult({
+          registration: null,
+          error: "Invalid QR code format",
+          alreadyCheckedIn: false,
+        });
+        return;
+      }
+
+      // Look up registration in current list
+      const reg = registrations?.find(r => r.id === parsed.registrationId);
+      if (!reg) {
+        // Try fetching directly from API
+        try {
+          const response = await fetch(`/api/registrations/${parsed.registrationId}`);
+          if (!response.ok) {
+            setScanResult({
+              registration: null,
+              error: "Registration not found for this event",
+              alreadyCheckedIn: false,
+            });
+            return;
+          }
+          const fetchedReg = await response.json();
+          // Verify it's for this event
+          if (fetchedReg.eventId !== selectedEvent) {
+            setScanResult({
+              registration: null,
+              error: "This registration is for a different event",
+              alreadyCheckedIn: false,
+            });
+            return;
+          }
+          setScanResult({
+            registration: fetchedReg,
+            error: null,
+            alreadyCheckedIn: fetchedReg.status === "checked_in",
+          });
+        } catch {
+          setScanResult({
+            registration: null,
+            error: "Failed to fetch registration",
+            alreadyCheckedIn: false,
+          });
+        }
+        return;
+      }
+
+      setScanResult({
+        registration: reg,
+        error: null,
+        alreadyCheckedIn: reg.status === "checked_in",
+      });
+    } catch (error) {
+      setScanResult({
+        registration: null,
+        error: error instanceof Error ? error.message : "Unknown error",
+        alreadyCheckedIn: false,
+      });
+    } finally {
+      setIsProcessingScan(false);
+    }
+  }, [isProcessingScan, selectedEvent, registrations]);
+
+  // Reset scan result and resume scanner
+  const resetScan = useCallback(() => {
+    setScanResult(null);
+    setScannerPaused(false);
+  }, []);
+
+  // Quick check-in from scan result (check-in + optional print)
+  const handleQuickCheckIn = async (reg: Registration, autoPrint: boolean) => {
+    try {
+      if (reg.status !== "checked_in") {
+        await apiRequest("POST", `/api/registrations/${reg.id}/check-in`, {});
+        toast({ title: t("success"), description: `${reg.firstName} ${reg.lastName} checked in` });
+        queryClient.invalidateQueries({ predicate: (query) => 
+          String(query.queryKey[0]).startsWith("/api/registrations")
+        });
+      }
+
+      if (autoPrint) {
+        if (!bridgeUrl) {
+          toast({ 
+            title: "Print Bridge not configured", 
+            description: "Badge not printed. Configure Print Bridge in Printers page.",
+            variant: "destructive" 
+          });
+        } else if (!selectedPrinter) {
+          toast({ 
+            title: "No printer selected", 
+            description: "Badge not printed. Select a printer first.",
+            variant: "destructive" 
+          });
+        } else {
+          const printer = printers?.find(p => p.id === selectedPrinter);
+          if (!printer) {
+            toast({ 
+              title: "Printer not found", 
+              description: "The selected printer is no longer available.",
+              variant: "destructive" 
+            });
+          } else {
+            const printResponse = await fetch(`${bridgeUrl}/print`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                printer: { ipAddress: printer.ipAddress, port: printer.port || 9100 },
+                badge: {
+                  firstName: reg.firstName,
+                  lastName: reg.lastName,
+                  unicityId: reg.unicityId || "",
+                  registrationId: reg.id,
+                },
+              }),
+            });
+
+            if (!printResponse.ok) {
+              const errorData = await printResponse.json().catch(() => ({}));
+              throw new Error(errorData.error || "Failed to print badge");
+            }
+
+            await apiRequest("POST", `/api/registrations/${reg.id}/record-print`, {
+              printerId: selectedPrinter,
+            });
+            toast({ title: t("success"), description: "Badge printed" });
+          }
+        }
+      }
+
+      // Reset for next scan
+      resetScan();
+    } catch (error) {
+      toast({ 
+        title: t("error"), 
+        description: error instanceof Error ? error.message : "Check-in failed",
+        variant: "destructive" 
+      });
+    }
+  };
+
   const filteredRegistrations = registrations?.filter((reg) => {
     if (!searchQuery) return true;
     const searchLower = searchQuery.toLowerCase();
@@ -186,7 +350,10 @@ export default function CheckInPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <Select value={selectedEvent} onValueChange={setSelectedEvent}>
+          <Select value={selectedEvent} onValueChange={(v) => {
+            setSelectedEvent(v);
+            resetScan();
+          }}>
             <SelectTrigger className="w-[220px]" data-testid="select-checkin-event">
               <SelectValue placeholder="Select an event" />
             </SelectTrigger>
@@ -204,6 +371,30 @@ export default function CheckInPage() {
               <Badge variant="secondary" className="text-sm">
                 {checkedInCount} / {totalCount} checked in
               </Badge>
+              
+              <div className="flex items-center border rounded-md overflow-hidden">
+                <Button
+                  variant={scanMode === "list" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => { setScanMode("list"); resetScan(); }}
+                  className="rounded-none"
+                  data-testid="button-mode-list"
+                >
+                  <Search className="h-4 w-4 mr-1" />
+                  List
+                </Button>
+                <Button
+                  variant={scanMode === "scan" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setScanMode("scan")}
+                  className="rounded-none"
+                  data-testid="button-mode-scan"
+                >
+                  <QrCode className="h-4 w-4 mr-1" />
+                  Scan
+                </Button>
+              </div>
+              
               {printers && printers.length > 0 && (
                 <Select value={selectedPrinter} onValueChange={setSelectedPrinter}>
                   <SelectTrigger className="w-[180px]" data-testid="select-printer">
@@ -224,7 +415,181 @@ export default function CheckInPage() {
         </div>
       </div>
 
-      {selectedEvent && (
+      {selectedEvent && scanMode === "scan" && (
+        <div className="flex flex-col lg:flex-row gap-6">
+          <div className="flex-1 max-w-md mx-auto lg:mx-0">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">Scan QR Code</CardTitle>
+                <CardDescription>Point camera at attendee's QR code</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {!scanResult ? (
+                  <QRScanner
+                    onScan={handleQRScan}
+                    onError={(error) => toast({ title: "Camera error", description: error, variant: "destructive" })}
+                    paused={scannerPaused}
+                  />
+                ) : (
+                  <div className="aspect-square bg-muted rounded-lg flex items-center justify-center">
+                    {scanResult.error ? (
+                      <div className="text-center p-4">
+                        <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-2" />
+                        <p className="text-destructive font-medium">{scanResult.error}</p>
+                      </div>
+                    ) : (
+                      <div className="text-center p-4">
+                        <CheckCircle className="h-12 w-12 text-green-600 mx-auto mb-2" />
+                        <p className="text-muted-foreground">Attendee found</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="flex-1 max-w-md mx-auto lg:mx-0">
+            {scanResult ? (
+              <Card className={scanResult.alreadyCheckedIn ? "border-amber-500" : scanResult.error ? "border-destructive" : "border-green-500"}>
+                <CardHeader>
+                  <div className="flex items-center justify-between gap-2">
+                    <CardTitle className="text-lg">Scan Result</CardTitle>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={resetScan}
+                      data-testid="button-reset-scan"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {scanResult.error ? (
+                    <div className="text-center py-4">
+                      <AlertTriangle className="h-8 w-8 text-destructive mx-auto mb-2" />
+                      <p className="font-medium text-destructive">{scanResult.error}</p>
+                      <Button onClick={resetScan} className="mt-4" data-testid="button-scan-again">
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Scan Again
+                      </Button>
+                    </div>
+                  ) : scanResult.registration ? (
+                    <>
+                      <div className="flex items-start gap-4">
+                        <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center shrink-0">
+                          <User className="h-6 w-6 text-muted-foreground" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-xl font-semibold">
+                            {scanResult.registration.firstName} {scanResult.registration.lastName}
+                          </h3>
+                          <p className="text-muted-foreground truncate">{scanResult.registration.email}</p>
+                          {scanResult.registration.unicityId && (
+                            <p className="text-sm text-muted-foreground">ID: {scanResult.registration.unicityId}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {scanResult.alreadyCheckedIn && (
+                        <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200">
+                          <AlertTriangle className="h-5 w-5 shrink-0" />
+                          <div>
+                            <p className="font-medium">Already Checked In</p>
+                            {scanResult.registration.checkedInAt && (
+                              <p className="text-sm">at {format(new Date(scanResult.registration.checkedInAt), "h:mm a")}</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
+                        {scanResult.registration.shirtSize && (
+                          <span className="flex items-center gap-1.5">
+                            <Shirt className="h-4 w-4" />
+                            {scanResult.registration.shirtSize}
+                          </span>
+                        )}
+                        <div className="flex items-center gap-1.5">
+                          <Package className="h-4 w-4" />
+                          <StatusBadge status={scanResult.registration.swagStatus || "pending"} type="swag" />
+                        </div>
+                        {scanResult.registration.badgePrintCount && scanResult.registration.badgePrintCount > 0 && (
+                          <Badge variant="outline" className="text-xs">
+                            <Printer className="h-3 w-3 mr-1" />
+                            Printed {scanResult.registration.badgePrintCount}x
+                          </Badge>
+                        )}
+                      </div>
+
+                      <div className="pt-3 border-t space-y-2">
+                        {!scanResult.alreadyCheckedIn ? (
+                          <>
+                            <Button 
+                              onClick={() => handleQuickCheckIn(scanResult.registration!, selectedPrinter && bridgeUrl ? true : false)}
+                              className="w-full"
+                              data-testid="button-quick-checkin"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-2" />
+                              Check In {selectedPrinter && bridgeUrl ? "+ Print Badge" : ""}
+                            </Button>
+                            {selectedPrinter && bridgeUrl && (
+                              <Button 
+                                variant="outline"
+                                onClick={() => handleQuickCheckIn(scanResult.registration!, false)}
+                                className="w-full"
+                                data-testid="button-checkin-no-print"
+                              >
+                                <CheckCircle className="h-4 w-4 mr-2" />
+                                Check In Only
+                              </Button>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <Button 
+                              variant="secondary"
+                              onClick={() => handlePrintBadge(scanResult.registration!)}
+                              disabled={!selectedPrinter || !bridgeUrl}
+                              className="w-full"
+                              data-testid="button-reprint-badge"
+                            >
+                              <Printer className="h-4 w-4 mr-2" />
+                              Reprint Badge
+                            </Button>
+                          </>
+                        )}
+                        <Button 
+                          variant="ghost"
+                          onClick={resetScan}
+                          className="w-full"
+                          data-testid="button-next-scan"
+                        >
+                          <QrCode className="h-4 w-4 mr-2" />
+                          Scan Next
+                        </Button>
+                      </div>
+                    </>
+                  ) : null}
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="border-dashed">
+                <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+                  <QrCode className="h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-medium mb-2">Ready to Scan</h3>
+                  <p className="text-muted-foreground text-sm">
+                    Point the camera at an attendee's QR code to check them in
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </div>
+      )}
+
+      {selectedEvent && scanMode === "list" && (
         <>
           <div className="relative max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
