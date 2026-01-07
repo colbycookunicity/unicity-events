@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, CheckCircle, Calendar, MapPin, ExternalLink, Mail, ShieldCheck, AlertCircle, LogOut, QrCode } from "lucide-react";
+import { Loader2, CheckCircle, Calendar, MapPin, ExternalLink, Mail, ShieldCheck, AlertCircle, LogOut, QrCode, Ticket } from "lucide-react";
 import PhoneInput, { isPossiblePhoneNumber } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1654,7 +1654,7 @@ export default function RegistrationPage() {
   const renderVerificationStep = () => {
     if (verificationStep === "email") {
       return (
-        <Card>
+        <Card id="verification-section">
           <CardHeader className="text-center">
             <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-muted flex items-center justify-center">
               <Mail className="w-6 h-6 text-muted-foreground" />
@@ -2782,6 +2782,27 @@ export default function RegistrationPage() {
           </div>
         )}
         
+        {/* Already registered link - scroll to verification section */}
+        {requiresVerification && verificationStep === "email" && (
+          <div className="max-w-2xl mx-auto px-4 text-center">
+            <button 
+              onClick={() => {
+                const section = document.getElementById("verification-section");
+                if (section) {
+                  section.scrollIntoView({ behavior: "smooth", block: "center" });
+                }
+              }}
+              className="text-sm text-primary hover:underline flex items-center gap-1 mx-auto"
+              data-testid="link-already-registered"
+            >
+              <Ticket className="h-4 w-4" />
+              {language === "es" 
+                ? "¿Ya registrado? Obtén tu código de acceso" 
+                : "Already registered? Get your check-in code"}
+            </button>
+          </div>
+        )}
+        
         <div className="max-w-2xl mx-auto p-4 pb-12">
           {!introSection && getEventDescription() && !getCustomSubheading() && (
             <Card className="mb-6 bg-card border">
@@ -2928,6 +2949,27 @@ export default function RegistrationPage() {
               </div>
             </div>
             
+            {/* Already registered link for split layout */}
+            {requiresVerification && verificationStep === "email" && (
+              <div className="pt-4 px-6 lg:px-10 text-center bg-background">
+                <button 
+                  onClick={() => {
+                    const section = document.getElementById("verification-section");
+                    if (section) {
+                      section.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
+                  }}
+                  className="text-sm text-primary hover:underline flex items-center gap-1 mx-auto"
+                  data-testid="link-already-registered-split"
+                >
+                  <Ticket className="h-4 w-4" />
+                  {language === "es" 
+                    ? "¿Ya registrado? Obtén tu código de acceso" 
+                    : "Already registered? Get your check-in code"}
+                </button>
+              </div>
+            )}
+            
             {/* Form content - scrolls naturally with page */}
             <div className="p-6 lg:p-10 bg-background">
               <div className="max-w-xl mx-auto">
@@ -3006,6 +3048,27 @@ export default function RegistrationPage() {
           </div>
         </div>
       </div>
+      
+      {/* Already registered link for hero-background layout */}
+      {requiresVerification && verificationStep === "email" && (
+        <div className="bg-card pb-4 text-center">
+          <button 
+            onClick={() => {
+              const section = document.getElementById("verification-section");
+              if (section) {
+                section.scrollIntoView({ behavior: "smooth", block: "center" });
+              }
+            }}
+            className="text-sm text-primary hover:underline flex items-center gap-1 mx-auto"
+            data-testid="link-already-registered-hero"
+          >
+            <Ticket className="h-4 w-4" />
+            {language === "es" 
+              ? "¿Ya registrado? Obtén tu código de acceso" 
+              : "Already registered? Get your check-in code"}
+          </button>
+        </div>
+      )}
       
       {/* Form Section */}
       <div className="bg-gray-50 py-8">
