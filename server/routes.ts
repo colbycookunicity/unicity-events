@@ -4302,6 +4302,43 @@ export async function registerRoutes(
     }
   });
 
+  // Record a badge print (called after successful print via print bridge)
+  app.post("/api/registrations/:registrationId/record-print", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const { registrationId } = req.params;
+      const { printerId, guestId } = req.body;
+
+      const registration = await storage.getRegistration(registrationId);
+      if (!registration) {
+        return res.status(404).json({ error: "Registration not found" });
+      }
+
+      // Create a print log entry to record this print
+      const printLog = await storage.createPrintLog({
+        registrationId,
+        guestId: guestId || null,
+        printerId: printerId || null,
+        status: "success",
+        zplSnapshot: null,
+        requestedBy: req.user!.id,
+      });
+
+      // Update the print log as completed
+      await storage.updatePrintLog(printLog.id, {
+        status: "success",
+        completedAt: new Date(),
+      });
+
+      // Record badge print count on the registration
+      await storage.recordBadgePrint(registrationId);
+
+      res.json({ success: true, printLogId: printLog.id });
+    } catch (error) {
+      console.error("Error recording badge print:", error);
+      res.status(500).json({ error: "Failed to record badge print" });
+    }
+  });
+
   // Forward print job to print bridge (proxy endpoint)
   app.post("/api/print-bridge/print", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
     try {

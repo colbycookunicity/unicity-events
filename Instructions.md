@@ -334,6 +334,55 @@ When API routes don't match or fail to send a response, Vite's catch-all SPA han
 - User sees "Server returned HTML instead of JSON" instead of cryptic parse error
 
 ---
+
+# Record-Print 404 Fix (January 2026)
+
+## Problem
+
+Frontend called `POST /api/registrations/:registrationId/record-print` but endpoint didn't exist, causing 404.
+
+## Solution
+
+**Option A chosen**: Implemented the missing endpoint.
+
+## Endpoint Details
+
+| Path | Method | Auth | Purpose |
+|------|--------|------|---------|
+| `/api/registrations/:registrationId/record-print` | POST | admin, event_manager | Records badge print after successful print bridge call |
+
+## Request Body
+
+```json
+{
+  "printerId": "uuid",
+  "guestId": "uuid" // optional
+}
+```
+
+## Response
+
+```json
+{
+  "success": true,
+  "printLogId": "uuid"
+}
+```
+
+## What It Does
+
+1. Validates registration exists
+2. Creates a print log entry with status "success"
+3. Updates print log with completedAt timestamp
+4. Increments badge print count on registration via `storage.recordBadgePrint()`
+
+## Files Changed
+
+| File | Change |
+|------|--------|
+| `server/routes.ts` | Added `POST /api/registrations/:registrationId/record-print` endpoint (lines ~4308-4343) |
+
+---
 ---
 
 # Attendee Portal Implementation Plan (Previous Documentation)
