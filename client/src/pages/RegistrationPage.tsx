@@ -2753,7 +2753,7 @@ export default function RegistrationPage() {
           </InputOTP>
           
           <Button
-            variant="link"
+            variant="ghost"
             onClick={() => handleOpenVerifiedSendOtp(dialogEmail)}
             disabled={isVerifying || !dialogEmail}
             className="text-sm"
@@ -2964,7 +2964,7 @@ export default function RegistrationPage() {
             </InputOTP>
             
             <Button
-              variant="link"
+              variant="ghost"
               onClick={handleLookupSendOtp}
               disabled={isSendingLookupOtp}
               className="text-sm"
