@@ -919,7 +919,9 @@ export default function RegistrationPage() {
       }
       
       // Strategy 2: Use OTP session (for users who just verified)
-      if (verificationStep === "form") {
+      // Skip this for open_anonymous mode - it allows multiple registrations per email
+      // so we don't need to check for existing registrations
+      if (verificationStep === "form" && !openAnonymousMode) {
         fetchingExistingRef.current = currentKey;
         setIsLoadingExisting(true);
         
@@ -954,11 +956,14 @@ export default function RegistrationPage() {
         }
         
         setIsLoadingExisting(false);
+      } else if (verificationStep === "form" && openAnonymousMode) {
+        // For open_anonymous mode, just mark as loaded without fetching
+        setLoadedForKey(currentKey);
       }
     };
     
     fetchExistingRegistration();
-  }, [verificationStep, verifiedProfile, verificationEmail, prePopulatedEmail, params.eventId, event, loadedForKey]);
+  }, [verificationStep, verifiedProfile, verificationEmail, prePopulatedEmail, params.eventId, event, loadedForKey, openAnonymousMode]);
 
   const registerMutation = useMutation({
     mutationFn: async (data: RegistrationFormData) => {
