@@ -11,6 +11,7 @@ interface RegistrationQRCodeProps {
   eventName?: string;
   size?: number;
   showDownload?: boolean;
+  t?: (en: string, es: string) => string;
 }
 
 export function RegistrationQRCode({ 
@@ -18,7 +19,8 @@ export function RegistrationQRCode({
   attendeeName,
   eventName,
   size = 200,
-  showDownload = false 
+  showDownload = false,
+  t
 }: RegistrationQRCodeProps) {
   const qrRef = useRef<HTMLDivElement>(null);
   
@@ -74,13 +76,13 @@ export function RegistrationQRCode({
       
       {showDownload && (
         <Button 
-          variant="outline" 
-          size="sm" 
+          variant="default" 
+          className="w-full"
           onClick={handleDownload}
           data-testid="button-download-qr"
         >
           <Download className="h-4 w-4 mr-2" />
-          Download QR Code
+          {t ? t("Download QR Code", "Descargar Código QR") : "Download QR Code"}
         </Button>
       )}
     </div>
@@ -126,6 +128,7 @@ export function QRCodeDialog({
               eventName={eventName}
               size={220}
               showDownload={true}
+              t={t}
             />
             <p className="text-xs text-muted-foreground text-center mt-4">
               {t(

@@ -1594,7 +1594,7 @@ export default function AttendeesPage() {
                     key={person.id}
                     className={`hover:bg-muted/50 transition-colors ${person.registration ? 'cursor-pointer' : ''}`}
                     data-testid={`row-attendee-${person.id}`}
-                    onClick={() => person.registration && handleRowClick(person.registration)}
+                    onClick={() => handleRowClick(person)}
                   >
                     <td className="px-4 py-3 w-10" onClick={(e) => e.stopPropagation()}>
                       <Checkbox
