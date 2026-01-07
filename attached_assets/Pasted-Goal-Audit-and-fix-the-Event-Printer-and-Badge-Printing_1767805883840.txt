@@ -1,0 +1,75 @@
+Goal:
+Audit and fix the Event Printer and Badge Printing system so admins can reliably select printers and print badges without authorization or JSON parsing errors.
+
+I want you to:
+• Research the entire codebase
+• Find all files related to:
+  - Event printers
+  - Badge printing
+  - Check-in printing
+  - Printer selection
+• Identify why printers appear in Admin > Printers but not in attendee print modals
+• Identify why badge print requests return HTML instead of JSON
+• Develop a fix plan
+• Write the plan to Instructions.md
+• Implement fixes after the plan is approved
+
+Context:
+• Zebra printers are reachable over TCP/IP and confirmed working via terminal:
+  echo "^XA^FO50,50^A0N,50,50^FDZPL TEST SUCCESS^FS^XZ" | nc 192.168.1.4 9100
+• Printers are configured per event in Admin > Printers
+• Admins attempt to print badges from:
+  - Attendee details modal
+  - /admin/check-in flow
+
+Observed issues:
+1. Printer dropdown shows "No printers configured" inside attendee print modal
+2. Printer dropdown DOES appear during check-in, but print fails
+3. Print request returns:
+   "Unexpected token '<', '<!DOCTYPE'... is not valid JSON"
+4. Network tab shows 401 Unauthorized responses for print-related GET requests
+5. Admin is authenticated and allowed to access the admin UI
+
+Strong indicators:
+• Backend is returning an HTML error page (likely auth redirect or error boundary)
+• Frontend is blindly calling response.json()
+• Printer fetch or print endpoint is protected by incorrect auth middleware
+• Event-scoped printers are not being joined or filtered correctly
+
+Requirements for the final system:
+• Printers assigned to an event must appear consistently:
+  - In Admin > Printers
+  - In Attendee print modal
+  - In Check-in print flow
+• Printer fetch and print endpoints must:
+  - Require admin auth
+  - Return JSON on success and failure
+  - Never return HTML to fetch() calls
+• Print requests must:
+  - Validate printer belongs to event
+  - Send ZPL to the configured TCP endpoint
+  - Return a success/failure JSON response
+• Frontend must gracefully handle errors (no JSON parse crashes)
+
+Deliverables:
+1. Instructions.md explaining:
+   - Root cause(s)
+   - Files involved
+   - Data flow for printers and printing
+   - Auth flow before vs after
+2. Code fixes that:
+   - Fix printer visibility across admin flows
+   - Fix authorization on printer endpoints
+   - Ensure consistent JSON responses
+3. A verification checklist:
+   - Printer visible in all flows
+   - Badge prints successfully
+   - No 401s
+   - No HTML returned to fetch()
+
+Do NOT:
+• Change printer hardware logic
+• Change TCP/ZPL printing mechanism
+• Add new features
+
+Focus strictly on correctness, auth consistency, and printing reliability.

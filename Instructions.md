@@ -190,6 +190,128 @@ After implementing fixes, verify:
 Please review this plan before implementation begins. Respond with approval to proceed with code changes.
 
 ---
+
+# Event Printer & Badge Printing Audit
+
+## Root Cause Analysis
+
+### Bug #1: Printer Dropdown Shows "No printers configured" in Attendee Modal
+
+**Root Cause**: In `AttendeesPage.tsx` lines 284-291, the printer fetch uses a **custom `queryFn`** with raw `fetch()` that doesn't include auth headers:
+
+```javascript
+// BUG: No Authorization header sent!
+const { data: eventPrinters } = useQuery<Printer[]>({
+  queryKey: ['/api/events', selectedAttendee?.eventId, 'printers'],
+  enabled: !!selectedAttendee && drawerOpen,
+  queryFn: async () => {
+    const response = await fetch(`/api/events/${selectedAttendee?.eventId}/printers`);
+    // Missing: Authorization header
+    if (!response.ok) throw new Error("Failed to fetch printers");
+    return response.json();
+  },
+});
+```
+
+The default `queryFn` in `queryClient.ts` includes `getAuthHeaders()`, but custom implementations bypass it.
+
+### Bug #2: Same Issue with Print Logs
+
+Lines 274-282 have the identical problem for `printLogs`:
+
+```javascript
+queryFn: async () => {
+  const response = await fetch(`/api/registrations/${selectedAttendee?.id}/print-logs`);
+  // Missing: Authorization header
+}
+```
+
+### Bug #3: 401 Unauthorized + HTML Response
+
+When `fetch()` is called without the `Authorization` header:
+1. Server middleware rejects with 401
+2. Vite dev server or error boundary returns HTML error page
+3. Frontend calls `response.json()` which fails: `"Unexpected token '<'..."`
+
+### Why Check-In Page Works
+
+`CheckInPage.tsx` line 60-62 does NOT define a custom `queryFn`:
+
+```javascript
+const { data: printers } = useQuery<PrinterType[]>({
+  queryKey: [`/api/events/${selectedEvent}/printers`],
+  enabled: !!selectedEvent,
+  // Uses default queryFn with auth headers
+});
+```
+
+---
+
+## Files Involved
+
+| File | Lines | Issue |
+|------|-------|-------|
+| `client/src/pages/AttendeesPage.tsx` | 274-291 | Custom queryFn missing auth headers |
+| `client/src/lib/queryClient.ts` | 46-64 | Default queryFn correctly includes auth |
+| `server/routes.ts` | 4218 | `/api/events/:eventId/printers` requires `authenticateToken` |
+
+---
+
+## Fix Plan
+
+### Fix 1: Remove Custom queryFn for Printer Fetch
+
+**Location**: `client/src/pages/AttendeesPage.tsx` lines 284-292
+
+**Change**: Use default queryFn by removing the custom one, and fix the queryKey format.
+
+```javascript
+// BEFORE
+const { data: eventPrinters } = useQuery<Printer[]>({
+  queryKey: ['/api/events', selectedAttendee?.eventId, 'printers'],
+  enabled: !!selectedAttendee && drawerOpen,
+  queryFn: async () => {
+    const response = await fetch(`/api/events/${selectedAttendee?.eventId}/printers`);
+    if (!response.ok) throw new Error("Failed to fetch printers");
+    return response.json();
+  },
+});
+
+// AFTER (uses default queryFn with auth)
+const { data: eventPrinters } = useQuery<Printer[]>({
+  queryKey: [`/api/events/${selectedAttendee?.eventId}/printers`],
+  enabled: !!selectedAttendee && drawerOpen,
+});
+```
+
+### Fix 2: Remove Custom queryFn for Print Logs
+
+**Location**: `client/src/pages/AttendeesPage.tsx` lines 274-282
+
+**Change**: Same fix - use default queryFn.
+
+```javascript
+// AFTER
+const { data: printLogs, isLoading: printLogsLoading } = useQuery<(PrintLog & { printer?: Printer })[]>({
+  queryKey: [`/api/registrations/${selectedAttendee?.id}/print-logs`],
+  enabled: !!selectedAttendee && drawerOpen,
+});
+```
+
+---
+
+## Confirmation Checklist
+
+After implementing fixes, verify:
+
+- [ ] Printers visible in Admin > Printers page
+- [ ] Printers visible in Attendee print modal dropdown
+- [ ] Printers visible in Check-in flow
+- [ ] Badge prints successfully with no 401 errors
+- [ ] No "Unexpected token '<'" JSON parse errors
+- [ ] Print logs load in attendee modal
+
+---
 ---
 
 # Attendee Portal Implementation Plan (Previous Documentation)
