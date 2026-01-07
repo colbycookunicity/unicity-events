@@ -373,8 +373,7 @@ export default function AttendeesPage() {
     }
     
     // Always include these base columns for specific event view (exclude "event" column)
-    // Status is first column after checkbox
-    const alwaysVisible: ColumnKey[] = ["status", "name", "email", "registeredAt", "actions"];
+    const alwaysVisible: ColumnKey[] = ["name", "email", "status", "registeredAt", "actions"];
     
     // If no form fields defined, show base columns plus operational ones
     if (!eventFormFields) {
@@ -1162,20 +1161,31 @@ export default function AttendeesPage() {
     const reg = person.registration;
     switch (key) {
       case "name":
+        const assignedRule = person.qualifier?.guestAllowanceRuleId 
+          ? guestRulesById.get(person.qualifier.guestAllowanceRuleId)
+          : undefined;
+        const isCheckedIn = person.registration?.checkedInAt != null;
         return (
           <div className="min-w-[150px]">
-            <span className="font-medium whitespace-nowrap" data-testid={`text-name-${person.id}`}>{person.firstName} {person.lastName}</span>
+            <div className="flex items-center gap-2">
+              <span className="font-medium whitespace-nowrap" data-testid={`text-name-${person.id}`}>{person.firstName} {person.lastName}</span>
+              {!person.isRegistered && (
+                <Badge variant="secondary" className="text-xs" data-testid={`badge-not-registered-${person.id}`}>Not Registered</Badge>
+              )}
+              {person.isRegistered && isCheckedIn && (
+                <Badge variant="default" className="text-xs bg-green-600 hover:bg-green-600" data-testid={`badge-checked-in-${person.id}`}>Checked In</Badge>
+              )}
+              {person.isRegistered && person.qualifier && eventFilter !== "all" && (
+                <Badge variant="outline" className="text-xs" data-testid={`badge-qualified-${person.id}`}>Qualified</Badge>
+              )}
+              {selectedEvent?.guestPolicy === "allowed_mixed" && person.qualifier && assignedRule && (
+                <Badge variant="outline" className="text-xs" data-testid={`badge-rule-${person.id}`}>
+                  {assignedRule.name}
+                </Badge>
+              )}
+            </div>
           </div>
         );
-      case "status":
-        if (!person.isRegistered) {
-          return <Badge variant="secondary" className="text-xs" data-testid={`badge-status-${person.id}`}>Not Registered</Badge>;
-        }
-        const isPersonCheckedIn = person.registration?.checkedInAt != null;
-        if (isPersonCheckedIn) {
-          return <Badge variant="default" className="text-xs bg-green-600 hover:bg-green-600" data-testid={`badge-status-${person.id}`}>Checked In</Badge>;
-        }
-        return <StatusBadge status={person.registration?.status || "registered"} />;
       case "unicityId":
         return <span className="text-muted-foreground whitespace-nowrap">{person.unicityId || "-"}</span>;
       case "email":
@@ -1186,6 +1196,12 @@ export default function AttendeesPage() {
         return <span className="text-muted-foreground capitalize whitespace-nowrap">{reg?.gender || "-"}</span>;
       case "dateOfBirth":
         return <span className="text-muted-foreground whitespace-nowrap">{formatDateOnly(reg?.dateOfBirth)}</span>;
+      case "status":
+        return person.isRegistered && reg ? (
+          <StatusBadge status={reg.status} />
+        ) : (
+          <span className="text-muted-foreground">Not Registered</span>
+        );
       case "swagStatus":
         return reg ? <StatusBadge status={reg.swagStatus || "pending"} type="swag" /> : <span className="text-muted-foreground">-</span>;
       case "shirtSize":
@@ -1545,9 +1561,7 @@ export default function AttendeesPage() {
                   <th 
                     key={col.key} 
                     className={`px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap ${
-                      col.key === "status" ? "md:sticky md:left-10 md:z-20 bg-muted/50" : ""
-                    }${
-                      col.key === "name" ? "md:sticky md:left-[120px] md:z-20 bg-muted/50" : ""
+                      col.key === "name" ? "md:sticky md:left-10 md:z-20 bg-muted/50" : ""
                     }`}
                   >
                     {col.key !== "actions" ? (
@@ -1600,9 +1614,7 @@ export default function AttendeesPage() {
                       <td 
                         key={col.key} 
                         className={`px-4 py-3 ${
-                          col.key === "status" ? "md:sticky md:left-10 md:z-10 bg-background" : ""
-                        }${
-                          col.key === "name" ? "md:sticky md:left-[120px] md:z-10 bg-background" : ""
+                          col.key === "name" ? "md:sticky md:left-10 md:z-10 bg-background" : ""
                         }`}
                       >
                         {renderCell(person, col.key)}
