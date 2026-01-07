@@ -513,26 +513,40 @@ export async function registerRoutes(
           const errorMessage = data.message || data.data?.message || "Invalid verification code";
           
           // Special case: "Customer not found" means OTP was valid but no customer account exists
-          // For qualified registrants, we should still allow them to proceed
+          // For qualified registrants or open registration events, we should still allow them to proceed
           if (errorMessage.toLowerCase().includes("customer not found") && eventId) {
-            console.log("Customer not found in Hydra, checking qualified list for eventId:", eventId);
+            console.log("Customer not found in Hydra, checking event mode for eventId:", eventId);
             const event = await storage.getEventByIdOrSlug(eventId);
             if (event) {
-              const qualifiedRegistrant = await storage.getQualifiedRegistrantByEmail(event.id, email);
-              if (qualifiedRegistrant) {
-                console.log("User is in qualified list, allowing verification:", qualifiedRegistrant);
+              // Check if event is open registration (doesn't require qualification)
+              const isOpenRegistration = event.registrationMode === "open_verified" || event.registrationMode === "open_anonymous";
+              
+              if (isOpenRegistration) {
+                // Open registration - allow anyone with valid OTP
+                console.log("Open registration event, allowing verification for:", email);
                 isValid = true;
-                // Use qualifier data as customer data
                 customerData = {
-                  id: { unicity: qualifiedRegistrant.unicityId },
-                  humanName: { 
-                    firstName: qualifiedRegistrant.firstName || "", 
-                    lastName: qualifiedRegistrant.lastName || "" 
-                  },
+                  id: { unicity: null },
+                  humanName: { firstName: "", lastName: "" },
                   email: email,
                 };
               } else {
-                return res.status(400).json({ error: errorMessage });
+                // Qualified registration - check if on the qualified list
+                const qualifiedRegistrant = await storage.getQualifiedRegistrantByEmail(event.id, email);
+                if (qualifiedRegistrant) {
+                  console.log("User is in qualified list, allowing verification:", qualifiedRegistrant);
+                  isValid = true;
+                  customerData = {
+                    id: { unicity: qualifiedRegistrant.unicityId },
+                    humanName: { 
+                      firstName: qualifiedRegistrant.firstName || "", 
+                      lastName: qualifiedRegistrant.lastName || "" 
+                    },
+                    email: email,
+                  };
+                } else {
+                  return res.status(400).json({ error: errorMessage });
+                }
               }
             } else {
               return res.status(400).json({ error: errorMessage });
