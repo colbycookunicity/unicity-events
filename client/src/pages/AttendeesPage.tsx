@@ -272,23 +272,13 @@ export default function AttendeesPage() {
   });
 
   const { data: printLogs, isLoading: printLogsLoading } = useQuery<(PrintLog & { printer?: Printer })[]>({
-    queryKey: ['/api/registrations', selectedAttendee?.id, 'print-logs'],
+    queryKey: [`/api/registrations/${selectedAttendee?.id}/print-logs`],
     enabled: !!selectedAttendee && drawerOpen,
-    queryFn: async () => {
-      const response = await fetch(`/api/registrations/${selectedAttendee?.id}/print-logs`);
-      if (!response.ok) throw new Error("Failed to fetch print logs");
-      return response.json();
-    },
   });
 
   const { data: eventPrinters } = useQuery<Printer[]>({
-    queryKey: ['/api/events', selectedAttendee?.eventId, 'printers'],
+    queryKey: [`/api/events/${selectedAttendee?.eventId}/printers`],
     enabled: !!selectedAttendee && drawerOpen,
-    queryFn: async () => {
-      const response = await fetch(`/api/events/${selectedAttendee?.eventId}/printers`);
-      if (!response.ok) throw new Error("Failed to fetch printers");
-      return response.json();
-    },
   });
 
   const printBadgeMutation = useMutation({

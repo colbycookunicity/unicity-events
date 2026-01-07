@@ -209,12 +209,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.email, email));
+    const normalized = email.toLowerCase().trim();
+    const [user] = await db.select().from(users).where(eq(users.email, normalized));
     return user || undefined;
   }
 
   async createUser(user: InsertUser): Promise<User> {
-    const [newUser] = await db.insert(users).values(user).returning();
+    const normalizedUser = {
+      ...user,
+      email: user.email.toLowerCase().trim(),
+    };
+    const [newUser] = await db.insert(users).values(normalizedUser).returning();
     return newUser;
   }
 

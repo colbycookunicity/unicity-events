@@ -19,6 +19,7 @@ const FALLBACK_ADMIN_EMAILS = [
   "biani.gonzalez@unicity.com",
   "ashley.milliken@unicity.com",
   "william.hall@unicity.com",
+  "carolina.martinez@unicity.com",
 ];
 
 // Check if email is an authorized admin (database-driven with fallback)
@@ -269,23 +270,10 @@ export async function registerRoutes(
       let user = await storage.getUserByEmail(email);
       
       if (!user) {
-        // Only whitelisted emails get admin role (exact match, no plus aliases)
-        const role = await isAdminEmail(email) ? "admin" : "readonly";
-        user = await storage.createUser({
-          email,
-          name: email.split("@")[0],
-          role,
-          customerId,
+        // Admin users must be explicitly created via Admin UI - no auto-creation
+        return res.status(403).json({ 
+          error: "Account not found. Please contact an administrator to create your account." 
         });
-      } else {
-        // Verify and correct role on each login to prevent unauthorized admin access
-        const expectedRole = await isAdminEmail(email) ? "admin" : "readonly";
-        if (user.role === "admin" && expectedRole !== "admin") {
-          // Demote user who shouldn't be admin
-          await storage.updateUser(user.id, { role: "readonly" });
-          user = { ...user, role: "readonly" };
-          console.log(`Security: Demoted user ${email} from admin to readonly`);
-        }
       }
 
       const token = generateToken();
@@ -640,36 +628,6 @@ export async function registerRoutes(
 
       console.log("Profile extracted:", profile);
 
-      // Check if this is an admin email - if so, create auth session
-      let authToken: string | undefined;
-      let adminUser: any | undefined;
-      
-      if (email.toLowerCase().endsWith("@unicity.com")) {
-        // Find or create user (only whitelist gets admin role)
-        let user = await storage.getUserByEmail(email);
-        if (!user) {
-          // Create new user - only fallback admin emails get admin role
-          const role = await isAdminEmail(email) ? "admin" : "readonly";
-          user = await storage.createUser({
-            email: email.toLowerCase(),
-            name: email.split("@")[0],
-            role,
-          });
-        }
-        
-        // Create auth session with full session data
-        const sessionToken = crypto.randomUUID();
-        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-        const session = await storage.createAuthSession({
-          token: sessionToken,
-          userId: user.id,
-          email: user.email,
-          expiresAt,
-        });
-        authToken = session.token;
-        adminUser = user;
-      }
-
       res.json({ 
         success: true, 
         verified: true,
@@ -678,9 +636,6 @@ export async function registerRoutes(
         isQualified,
         qualificationMessage,
         redirectToken,
-        // Include auth token for admin users
-        token: authToken,
-        user: adminUser,
       });
     } catch (error: any) {
       console.error("Registration OTP validate error:", error);
