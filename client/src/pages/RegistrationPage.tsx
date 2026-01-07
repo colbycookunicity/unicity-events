@@ -2670,6 +2670,10 @@ export default function RegistrationPage() {
   );
 
   // OTP Verification Dialog for open_verified mode
+  // Use pendingSubmissionData.email as primary source (set before dialog opens)
+  // Falls back to verificationEmail for consistency
+  const dialogEmail = pendingSubmissionData?.email || verificationEmail;
+  
   const renderOtpDialog = () => (
     <Dialog open={showOtpDialog} onOpenChange={(open) => {
       if (!open) {
@@ -2685,8 +2689,8 @@ export default function RegistrationPage() {
           </DialogTitle>
           <DialogDescription>
             {language === "es" 
-              ? `Ingrese el código de 6 dígitos enviado a ${verificationEmail}`
-              : `Enter the 6-digit code sent to ${verificationEmail}`}
+              ? `Ingrese el código de 6 dígitos enviado a ${dialogEmail}`
+              : `Enter the 6-digit code sent to ${dialogEmail}`}
           </DialogDescription>
         </DialogHeader>
         
@@ -2709,8 +2713,8 @@ export default function RegistrationPage() {
           
           <Button
             variant="link"
-            onClick={() => handleOpenVerifiedSendOtp(verificationEmail)}
-            disabled={isVerifying}
+            onClick={() => handleOpenVerifiedSendOtp(dialogEmail)}
+            disabled={isVerifying || !dialogEmail}
             className="text-sm"
             data-testid="button-resend-otp"
           >
