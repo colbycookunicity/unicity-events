@@ -135,6 +135,7 @@ export interface IStorage {
   getQualifiedRegistrantsByEvent(eventId: string): Promise<QualifiedRegistrant[]>;
   getQualifiedRegistrant(id: string): Promise<QualifiedRegistrant | undefined>;
   getQualifiedRegistrantByEmail(eventId: string, email: string): Promise<QualifiedRegistrant | undefined>;
+  getQualifiedRegistrantByUnicityId(eventId: string, unicityId: string): Promise<QualifiedRegistrant | undefined>;
   getQualifyingEventsForEmail(email: string): Promise<{ event: Event; registration: Registration | null; qualifiedRegistrant: QualifiedRegistrant | null }[]>;
   createQualifiedRegistrant(registrant: InsertQualifiedRegistrant): Promise<QualifiedRegistrant>;
   createQualifiedRegistrantsBulk(registrants: InsertQualifiedRegistrant[]): Promise<QualifiedRegistrant[]>;
@@ -1038,6 +1039,15 @@ export class DatabaseStorage implements IStorage {
       .where(and(
         eq(qualifiedRegistrants.eventId, eventId),
         sql`LOWER(${qualifiedRegistrants.email}) = LOWER(${email})`
+      ));
+    return registrant || undefined;
+  }
+
+  async getQualifiedRegistrantByUnicityId(eventId: string, unicityId: string): Promise<QualifiedRegistrant | undefined> {
+    const [registrant] = await db.select().from(qualifiedRegistrants)
+      .where(and(
+        eq(qualifiedRegistrants.eventId, eventId),
+        sql`LOWER(${qualifiedRegistrants.unicityId}) = LOWER(${unicityId})`
       ));
     return registrant || undefined;
   }

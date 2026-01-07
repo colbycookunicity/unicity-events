@@ -1074,6 +1074,30 @@ export default function RegistrationPage() {
         return; // Don't show error toast, we're handling it with OTP flow
       }
       
+      // Check if this is a NOT_QUALIFIED error (user not on qualified list)
+      const isNotQualified = 
+        errorCode === "NOT_QUALIFIED" ||
+        errorMsg.includes("NOT_QUALIFIED") || 
+        errorMsg.includes("Not qualified for this event");
+      
+      if (isNotQualified) {
+        // Show friendly qualification error with custom messaging
+        toast({ 
+          title: language === "es" ? "No calificado" : "Not Qualified",
+          description: language === "es" 
+            ? "No está en la lista de calificados para este evento. Por favor contacte al organizador si cree que esto es un error."
+            : "You are not on the qualified list for this event. Please contact the event organizer if you believe this is an error.",
+          variant: "destructive"
+        });
+        setIsQualified(false);
+        setQualificationMessage(
+          language === "es"
+            ? "Su correo electrónico o ID de Unicity no está en la lista de calificados para este evento."
+            : "Your email or Unicity ID is not on the qualified list for this event."
+        );
+        return; // Don't show default error toast
+      }
+      
       // Make error message more user-friendly
       let userMessage = error.message || "";
       // Remove HTTP status codes from message

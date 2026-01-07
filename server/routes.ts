@@ -1765,6 +1765,36 @@ export async function registerRoutes(
         }
       }
       
+      // QUALIFICATION CHECK: For qualified_verified mode, verify user is in qualified_registrants table
+      if (registrationMode === "qualified_verified") {
+        // Try to find qualified registrant by Unicity ID first (more reliable), then by email
+        const unicityId = req.body.unicityId?.trim();
+        let isQualified = false;
+        
+        if (unicityId) {
+          const qualifiedByUnicityId = await storage.getQualifiedRegistrantByUnicityId(event.id, unicityId);
+          if (qualifiedByUnicityId) {
+            isQualified = true;
+          }
+        }
+        
+        if (!isQualified) {
+          // Fallback to email lookup
+          const qualifiedByEmail = await storage.getQualifiedRegistrantByEmail(event.id, normalizedEmail);
+          if (qualifiedByEmail) {
+            isQualified = true;
+          }
+        }
+        
+        if (!isQualified) {
+          return res.status(403).json({ 
+            error: "Not qualified for this event",
+            code: "NOT_QUALIFIED",
+            message: "You are not on the qualified list for this event. Please contact the event organizer if you believe this is an error."
+          });
+        }
+      }
+      
       // For open_anonymous mode: ALWAYS create new registration (no email uniqueness check)
       // Multiple registrations per email are allowed
       // Supports multi-attendee submissions via attendees array
