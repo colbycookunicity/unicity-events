@@ -145,10 +145,12 @@ export class IterableService {
     registration: any,
     event: any,
     language: string = 'en',
-    checkInQrPayload?: string | null
+    checkInQrPayload?: string | null,
+    checkInToken?: string | null
   ): Promise<EmailResult> {
     const campaignId = getCampaignId('ITERABLE_EVENT_CONFIRMATION_CAMPAIGN_ID');
     const eventName = (language === 'es' && event.nameEs) ? event.nameEs : event.name;
+    const baseUrl = getBaseUrl();
 
     return this.sendEmailInternal({
       campaignId,
@@ -171,6 +173,8 @@ export class IterableService {
         checkInQrImageUrl: checkInQrPayload 
           ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(checkInQrPayload)}`
           : null,
+        // Apple Wallet pass URL (for iOS devices)
+        appleWalletUrl: checkInToken ? `${baseUrl}/api/wallet/${checkInToken}` : null,
       },
     });
   }

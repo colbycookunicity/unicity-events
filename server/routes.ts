@@ -1981,14 +1981,19 @@ export async function registerRoutes(
             registration,
             event,
             registration.language,
-            checkInQrPayload
+            checkInQrPayload,
+            checkInToken?.token || null
           );
         } catch (err) {
           console.error('Failed to send confirmation email:', err);
         }
       }
 
-      res.status(201).json(registration);
+      // Include check-in token in response for client-side wallet URL
+      res.status(201).json({
+        ...registration,
+        checkInToken: checkInToken?.token || null,
+      });
     } catch (error) {
       console.error("Registration error:", error);
       if (error instanceof z.ZodError) {
@@ -2337,6 +2342,69 @@ export async function registerRoutes(
     } catch (error) {
       console.error("[QR Scan] Error:", error);
       res.status(500).json({ error: "Unable to process QR code. Please try again.", code: "INTERNAL_ERROR" });
+    }
+  });
+
+  // Apple Wallet Pass Generation
+  // GET /api/wallet/:token - Generates and returns a .pkpass file for Apple Wallet
+  app.get("/api/wallet/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      
+      if (!token || token.length < 32) {
+        return res.status(400).json({ error: "Invalid token" });
+      }
+      
+      // Check if Apple Wallet is configured
+      const { appleWalletService } = await import("./appleWallet");
+      if (!appleWalletService.isConfigured()) {
+        return res.status(503).json({ 
+          error: "Apple Wallet is not configured",
+          message: "Apple Wallet passes are not available at this time"
+        });
+      }
+      
+      // Look up the check-in token
+      const checkInToken = await storage.getCheckInTokenByToken(token);
+      if (!checkInToken) {
+        return res.status(404).json({ error: "Token not found or expired" });
+      }
+      
+      // Check expiration if set
+      if (checkInToken.expiresAt && new Date(checkInToken.expiresAt) < new Date()) {
+        return res.status(410).json({ error: "Token has expired" });
+      }
+      
+      // Get the registration
+      const registration = await storage.getRegistration(checkInToken.registrationId);
+      if (!registration) {
+        return res.status(404).json({ error: "Registration not found" });
+      }
+      
+      // Get the event
+      const event = await storage.getEvent(checkInToken.eventId);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+      
+      // Generate the pass
+      const passBuffer = await appleWalletService.generatePass({
+        registration,
+        event,
+        checkInToken,
+      });
+      
+      // Set appropriate headers for .pkpass file
+      res.set({
+        "Content-Type": "application/vnd.apple.pkpass",
+        "Content-Disposition": `attachment; filename="${event.slug || event.id}-pass.pkpass"`,
+        "Content-Length": passBuffer.length.toString(),
+      });
+      
+      res.send(passBuffer);
+    } catch (error) {
+      console.error("[Apple Wallet] Error generating pass:", error);
+      res.status(500).json({ error: "Failed to generate Apple Wallet pass" });
     }
   });
 

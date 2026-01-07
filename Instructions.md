@@ -2797,3 +2797,150 @@ Per constraints, no production code was added. This is a readiness assessment on
 | `client/src/pages/PrintersPage.tsx` | Bridge config UI |
 | `client/src/pages/CheckInPage.tsx` | Check-in with print button |
 | `server/routes.ts` (lines 4055-4170) | Server-side print proxy |
+
+---
+
+# Apple Wallet (PassKit) Integration
+
+## Overview
+
+The system supports generating Apple Wallet passes (.pkpass files) that contain the attendee's check-in QR code. This allows iOS users to add their event pass to Apple Wallet for quick access during check-in.
+
+## Architecture
+
+### Components
+
+1. **AppleWalletService** (`server/appleWallet.ts`)
+   - Generates .pkpass files using `passkit-generator`
+   - Creates passes with event details, QR code, and branding
+   - Supports bilingual content (English/Spanish)
+
+2. **API Endpoint** (`GET /api/wallet/:token`)
+   - Validates check-in token
+   - Generates and returns .pkpass file
+   - Returns 503 if certificates not configured
+
+3. **UI Components** (`client/src/components/AppleWalletButton.tsx`)
+   - `AppleWalletButton` - Basic button
+   - `AppleWalletButtonBilingual` - Language-aware button
+
+### Integration Points
+
+- **Registration Success Page**: Shows "Add to Apple Wallet" button after registration
+- **Confirmation Email**: Includes Apple Wallet download link via Iterable
+
+## Apple Developer Setup
+
+### 1. Create Pass Type Identifier
+
+1. Go to [Apple Developer Portal](https://developer.apple.com/account/resources/identifiers/list/passTypeId)
+2. Click "+" to create new identifier
+3. Select "Pass Type IDs"
+4. Enter description: "Unicity Events Check-In Pass"
+5. Enter identifier: `pass.com.unicity.events`
+6. Click "Register"
+
+### 2. Create Signing Certificate
+
+1. In Apple Developer Portal, go to Certificates
+2. Click "+" to create new certificate
+3. Select "Pass Type ID Certificate"
+4. Select your Pass Type ID (`pass.com.unicity.events`)
+5. Follow instructions to create CSR and download certificate
+6. Export certificate and private key as .p12 file
+
+### 3. Download WWDR Certificate
+
+1. Download Apple's WWDR (Worldwide Developer Relations) certificate
+2. Required for pass signing chain
+
+### 4. Convert Certificates to PEM Format
+
+```bash
+# Convert signer certificate and key from .p12
+openssl pkcs12 -in Certificates.p12 -out signer.pem -clcerts -nokeys
+openssl pkcs12 -in Certificates.p12 -out signer.key -nocerts -nodes
+
+# Download and convert WWDR certificate
+curl -O https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer
+openssl x509 -inform der -in AppleWWDRCAG3.cer -out wwdr.pem
+```
+
+## Environment Variables
+
+Configure the following secrets in Replit:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `APPLE_WALLET_WWDR_CERT` | WWDR certificate (PEM format, base64 encoded) | Base64 of wwdr.pem |
+| `APPLE_WALLET_SIGNER_CERT` | Pass signing certificate (PEM format, base64 encoded) | Base64 of signer.pem |
+| `APPLE_WALLET_SIGNER_KEY` | Private key (PEM format, base64 encoded) | Base64 of signer.key |
+| `APPLE_WALLET_SIGNER_KEY_PASSPHRASE` | Key passphrase (if encrypted) | Optional |
+| `APPLE_PASS_TYPE_IDENTIFIER` | Pass Type ID | `pass.com.unicity.events` |
+| `APPLE_TEAM_IDENTIFIER` | Apple Team ID | `XXXXXXXXXX` |
+
+### Encoding Certificates
+
+```bash
+# Encode certificate files as base64 for environment variables
+cat wwdr.pem | base64 > wwdr.pem.b64
+cat signer.pem | base64 > signer.pem.b64
+cat signer.key | base64 > signer.key.b64
+```
+
+## Pass Model Configuration
+
+The pass model is stored in `server/pass-model/` with the following structure:
+
+```
+server/pass-model/
+├── pass.json          # Pass template (auto-generated if missing)
+├── icon.png           # Required: 29x29 icon
+├── icon@2x.png        # Required: 58x58 icon (Retina)
+├── logo.png           # Optional: Logo displayed on pass
+├── logo@2x.png        # Optional: Retina logo
+├── strip.png          # Optional: Strip image for event pass
+└── strip@2x.png       # Optional: Retina strip image
+```
+
+## How It Works
+
+1. **Registration**: When attendee registers, a unique check-in token is generated
+2. **Success Page**: Shows QR code and "Add to Apple Wallet" button
+3. **Click Button**: Downloads .pkpass file from `/api/wallet/:token`
+4. **iOS Opens**: Apple Wallet prompts to add the pass
+5. **Check-In**: Attendee shows pass, staff scans QR code
+
+## Security
+
+- Tokens are cryptographically secure (64-char hex)
+- Tokens expire with registration validity
+- Each token is single-use for wallet generation
+- Pass cannot be generated without valid event access
+
+## Troubleshooting
+
+### "Service Unavailable" (503) Error
+- Certificates not configured
+- Check environment variables are set correctly
+- Verify base64 encoding is correct
+
+### "Pass signature invalid"
+- Certificate chain issue
+- Ensure WWDR certificate is current
+- Check signing certificate matches Team ID
+
+### Pass doesn't appear on iOS
+- Pass Type ID mismatch
+- Ensure `pass.json` has correct `passTypeIdentifier`
+- Team ID must match signing certificate
+
+## File Reference
+
+| File | Purpose |
+|------|---------|
+| `server/appleWallet.ts` | Pass generation service |
+| `server/routes.ts` | `/api/wallet/:token` endpoint |
+| `server/pass-model/` | Pass template and images |
+| `client/src/components/AppleWalletButton.tsx` | UI button components |
+| `server/iterable.ts` | Email integration with wallet URL |

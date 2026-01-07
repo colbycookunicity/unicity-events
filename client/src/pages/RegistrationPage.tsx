@@ -47,6 +47,7 @@ interface CustomFormField {
 
 import { IntroSection, ThankYouSection } from "@/components/landing-sections";
 import { RegistrationQRCode, QRCodeDialog } from "@/components/RegistrationQRCode";
+import { AppleWalletButtonBilingual } from "@/components/AppleWalletButton";
 
 interface PageData {
   page: EventPage;
@@ -323,6 +324,8 @@ export default function RegistrationPage() {
   const [isLoadingExisting, setIsLoadingExisting] = useState(false);
   // Track completed registration ID for thank-you page QR code
   const [completedRegistrationId, setCompletedRegistrationId] = useState<string | null>(null);
+  // Track check-in token for Apple Wallet button
+  const [completedCheckInToken, setCompletedCheckInToken] = useState<string | null>(null);
   // Track which email+event combination we loaded data for (security: prevents cross-user/cross-event data leakage)
   const [loadedForKey, setLoadedForKey] = useState<string | null>(null);
   // Ref to prevent duplicate fetch calls during React concurrent mode/strict mode re-renders
@@ -1033,6 +1036,8 @@ export default function RegistrationPage() {
         if (result.ticketCount) registrationCount = result.ticketCount;
         if (result.id) regId = result.id;
         if (result.registrationId) regId = result.registrationId;
+        // Store check-in token for Apple Wallet button
+        if (result.checkInToken) setCompletedCheckInToken(result.checkInToken);
       } catch {
         // Ignore JSON parse errors
       }
@@ -1503,6 +1508,14 @@ export default function RegistrationPage() {
                     ? "Muestra este código en el registro para entrada rápida"
                     : "Show this code at check-in for fast entry"}
                 </p>
+                {completedCheckInToken && (
+                  <div className="mt-3">
+                    <AppleWalletButtonBilingual 
+                      checkInToken={completedCheckInToken} 
+                      language={language as "en" | "es"}
+                    />
+                  </div>
+                )}
               </div>
             )}
             <div className="text-sm text-muted-foreground">
@@ -1552,6 +1565,14 @@ export default function RegistrationPage() {
                       ? "Muestra este código en el registro para entrada rápida"
                       : "Show this code at check-in for fast entry"}
                   </p>
+                  {completedCheckInToken && (
+                    <div className="mt-4">
+                      <AppleWalletButtonBilingual 
+                        checkInToken={completedCheckInToken} 
+                        language={language as "en" | "es"}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
               
