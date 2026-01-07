@@ -207,11 +207,17 @@ export default function AttendeesPage() {
     });
   };
 
-  const handleRowClick = (reg: Registration) => {
-    setSelectedAttendee(reg);
-    setEditForm(reg);
-    setIsEditing(false);
-    setDrawerOpen(true);
+  const handleRowClick = (person: UnifiedPerson) => {
+    // For registered attendees, open the detail slider
+    if (person.registration) {
+      setSelectedAttendee(person.registration);
+      setEditForm(person.registration);
+      setIsEditing(false);
+      setDrawerOpen(true);
+    } else if (person.qualifier) {
+      // For qualifiers (not registered), open the edit dialog
+      handleEditQualifier(person.qualifier);
+    }
   };
 
   const handleEditToggle = () => {
