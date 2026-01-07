@@ -1165,6 +1165,7 @@ export default function AttendeesPage() {
           ? guestRulesById.get(person.qualifier.guestAllowanceRuleId)
           : undefined;
         const isCheckedIn = person.registration?.checkedInAt != null;
+        const regStatus = person.registration?.status;
         return (
           <div className="min-w-[150px]">
             <div className="flex items-center gap-2">
@@ -1174,6 +1175,12 @@ export default function AttendeesPage() {
               )}
               {person.isRegistered && isCheckedIn && (
                 <Badge variant="default" className="text-xs bg-green-600 hover:bg-green-600" data-testid={`badge-checked-in-${person.id}`}>Checked In</Badge>
+              )}
+              {person.isRegistered && !isCheckedIn && regStatus === "registered" && (
+                <Badge variant="outline" className="text-xs" data-testid={`badge-registered-${person.id}`}>Registered</Badge>
+              )}
+              {person.isRegistered && !isCheckedIn && regStatus === "not_coming" && (
+                <Badge variant="destructive" className="text-xs" data-testid={`badge-not-coming-${person.id}`}>Not Coming</Badge>
               )}
               {person.isRegistered && person.qualifier && eventFilter !== "all" && (
                 <Badge variant="outline" className="text-xs" data-testid={`badge-qualified-${person.id}`}>Qualified</Badge>
