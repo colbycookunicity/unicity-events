@@ -443,6 +443,12 @@ export default function RegistrationPage() {
   const requiresVerification = (registrationMode !== "open_anonymous") && !skipVerification;
   const openVerifiedMode = registrationMode === "open_verified";
   const openAnonymousMode = registrationMode === "open_anonymous";
+  
+  // Lookup dialog state for already registered users (used in open_verified mode)
+  const [showLookupDialog, setShowLookupDialog] = useState(false);
+  const [lookupEmail, setLookupEmail] = useState("");
+  const [lookupStep, setLookupStep] = useState<"email" | "otp">("email");
+  const [isSendingLookupOtp, setIsSendingLookupOtp] = useState(false);
 
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(null);
   
@@ -2787,11 +2793,226 @@ export default function RegistrationPage() {
     </Dialog>
   );
 
+  // Handle lookup OTP send for already registered users
+  const handleLookupSendOtp = async () => {
+    if (!lookupEmail) return;
+    
+    setIsSendingLookupOtp(true);
+    try {
+      const res = await apiRequest("POST", "/api/register/otp/generate", {
+        email: lookupEmail,
+        eventId: params.eventId,
+      });
+      const data = await res.json();
+      
+      if (data.sent) {
+        setLookupStep("otp");
+        toast({
+          title: language === "es" ? "Código enviado" : "Code sent",
+          description: language === "es" 
+            ? `Se envió un código de verificación a ${lookupEmail}`
+            : `A verification code was sent to ${lookupEmail}`,
+        });
+      }
+    } catch (error: any) {
+      let errorMessage = language === "es" ? "No se pudo enviar el código" : "Failed to send code";
+      if (error.message) {
+        try {
+          const jsonMatch = error.message.match(/\{.*\}/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            errorMessage = parsed.error || errorMessage;
+          }
+        } catch { }
+      }
+      toast({
+        title: language === "es" ? "Error" : "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSendingLookupOtp(false);
+    }
+  };
+
+  // Handle lookup OTP verify and redirect to check-in code
+  const handleLookupVerifyOtp = async () => {
+    if (otpCode.length !== 6) return;
+    
+    setIsVerifying(true);
+    try {
+      const res = await apiRequest("POST", "/api/register/otp/validate", {
+        email: lookupEmail,
+        code: otpCode,
+        eventId: params.eventId,
+      });
+      const data = await res.json();
+      
+      if (data.verified) {
+        // Close dialog and set verification state
+        setShowLookupDialog(false);
+        setOtpCode("");
+        setLookupStep("email");
+        setVerificationEmail(lookupEmail);
+        setVerifiedProfile(data.profile);
+        setVerifiedByHydra(data.verifiedByHydra || false);
+        
+        // Store verified email in sessionStorage
+        if (params.eventId) {
+          sessionStorage.setItem(`reg_verified_email_${params.eventId}`, lookupEmail);
+        }
+        
+        // Now navigate to form step - the existing registration will be loaded automatically
+        setVerificationStep("form");
+        
+        toast({
+          title: language === "es" ? "Verificado" : "Verified",
+          description: language === "es" 
+            ? "Su correo ha sido verificado. Si ya está registrado, verá sus datos."
+            : "Your email has been verified. If you're already registered, you'll see your details.",
+        });
+      }
+    } catch (error: any) {
+      let errorMessage = language === "es" ? "Por favor verifica tu código e intenta de nuevo" : "Please check your code and try again";
+      if (error.message) {
+        try {
+          const jsonMatch = error.message.match(/\{.*\}/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            errorMessage = parsed.error || errorMessage;
+          }
+        } catch { }
+      }
+      toast({
+        title: language === "es" ? "Código inválido" : "Invalid Code",
+        description: errorMessage,
+        variant: "destructive",
+      });
+      setOtpCode("");
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  // Lookup dialog for already registered users in open_verified mode
+  const renderLookupDialog = () => (
+    <Dialog open={showLookupDialog} onOpenChange={(open) => {
+      if (!open) {
+        setShowLookupDialog(false);
+        setOtpCode("");
+        setLookupEmail("");
+        setLookupStep("email");
+      }
+    }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Ticket className="h-5 w-5" />
+            {language === "es" ? "Buscar Registro" : "Find Registration"}
+          </DialogTitle>
+          <DialogDescription>
+            {lookupStep === "email"
+              ? (language === "es" 
+                  ? "Ingrese el correo con el que se registró"
+                  : "Enter the email you registered with")
+              : (language === "es"
+                  ? `Ingrese el código de 6 dígitos enviado a ${lookupEmail}`
+                  : `Enter the 6-digit code sent to ${lookupEmail}`)}
+          </DialogDescription>
+        </DialogHeader>
+        
+        {lookupStep === "email" ? (
+          <div className="flex flex-col gap-4 py-4">
+            <Input
+              type="email"
+              placeholder={language === "es" ? "correo@ejemplo.com" : "email@example.com"}
+              value={lookupEmail}
+              onChange={(e) => setLookupEmail(e.target.value)}
+              data-testid="input-lookup-email"
+            />
+            <Button
+              onClick={handleLookupSendOtp}
+              disabled={isSendingLookupOtp || !lookupEmail}
+              data-testid="button-lookup-send-otp"
+            >
+              {isSendingLookupOtp ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  {language === "es" ? "Enviando..." : "Sending..."}
+                </>
+              ) : (
+                language === "es" ? "Enviar código" : "Send code"
+              )}
+            </Button>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-4 py-4">
+            <InputOTP
+              value={otpCode}
+              onChange={setOtpCode}
+              maxLength={6}
+              data-testid="input-lookup-otp"
+            >
+              <InputOTPGroup>
+                <InputOTPSlot index={0} />
+                <InputOTPSlot index={1} />
+                <InputOTPSlot index={2} />
+                <InputOTPSlot index={3} />
+                <InputOTPSlot index={4} />
+                <InputOTPSlot index={5} />
+              </InputOTPGroup>
+            </InputOTP>
+            
+            <Button
+              variant="link"
+              onClick={handleLookupSendOtp}
+              disabled={isSendingLookupOtp}
+              className="text-sm"
+              data-testid="button-lookup-resend"
+            >
+              {language === "es" ? "Reenviar código" : "Resend code"}
+            </Button>
+            
+            <div className="flex gap-2 w-full">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setLookupStep("email");
+                  setOtpCode("");
+                }}
+                className="flex-1"
+                data-testid="button-lookup-back"
+              >
+                {language === "es" ? "Atrás" : "Back"}
+              </Button>
+              <Button
+                onClick={handleLookupVerifyOtp}
+                disabled={isVerifying || otpCode.length !== 6}
+                className="flex-1"
+                data-testid="button-lookup-verify"
+              >
+                {isVerifying ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    {language === "es" ? "Verificando..." : "Verifying..."}
+                  </>
+                ) : (
+                  language === "es" ? "Verificar" : "Verify"
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+
   // Standard layout - default, form centered on page
   if (layout === "standard") {
     return (
       <>
       {renderOtpDialog()}
+      {renderLookupDialog()}
       <div className="min-h-screen bg-background relative">
         {renderHeader()}
         
@@ -2817,14 +3038,20 @@ export default function RegistrationPage() {
           </div>
         )}
         
-        {/* Already registered link - scroll to verification section */}
-        {requiresVerification && verificationStep === "email" && (
+        {/* Already registered link - for qualified_verified: scroll to verification, for open_verified: open lookup dialog */}
+        {requiresVerification && !openAnonymousMode && (
           <div className="max-w-2xl mx-auto px-4 text-center">
             <button 
               onClick={() => {
-                const section = document.getElementById("verification-section");
-                if (section) {
-                  section.scrollIntoView({ behavior: "smooth", block: "center" });
+                if (verificationStep === "email") {
+                  // For qualified_verified mode (email step shown), scroll to verification section
+                  const section = document.getElementById("verification-section");
+                  if (section) {
+                    section.scrollIntoView({ behavior: "smooth", block: "center" });
+                  }
+                } else {
+                  // For open_verified mode (form shown), open lookup dialog
+                  setShowLookupDialog(true);
                 }
               }}
               className="text-sm text-primary hover:underline flex items-center gap-1 mx-auto"
@@ -2869,6 +3096,7 @@ export default function RegistrationPage() {
     return (
       <>
       {renderOtpDialog()}
+      {renderLookupDialog()}
       <div className="min-h-screen bg-background">
         {/* Mobile: stacked layout, Desktop: side-by-side */}
         <div className="flex flex-col lg:flex-row lg:min-h-screen">
@@ -2985,13 +3213,17 @@ export default function RegistrationPage() {
             </div>
             
             {/* Already registered link for split layout */}
-            {requiresVerification && verificationStep === "email" && (
+            {requiresVerification && !openAnonymousMode && (
               <div className="pt-4 px-6 lg:px-10 text-center bg-background">
                 <button 
                   onClick={() => {
-                    const section = document.getElementById("verification-section");
-                    if (section) {
-                      section.scrollIntoView({ behavior: "smooth", block: "center" });
+                    if (verificationStep === "email") {
+                      const section = document.getElementById("verification-section");
+                      if (section) {
+                        section.scrollIntoView({ behavior: "smooth", block: "center" });
+                      }
+                    } else {
+                      setShowLookupDialog(true);
                     }
                   }}
                   className="text-sm text-primary hover:underline flex items-center gap-1 mx-auto"
@@ -3027,6 +3259,7 @@ export default function RegistrationPage() {
   return (
     <>
       {renderOtpDialog()}
+      {renderLookupDialog()}
       <div className="min-h-screen bg-card">
         {renderHeader()}
       
@@ -3085,13 +3318,17 @@ export default function RegistrationPage() {
       </div>
       
       {/* Already registered link for hero-background layout */}
-      {requiresVerification && verificationStep === "email" && (
+      {requiresVerification && !openAnonymousMode && (
         <div className="bg-card pb-4 text-center">
           <button 
             onClick={() => {
-              const section = document.getElementById("verification-section");
-              if (section) {
-                section.scrollIntoView({ behavior: "smooth", block: "center" });
+              if (verificationStep === "email") {
+                const section = document.getElementById("verification-section");
+                if (section) {
+                  section.scrollIntoView({ behavior: "smooth", block: "center" });
+                }
+              } else {
+                setShowLookupDialog(true);
               }
             }}
             className="text-sm text-primary hover:underline flex items-center gap-1 mx-auto"
