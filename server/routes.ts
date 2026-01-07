@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertEventSchema, insertRegistrationSchema, insertGuestSchema, insertFlightSchema, insertReimbursementSchema, insertSwagItemSchema, insertSwagAssignmentSchema, insertQualifiedRegistrantSchema, insertUserSchema, insertPrinterSchema, insertPrintLogSchema, userRoleEnum, deriveRegistrationFlags, deriveRegistrationMode, type RegistrationMode } from "@shared/schema";
+import { insertEventSchema, insertRegistrationSchema, insertGuestSchema, insertFlightSchema, insertReimbursementSchema, insertSwagItemSchema, insertSwagAssignmentSchema, insertQualifiedRegistrantSchema, insertUserSchema, insertPrinterSchema, insertPrintLogSchema, userRoleEnum, deriveRegistrationFlags, deriveRegistrationMode, type RegistrationMode, generateCheckInToken, parseCheckInQRPayload, buildCheckInQRPayload } from "@shared/schema";
 import { z } from "zod";
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
@@ -1827,6 +1827,17 @@ export async function registerRoutes(
               attendeeIndex: i,
             });
             createdRegistrations.push(newRegistration);
+            
+            // Generate check-in token for this attendee (non-blocking)
+            try {
+              await storage.createCheckInToken({
+                registrationId: newRegistration.id,
+                eventId: event.id,
+                token: generateCheckInToken(),
+              });
+            } catch (tokenErr) {
+              console.error('[CheckInToken] Failed to create token for attendee:', tokenErr);
+            }
           }
         } catch (error: any) {
           // If any attendee fails, attempt to clean up already-created registrations
@@ -1944,6 +1955,24 @@ export async function registerRoutes(
         registeredAt: new Date(),
       });
 
+      // Generate check-in token for email QR code (non-blocking)
+      let checkInToken;
+      try {
+        checkInToken = await storage.createCheckInToken({
+          registrationId: registration.id,
+          eventId: event.id,
+          token: generateCheckInToken(),
+        });
+        console.log('[CheckInToken] Created for registration:', registration.id);
+      } catch (tokenErr) {
+        console.error('[CheckInToken] Failed to create token:', tokenErr);
+      }
+
+      // Build QR code payload for email (if token was created)
+      const checkInQrPayload = checkInToken 
+        ? buildCheckInQRPayload(event.id, registration.id, checkInToken.token)
+        : null;
+
       // Send confirmation email via Iterable
       if (process.env.ITERABLE_API_KEY) {
         try {
@@ -1951,7 +1980,8 @@ export async function registerRoutes(
             registration.email,
             registration,
             event,
-            registration.language
+            registration.language,
+            checkInQrPayload
           );
         } catch (err) {
           console.error('Failed to send confirmation email:', err);
@@ -2192,6 +2222,121 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Check-in error:", error);
       res.status(500).json({ error: "Unable to complete check-in. Please try again." });
+    }
+  });
+
+  // QR Code Check-In via Email Token
+  // This endpoint is used by the check-in scanner to validate CHECKIN: format QR codes
+  // QR payload format: CHECKIN:<eventId>:<registrationId>:<token>
+  app.post("/api/checkin/scan", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const { qrPayload, eventId: expectedEventId } = req.body;
+      
+      if (!qrPayload || typeof qrPayload !== 'string') {
+        console.log('[QR Scan] Invalid request: missing qrPayload');
+        return res.status(400).json({ error: "QR payload is required", code: "INVALID_PAYLOAD" });
+      }
+      
+      // Parse the QR payload
+      const parsed = parseCheckInQRPayload(qrPayload);
+      if (!parsed) {
+        console.log('[QR Scan] Invalid QR format:', qrPayload.substring(0, 50));
+        return res.status(400).json({ error: "Invalid QR code format", code: "INVALID_FORMAT" });
+      }
+      
+      const { eventId, registrationId, token } = parsed;
+      
+      // Validate event matches if specified
+      if (expectedEventId && eventId !== expectedEventId) {
+        console.log('[QR Scan] Event mismatch:', { expected: expectedEventId, got: eventId });
+        return res.status(400).json({ 
+          error: "This QR code is for a different event", 
+          code: "EVENT_MISMATCH" 
+        });
+      }
+      
+      // Look up the token
+      const checkInToken = await storage.getCheckInTokenByToken(token);
+      if (!checkInToken) {
+        console.log('[QR Scan] Token not found:', token.substring(0, 16) + '...');
+        return res.status(404).json({ error: "Invalid or expired QR code", code: "TOKEN_NOT_FOUND" });
+      }
+      
+      // Validate token matches registration and event
+      if (checkInToken.registrationId !== registrationId || checkInToken.eventId !== eventId) {
+        console.log('[QR Scan] Token mismatch:', { 
+          tokenRegId: checkInToken.registrationId, 
+          payloadRegId: registrationId,
+          tokenEventId: checkInToken.eventId,
+          payloadEventId: eventId
+        });
+        return res.status(400).json({ error: "Invalid QR code", code: "TOKEN_MISMATCH" });
+      }
+      
+      // Check expiration if set
+      if (checkInToken.expiresAt && new Date(checkInToken.expiresAt) < new Date()) {
+        console.log('[QR Scan] Token expired:', { tokenId: checkInToken.id, expiresAt: checkInToken.expiresAt });
+        return res.status(400).json({ error: "QR code has expired", code: "TOKEN_EXPIRED" });
+      }
+      
+      // Get the registration
+      const registration = await storage.getRegistration(registrationId);
+      if (!registration) {
+        console.log('[QR Scan] Registration not found:', registrationId);
+        return res.status(404).json({ error: "Registration not found", code: "REGISTRATION_NOT_FOUND" });
+      }
+      
+      // Check if already checked in (idempotent - still success but flag it)
+      const wasAlreadyCheckedIn = registration.checkedInAt !== null;
+      
+      if (!wasAlreadyCheckedIn) {
+        // Perform check-in
+        await storage.checkInRegistration(registrationId, req.user!.id);
+        
+        // Mark token as used (for tracking, not for blocking)
+        if (!checkInToken.usedAt) {
+          await storage.markCheckInTokenUsed(checkInToken.id);
+        }
+        
+        // Send check-in confirmation email
+        const event = await storage.getEvent(eventId);
+        if (event) {
+          iterableService.sendCheckedInConfirmation(
+            registration.email,
+            registration,
+            event,
+            registration.language
+          ).catch(err => {
+            console.error('[Iterable] Failed to send check-in confirmation email:', err);
+          });
+        }
+        
+        console.log('[QR Scan] Check-in successful:', { 
+          registrationId, 
+          name: `${registration.firstName} ${registration.lastName}`,
+          eventId 
+        });
+      } else {
+        console.log('[QR Scan] Already checked in:', { 
+          registrationId, 
+          checkedInAt: registration.checkedInAt 
+        });
+      }
+      
+      // Get fresh registration data
+      const updatedRegistration = await storage.getRegistration(registrationId);
+      
+      res.json({
+        success: true,
+        alreadyCheckedIn: wasAlreadyCheckedIn,
+        registration: updatedRegistration,
+        message: wasAlreadyCheckedIn 
+          ? `${registration.firstName} ${registration.lastName} was already checked in`
+          : `${registration.firstName} ${registration.lastName} checked in successfully`
+      });
+    } catch (error) {
+      console.error("[QR Scan] Error:", error);
+      res.status(500).json({ error: "Unable to process QR code. Please try again.", code: "INTERNAL_ERROR" });
     }
   });
 

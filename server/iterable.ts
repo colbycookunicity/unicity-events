@@ -144,7 +144,8 @@ export class IterableService {
     email: string,
     registration: any,
     event: any,
-    language: string = 'en'
+    language: string = 'en',
+    checkInQrPayload?: string | null
   ): Promise<EmailResult> {
     const campaignId = getCampaignId('ITERABLE_EVENT_CONFIRMATION_CAMPAIGN_ID');
     const eventName = (language === 'es' && event.nameEs) ? event.nameEs : event.name;
@@ -164,6 +165,12 @@ export class IterableService {
         endDate: event.endDate,
         registrationId: registration.id,
         language,
+        // QR code for check-in (CHECKIN:<eventId>:<registrationId>:<token>)
+        checkInQrPayload: checkInQrPayload || null,
+        // URL to generate QR image (can be used in Iterable template)
+        checkInQrImageUrl: checkInQrPayload 
+          ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(checkInQrPayload)}`
+          : null,
       },
     });
   }

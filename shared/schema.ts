@@ -909,6 +909,53 @@ export const insertPrintLogSchema = createInsertSchema(printLogs).omit({
 export type InsertPrintLog = z.infer<typeof insertPrintLogSchema>;
 export type PrintLog = typeof printLogs.$inferSelect;
 
+// Check-in Tokens table - Secure tokens for email QR check-in
+// Each registration gets a unique, non-guessable token for QR scanning
+// QR payload format: CHECKIN:<eventId>:<registrationId>:<token>
+export const checkInTokens = pgTable("check_in_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  registrationId: varchar("registration_id").references(() => registrations.id, { onDelete: "cascade" }).notNull(),
+  eventId: varchar("event_id").references(() => events.id, { onDelete: "cascade" }).notNull(),
+  token: varchar("token", { length: 64 }).notNull(), // Cryptographically secure random token
+  expiresAt: timestamp("expires_at"), // Optional expiration (null = never expires)
+  usedAt: timestamp("used_at"), // When the token was first used for check-in
+  emailSentAt: timestamp("email_sent_at"), // When QR email was sent
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  uniqueRegistration: uniqueIndex("check_in_token_registration_idx").on(table.registrationId),
+  tokenLookup: uniqueIndex("check_in_token_token_idx").on(table.token),
+}));
+
+export const insertCheckInTokenSchema = createInsertSchema(checkInTokens).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertCheckInToken = z.infer<typeof insertCheckInTokenSchema>;
+export type CheckInToken = typeof checkInTokens.$inferSelect;
+
+// Helper function to generate a cryptographically secure token
+export function generateCheckInToken(): string {
+  const crypto = globalThis.crypto || require('crypto');
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return Array.from(array, b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Helper to build QR payload string
+export function buildCheckInQRPayload(eventId: string, registrationId: string, token: string): string {
+  return `CHECKIN:${eventId}:${registrationId}:${token}`;
+}
+
+// Helper to parse QR payload string
+export function parseCheckInQRPayload(payload: string): { eventId: string; registrationId: string; token: string } | null {
+  if (!payload.startsWith('CHECKIN:')) return null;
+  const parts = payload.substring(8).split(':');
+  if (parts.length !== 3) return null;
+  const [eventId, registrationId, token] = parts;
+  if (!eventId || !registrationId || !token) return null;
+  return { eventId, registrationId, token };
+}
+
 // Extended types for API responses
 export type RegistrationWithDetails = Registration & {
   guests?: Guest[];

@@ -22,7 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
 import type { Registration, Event, Printer as PrinterType } from "@shared/schema";
-import { QRScanner, parseQRCode } from "@/components/QRScanner";
+import { QRScanner, parseQRCode, ParsedQRCode } from "@/components/QRScanner";
 
 type ScanMode = "list" | "scan";
 type ScanResult = {
@@ -177,7 +177,7 @@ export default function CheckInPage() {
     }
   };
 
-  // Handle QR code scan
+  // Handle QR code scan - supports both badge QR (REG:) and email check-in QR (CHECKIN:)
   const handleQRScan = useCallback(async (rawData: string) => {
     if (isProcessingScan || !selectedEvent) return;
     
@@ -186,6 +186,54 @@ export default function CheckInPage() {
     
     try {
       const parsed = parseQRCode(rawData);
+      
+      // Handle CHECKIN: format (email QR) via dedicated scan endpoint
+      if (parsed.type === 'checkin' && parsed.token && parsed.eventId && parsed.registrationId) {
+        try {
+          const response = await fetch('/api/checkin/scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              qrPayload: rawData,
+              eventId: selectedEvent,  // Validate that scan is for the currently selected event
+            }),
+          });
+          const result = await response.json();
+          
+          if (!response.ok) {
+            setScanResult({
+              registration: null,
+              error: result.error || 'Check-in failed',
+              alreadyCheckedIn: false,
+            });
+            return;
+          }
+          
+          // Refresh registrations cache
+          queryClient.invalidateQueries({ predicate: (query) => 
+            String(query.queryKey[0]).startsWith("/api/registrations")
+          });
+          
+          setScanResult({
+            registration: result.registration,
+            error: null,
+            alreadyCheckedIn: result.alreadyCheckedIn || false,
+          });
+          
+          if (!result.alreadyCheckedIn) {
+            toast({ title: "Check-in successful", description: `${result.registration.firstName} ${result.registration.lastName} checked in` });
+          }
+        } catch {
+          setScanResult({
+            registration: null,
+            error: "Failed to process check-in QR code",
+            alreadyCheckedIn: false,
+          });
+        }
+        return;
+      }
+      
+      // Handle legacy badge QR formats (REG: and UUID)
       if (!parsed.registrationId) {
         setScanResult({
           registration: null,
@@ -248,7 +296,7 @@ export default function CheckInPage() {
     } finally {
       setIsProcessingScan(false);
     }
-  }, [isProcessingScan, selectedEvent, registrations]);
+  }, [isProcessingScan, selectedEvent, registrations, toast]);
 
   // Reset scan result and resume scanner
   const resetScan = useCallback(() => {

@@ -5,24 +5,63 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Camera, CameraOff, RefreshCw, SwitchCamera, AlertCircle, Pause } from "lucide-react";
 
-export function parseQRCode(rawData: string): { registrationId: string | null; raw: string } {
-  if (rawData.startsWith("REG:")) {
-    return { registrationId: rawData.replace("REG:", ""), raw: rawData };
-  } else if (rawData.match(/^[0-9a-f-]{36}$/i)) {
-    return { registrationId: rawData, raw: rawData };
+// QR code type for distinguishing badge QR from email check-in QR
+export type QRCodeType = 'badge' | 'checkin' | 'uuid' | 'unknown';
+
+export interface ParsedQRCode {
+  type: QRCodeType;
+  registrationId: string | null;
+  eventId?: string;
+  token?: string;
+  raw: string;
+}
+
+// Parse CHECKIN: format: CHECKIN:<eventId>:<registrationId>:<token>
+export function parseCheckInQR(payload: string): { eventId: string; registrationId: string; token: string } | null {
+  if (!payload.startsWith('CHECKIN:')) return null;
+  const parts = payload.substring(8).split(':');
+  if (parts.length !== 3) return null;
+  const [eventId, registrationId, token] = parts;
+  if (!eventId || !registrationId || !token) return null;
+  return { eventId, registrationId, token };
+}
+
+export function parseQRCode(rawData: string): ParsedQRCode {
+  // Email QR Check-in format: CHECKIN:<eventId>:<registrationId>:<token>
+  if (rawData.startsWith("CHECKIN:")) {
+    const parsed = parseCheckInQR(rawData);
+    if (parsed) {
+      return { 
+        type: 'checkin',
+        registrationId: parsed.registrationId, 
+        eventId: parsed.eventId,
+        token: parsed.token,
+        raw: rawData 
+      };
+    }
+    return { type: 'unknown', registrationId: null, raw: rawData };
   }
-  return { registrationId: null, raw: rawData };
+  // Badge QR format: REG:<registrationId>
+  if (rawData.startsWith("REG:")) {
+    return { type: 'badge', registrationId: rawData.replace("REG:", ""), raw: rawData };
+  }
+  // Plain UUID format
+  if (rawData.match(/^[0-9a-f-]{36}$/i)) {
+    return { type: 'uuid', registrationId: rawData, raw: rawData };
+  }
+  return { type: 'unknown', registrationId: null, raw: rawData };
 }
 
 interface QRScannerProps {
   onScan: (registrationId: string) => void;
+  onRawScan?: (parsed: ParsedQRCode) => void;  // For handling raw parsed QR data
   onError?: (error: string) => void;
   isProcessing?: boolean;
   disabled?: boolean;
   paused?: boolean;
 }
 
-export function QRScanner({ onScan, onError, isProcessing = false, disabled = false, paused = false }: QRScannerProps) {
+export function QRScanner({ onScan, onRawScan, onError, isProcessing = false, disabled = false, paused = false }: QRScannerProps) {
   const [isActive, setIsActive] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastScanned, setLastScanned] = useState<string | null>(null);
@@ -39,16 +78,31 @@ export function QRScanner({ onScan, onError, isProcessing = false, disabled = fa
     if (value === lastScanned) return;
     setLastScanned(value);
     
-    if (value.startsWith("REG:")) {
-      const registrationId = value.replace("REG:", "");
-      onScan(registrationId);
-    } else if (value.match(/^[0-9a-f-]{36}$/i)) {
-      onScan(value);
+    // Parse the QR code
+    const parsed = parseQRCode(value);
+    
+    // If onRawScan is provided, use it for all valid formats (handles CHECKIN: and others)
+    if (onRawScan && parsed.type !== 'unknown') {
+      onRawScan(parsed);
+      return;
+    }
+    
+    // Legacy behavior: call onScan with registrationId for badge/uuid formats only
+    // CHECKIN: format should not use this fallback - it must be handled by onRawScan
+    if (parsed.type === 'badge' || parsed.type === 'uuid') {
+      if (parsed.registrationId) {
+        onScan(parsed.registrationId);
+      }
+    } else if (parsed.type === 'checkin') {
+      // CHECKIN: format requires token validation - should use onRawScan handler
+      // If no onRawScan handler is provided, show error
+      setError("Email QR code scanned - please ensure scanner is configured for check-in mode");
+      onError?.("CHECKIN format requires onRawScan handler");
     } else {
-      setError("Invalid QR code format. Please scan a registration QR code.");
+      setError("Invalid QR code format. Please scan a valid check-in QR code.");
       onError?.("Invalid QR code format");
     }
-  }, [onScan, onError, isProcessing, disabled, isActive, lastScanned, paused]);
+  }, [onScan, onRawScan, onError, isProcessing, disabled, isActive, lastScanned, paused]);
 
   const handleError = useCallback((err: unknown) => {
     const errorMessage = err instanceof Error ? err.message : String(err);

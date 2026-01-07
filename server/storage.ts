@@ -1,7 +1,7 @@
 import {
   users, events, registrations, guests, flights, reimbursements, otpSessions, authSessions, attendeeSessions,
   swagItems, swagAssignments, qualifiedRegistrants, eventPages, eventPageSections, guestAllowanceRules,
-  formTemplates, eventManagerAssignments, printers, printLogs,
+  formTemplates, eventManagerAssignments, printers, printLogs, checkInTokens,
   type User, type InsertUser,
   type Event, type InsertEvent,
   type Registration, type InsertRegistration,
@@ -20,6 +20,7 @@ import {
   type EventManagerAssignment, type InsertEventManagerAssignment,
   type Printer, type InsertPrinter,
   type PrintLog, type InsertPrintLog,
+  type CheckInToken, type InsertCheckInToken,
   type EventWithStats, type RegistrationWithDetails,
   type SwagItemWithStats, type SwagAssignmentWithDetails,
 } from "@shared/schema";
@@ -186,6 +187,13 @@ export interface IStorage {
   createPrintLog(log: InsertPrintLog): Promise<PrintLog>;
   updatePrintLog(id: string, data: Partial<InsertPrintLog>): Promise<PrintLog | undefined>;
   recordBadgePrint(registrationId: string): Promise<Registration | undefined>;
+
+  // Check-in Tokens (for email QR check-in)
+  getCheckInTokenByRegistration(registrationId: string): Promise<CheckInToken | undefined>;
+  getCheckInTokenByToken(token: string): Promise<CheckInToken | undefined>;
+  createCheckInToken(token: InsertCheckInToken): Promise<CheckInToken>;
+  updateCheckInToken(id: string, data: Partial<InsertCheckInToken>): Promise<CheckInToken | undefined>;
+  markCheckInTokenUsed(id: string): Promise<CheckInToken | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1434,6 +1442,38 @@ export class DatabaseStorage implements IStorage {
         lastModified: new Date(),
       })
       .where(eq(registrations.id, registrationId))
+      .returning();
+    return updated || undefined;
+  }
+
+  // Check-in Tokens (for email QR check-in)
+  async getCheckInTokenByRegistration(registrationId: string): Promise<CheckInToken | undefined> {
+    const [token] = await db.select().from(checkInTokens).where(eq(checkInTokens.registrationId, registrationId));
+    return token || undefined;
+  }
+
+  async getCheckInTokenByToken(token: string): Promise<CheckInToken | undefined> {
+    const [result] = await db.select().from(checkInTokens).where(eq(checkInTokens.token, token));
+    return result || undefined;
+  }
+
+  async createCheckInToken(tokenData: InsertCheckInToken): Promise<CheckInToken> {
+    const [newToken] = await db.insert(checkInTokens).values(tokenData).returning();
+    return newToken;
+  }
+
+  async updateCheckInToken(id: string, data: Partial<InsertCheckInToken>): Promise<CheckInToken | undefined> {
+    const [updated] = await db.update(checkInTokens)
+      .set(data)
+      .where(eq(checkInTokens.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async markCheckInTokenUsed(id: string): Promise<CheckInToken | undefined> {
+    const [updated] = await db.update(checkInTokens)
+      .set({ usedAt: new Date() })
+      .where(eq(checkInTokens.id, id))
       .returning();
     return updated || undefined;
   }

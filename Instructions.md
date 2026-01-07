@@ -812,6 +812,121 @@ This document outlines the implementation plan for adding badge printing functio
 4. API updates registration status to "checked_in"
 5. UI refreshes to show checked-in state
 
+---
+
+## Email QR Code Check-In Flow (Added January 2026)
+
+### Overview
+
+A secure QR-based check-in flow where each registration receives a unique token-bearing QR code in their confirmation email. This enables fast on-site check-in by simply scanning the QR code.
+
+### QR Code Format Separation
+
+| Type | Format | Purpose |
+|------|--------|---------|
+| Badge QR | `REG:<registrationId>` | Printed on physical badges for identification |
+| Email QR | `CHECKIN:<eventId>:<registrationId>:<token>` | Sent in confirmation email for secure check-in |
+
+### Security Model
+
+- **Token Generation**: 64-character cryptographically secure tokens (`crypto.randomBytes(32).toString('hex')`)
+- **Event Scoping**: Tokens are bound to specific event-registration pairs
+- **Idempotent Check-in**: Duplicate scans return success with `alreadyCheckedIn: true`
+- **No Token Expiration** (optional field available for future use)
+
+### Database Schema
+
+```typescript
+// shared/schema.ts
+export const checkInTokens = pgTable("check_in_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  registrationId: varchar("registration_id").references(() => registrations.id).notNull(),
+  eventId: varchar("event_id").references(() => events.id).notNull(),
+  token: text("token").notNull(),
+  expiresAt: timestamp("expires_at"),  // Optional expiration
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("check_in_tokens_registration_id_idx").on(table.registrationId),
+  uniqueIndex("check_in_tokens_token_idx").on(table.token),
+]);
+```
+
+### API Endpoints
+
+#### POST `/api/checkin/scan`
+
+Validates and processes check-in QR codes from email.
+
+**Request:**
+```json
+{
+  "qrPayload": "CHECKIN:event-uuid:registration-uuid:64-char-token"
+}
+```
+
+**Success Response (200):**
+```json
+{
+  "success": true,
+  "registration": { /* full registration object */ },
+  "alreadyCheckedIn": false
+}
+```
+
+**Error Responses:**
+- `400` - Invalid QR format
+- `401` - Invalid check-in token
+- `404` - Registration or event not found
+- `403` - Event mismatch (registration not for specified event)
+
+### Email Integration
+
+The confirmation email includes:
+- `checkInQrPayload`: The full QR string `CHECKIN:<eventId>:<registrationId>:<token>`
+- `checkInQrImageUrl`: URL to QR image service (e.g., `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=...`)
+
+Iterable template can render the QR code using:
+```html
+<img src="{{checkInQrImageUrl}}" alt="Check-in QR Code" />
+```
+
+### Frontend Integration
+
+The `CheckInPage.tsx` automatically detects QR format:
+
+1. **CHECKIN: format** → Calls `POST /api/checkin/scan` with full payload
+2. **REG: format** → Legacy flow, looks up registration by ID
+3. **UUID format** → Legacy flow, direct registration lookup
+
+### Token Lifecycle
+
+1. **Generation**: Token created immediately after registration (`createCheckInToken`)
+2. **Storage**: One token per registration (unique index)
+3. **Validation**: Token matched against `check_in_tokens` table
+4. **Check-in**: Updates registration status to `checked_in`
+
+### Helper Functions
+
+```typescript
+// server/routes.ts
+function generateCheckInToken(): string {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+function buildCheckInQRPayload(eventId: string, registrationId: string, token: string): string {
+  return `CHECKIN:${eventId}:${registrationId}:${token}`;
+}
+
+function parseCheckInQRPayload(payload: string): { eventId: string; registrationId: string; token: string } | null {
+  if (!payload.startsWith('CHECKIN:')) return null;
+  const parts = payload.substring(8).split(':');
+  if (parts.length !== 3) return null;
+  return { eventId: parts[0], registrationId: parts[1], token: parts[2] };
+}
+```
+
+---
+
 ### Gap Analysis
 
 - **No printer infrastructure** in database schema
