@@ -3,11 +3,13 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Pencil, Trash2, Printer, Wifi, WifiOff, TestTube2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Printer, Wifi, WifiOff, TestTube2, FileCode, Star, Copy } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -45,7 +47,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "@/lib/i18n";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Printer as PrinterType, Event } from "@shared/schema";
+import type { Printer as PrinterType, Event, BadgeTemplate } from "@shared/schema";
 
 const printerFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -57,7 +59,42 @@ const printerFormSchema = z.object({
   port: z.coerce.number().min(1).max(65535).default(9100),
 });
 
+const templateFormSchema = z.object({
+  name: z.string().min(1, "Template name is required"),
+  description: z.string().optional(),
+  zplTemplate: z.string().min(10, "ZPL template is required"),
+});
+
 type PrinterFormData = z.infer<typeof printerFormSchema>;
+type TemplateFormData = z.infer<typeof templateFormSchema>;
+
+const DEFAULT_ZPL_TEMPLATE = `^XA
+
+^PW812
+^LL1218
+
+^FO0,80^A0N,60,60^FB812,1,0,C^FD{{eventName}}^FS
+
+^FO100,160^GB612,4,4^FS
+
+^FO0,250^A0N,100,100^FB812,1,0,C^FD{{firstName}}^FS
+
+^FO0,370^A0N,100,100^FB812,1,0,C^FD{{lastName}}^FS
+
+^FO306,520^BQN,2,6^FDQA,{{qrData}}^FS
+
+^FO0,820^A0N,35,35^FB812,1,0,C^FDID: {{unicityId}}^FS
+
+^XZ`;
+
+const AVAILABLE_PLACEHOLDERS = [
+  { key: "firstName", description: "Attendee first name" },
+  { key: "lastName", description: "Attendee last name" },
+  { key: "eventName", description: "Event name" },
+  { key: "unicityId", description: "Unicity ID" },
+  { key: "role", description: "Attendee role" },
+  { key: "qrData", description: "QR code data for check-in" },
+];
 
 export default function PrintersPage() {
   const { t } = useTranslation();
@@ -70,6 +107,13 @@ export default function PrintersPage() {
     localStorage.getItem("print-bridge-url") || ""
   );
   const [bridgeStatus, setBridgeStatus] = useState<"unknown" | "connected" | "disconnected">("unknown");
+  
+  // Badge Template state
+  const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<BadgeTemplate | null>(null);
+  const [deletingTemplate, setDeletingTemplate] = useState<BadgeTemplate | null>(null);
+  const [testPrintPrinterId, setTestPrintPrinterId] = useState<string>("");
+  const [testingTemplate, setTestingTemplate] = useState<BadgeTemplate | null>(null);
 
   const { data: events, isLoading: eventsLoading } = useQuery<Event[]>({
     queryKey: ["/api/events"],
@@ -77,6 +121,11 @@ export default function PrintersPage() {
 
   const { data: printers, isLoading: printersLoading, refetch: refetchPrinters } = useQuery<PrinterType[]>({
     queryKey: [`/api/events/${selectedEventId}/printers`],
+    enabled: !!selectedEventId,
+  });
+
+  const { data: templates, isLoading: templatesLoading } = useQuery<BadgeTemplate[]>({
+    queryKey: ["/api/events", selectedEventId, "badge-templates"],
     enabled: !!selectedEventId,
   });
 
@@ -154,6 +203,139 @@ export default function PrintersPage() {
       });
     },
   });
+
+  // Badge Template form and mutations
+  const templateForm = useForm<TemplateFormData>({
+    resolver: zodResolver(templateFormSchema),
+    defaultValues: {
+      name: "",
+      description: "",
+      zplTemplate: DEFAULT_ZPL_TEMPLATE,
+    },
+  });
+
+  const createTemplateMutation = useMutation({
+    mutationFn: async (data: TemplateFormData) => {
+      return apiRequest("POST", `/api/events/${selectedEventId}/badge-templates`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events", selectedEventId, "badge-templates"] });
+      setIsTemplateDialogOpen(false);
+      templateForm.reset();
+      toast({
+        title: "Template created",
+        description: "The badge template has been created successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to create template",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateTemplateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<TemplateFormData> }) => {
+      return apiRequest("PATCH", `/api/badge-templates/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events", selectedEventId, "badge-templates"] });
+      setEditingTemplate(null);
+      templateForm.reset();
+      toast({
+        title: "Template updated",
+        description: "The badge template has been updated successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to update template",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteTemplateMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest("DELETE", `/api/badge-templates/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events", selectedEventId, "badge-templates"] });
+      setDeletingTemplate(null);
+      toast({
+        title: "Template deleted",
+        description: "The badge template has been removed.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to delete template",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const setDefaultTemplateMutation = useMutation({
+    mutationFn: async (templateId: string) => {
+      return apiRequest("POST", `/api/events/${selectedEventId}/badge-templates/${templateId}/set-default`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events", selectedEventId, "badge-templates"] });
+      toast({
+        title: "Default template set",
+        description: "This template will be used for badge printing.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to set default",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const testPrintMutation = useMutation({
+    mutationFn: async ({ templateId, printerId }: { templateId: string; printerId: string }) => {
+      return apiRequest("POST", `/api/badge-templates/${templateId}/test-print`, { printerId });
+    },
+    onSuccess: () => {
+      setTestingTemplate(null);
+      setTestPrintPrinterId("");
+      toast({
+        title: "Test print sent",
+        description: "A test badge has been sent to the printer.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Test print failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleTemplateSubmit = (data: TemplateFormData) => {
+    if (editingTemplate) {
+      updateTemplateMutation.mutate({ id: editingTemplate.id, data });
+    } else {
+      createTemplateMutation.mutate(data);
+    }
+  };
+
+  const handleEditTemplate = (template: BadgeTemplate) => {
+    setEditingTemplate(template);
+    templateForm.reset({
+      name: template.name,
+      description: template.description || "",
+      zplTemplate: template.zplTemplate,
+    });
+  };
 
   const handleSubmit = (data: PrinterFormData) => {
     if (editingPrinter) {
@@ -423,6 +605,146 @@ export default function PrintersPage() {
         </CardContent>
       </Card>
 
+      {selectedEventId && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <FileCode className="h-5 w-5" />
+                  Badge Templates
+                </CardTitle>
+                <CardDescription>
+                  Customize badge layout using ZPL (Zebra Programming Language)
+                </CardDescription>
+              </div>
+              <Button 
+                onClick={() => {
+                  templateForm.reset({ name: "", description: "", zplTemplate: DEFAULT_ZPL_TEMPLATE });
+                  setIsTemplateDialogOpen(true);
+                }} 
+                data-testid="button-add-template"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Template
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {templates && templates.length > 0 && (
+              <div className="border rounded-md">
+                <div className="grid grid-cols-[1fr_2fr_auto_auto] gap-4 p-3 border-b bg-muted/50 text-sm font-medium">
+                  <div>Name</div>
+                  <div>Description</div>
+                  <div>Status</div>
+                  <div>Actions</div>
+                </div>
+                {templates.map((template) => (
+                  <div
+                    key={template.id}
+                    className="grid grid-cols-[1fr_2fr_auto_auto] gap-4 p-3 border-b last:border-b-0 items-center"
+                    data-testid={`row-template-${template.id}`}
+                  >
+                    <div className="font-medium flex items-center gap-2">
+                      {template.name}
+                      {!template.eventId && (
+                        <Badge variant="outline" className="text-xs">Global</Badge>
+                      )}
+                    </div>
+                    <div className="text-muted-foreground">{template.description || "—"}</div>
+                    <div>
+                      {template.isDefault ? (
+                        <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                          <Star className="h-3 w-3 mr-1" />
+                          Default
+                        </Badge>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setDefaultTemplateMutation.mutate(template.id)}
+                          disabled={setDefaultTemplateMutation.isPending}
+                          data-testid={`button-set-default-${template.id}`}
+                        >
+                          Set Default
+                        </Button>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => setTestingTemplate(template)}
+                        title="Test Print"
+                        data-testid={`button-test-template-${template.id}`}
+                      >
+                        <TestTube2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => handleEditTemplate(template)}
+                        data-testid={`button-edit-template-${template.id}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => {
+                          templateForm.reset({
+                            name: `${template.name} (Copy)`,
+                            description: template.description || "",
+                            zplTemplate: template.zplTemplate,
+                          });
+                          setIsTemplateDialogOpen(true);
+                        }}
+                        title="Duplicate"
+                        data-testid={`button-copy-template-${template.id}`}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                      {template.eventId && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => setDeletingTemplate(template)}
+                          data-testid={`button-delete-template-${template.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {templates && templates.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                No badge templates configured. The default layout will be used.
+                <br />
+                Click "Add Template" to customize badge appearance.
+              </div>
+            )}
+
+            <div className="p-4 bg-muted/50 rounded-md">
+              <h4 className="font-medium mb-2">Available Placeholders</h4>
+              <div className="flex flex-wrap gap-2">
+                {AVAILABLE_PLACEHOLDERS.map((ph) => (
+                  <Badge key={ph.key} variant="secondary" className="font-mono">
+                    {`{{${ph.key}}}`}
+                  </Badge>
+                ))}
+              </div>
+              <p className="text-sm text-muted-foreground mt-2">
+                Use these placeholders in your ZPL template. They will be replaced with actual attendee data when printing.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Dialog
         open={isAddDialogOpen || !!editingPrinter}
         onOpenChange={(open) => {
@@ -576,6 +898,201 @@ export default function PrintersPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog
+        open={isTemplateDialogOpen || !!editingTemplate}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsTemplateDialogOpen(false);
+            setEditingTemplate(null);
+            templateForm.reset();
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {editingTemplate ? "Edit Badge Template" : "Create Badge Template"}
+            </DialogTitle>
+            <DialogDescription>
+              {editingTemplate
+                ? "Update the ZPL template for badge printing."
+                : "Create a new ZPL template for badge printing. Use placeholders like {{firstName}} to insert attendee data."}
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...templateForm}>
+            <form onSubmit={templateForm.handleSubmit(handleTemplateSubmit)} className="space-y-4">
+              <FormField
+                control={templateForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Template Name</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Standard Badge"
+                        {...field}
+                        data-testid="input-template-name"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={templateForm.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description (optional)</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Standard 4x6 badge layout"
+                        {...field}
+                        data-testid="input-template-description"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={templateForm.control}
+                name="zplTemplate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>ZPL Template</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="^XA ... ^XZ"
+                        className="font-mono text-sm min-h-[300px]"
+                        {...field}
+                        data-testid="input-template-zpl"
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Enter raw ZPL code. Available placeholders: {AVAILABLE_PLACEHOLDERS.map(p => `{{${p.key}}}`).join(", ")}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setIsTemplateDialogOpen(false);
+                    setEditingTemplate(null);
+                    templateForm.reset();
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={createTemplateMutation.isPending || updateTemplateMutation.isPending}
+                  data-testid="button-save-template"
+                >
+                  {createTemplateMutation.isPending || updateTemplateMutation.isPending
+                    ? "Saving..."
+                    : editingTemplate
+                    ? "Update"
+                    : "Create Template"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={!!deletingTemplate}
+        onOpenChange={(open) => !open && setDeletingTemplate(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Template</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{deletingTemplate?.name}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deletingTemplate && deleteTemplateMutation.mutate(deletingTemplate.id)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete-template"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog
+        open={!!testingTemplate}
+        onOpenChange={(open) => {
+          if (!open) {
+            setTestingTemplate(null);
+            setTestPrintPrinterId("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Test Print Template</DialogTitle>
+            <DialogDescription>
+              Send a test print of "{testingTemplate?.name}" with sample data.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Select Printer</label>
+              <Select
+                value={testPrintPrinterId}
+                onValueChange={setTestPrintPrinterId}
+              >
+                <SelectTrigger data-testid="select-test-printer">
+                  <SelectValue placeholder="Choose a printer" />
+                </SelectTrigger>
+                <SelectContent>
+                  {printers?.map((printer) => (
+                    <SelectItem key={printer.id} value={printer.id}>
+                      {printer.name} ({printer.ipAddress})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setTestingTemplate(null);
+                setTestPrintPrinterId("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (testingTemplate && testPrintPrinterId) {
+                  testPrintMutation.mutate({
+                    templateId: testingTemplate.id,
+                    printerId: testPrintPrinterId,
+                  });
+                }
+              }}
+              disabled={!testPrintPrinterId || testPrintMutation.isPending}
+              data-testid="button-send-test-print"
+            >
+              {testPrintMutation.isPending ? "Sending..." : "Send Test Print"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
