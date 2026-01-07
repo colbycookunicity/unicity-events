@@ -89,7 +89,10 @@ function sendToPrinter(ip, port, zpl) {
     client.setTimeout(SOCKET_TIMEOUT);
 
     client.connect(port, ip, () => {
-      client.write(zpl, 'utf8', (err) => {
+      // Send ZPL with newline terminator as raw buffer
+      const buffer = Buffer.from(zpl + '\n', 'utf8');
+      
+      client.write(buffer, (err) => {
         if (err) {
           if (!resolved) {
             resolved = true;
@@ -97,14 +100,26 @@ function sendToPrinter(ip, port, zpl) {
             reject(new Error(`Failed to write to printer: ${err.message}`));
           }
         } else {
-          // Give printer time to receive data before closing
+          // Wait for data to be flushed to the network
+          client.once('drain', () => {
+            // Give printer time to receive and process data before closing
+            setTimeout(() => {
+              if (!resolved) {
+                resolved = true;
+                client.end();
+                resolve();
+              }
+            }, 500);
+          });
+          
+          // If write buffer was empty, drain won't fire - use timeout fallback
           setTimeout(() => {
             if (!resolved) {
               resolved = true;
               client.end();
               resolve();
             }
-          }, 100);
+          }, 500);
         }
       });
     });
