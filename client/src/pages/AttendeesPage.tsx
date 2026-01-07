@@ -1548,7 +1548,7 @@ export default function AttendeesPage() {
           <table className="w-full text-sm">
             <thead className="bg-muted/50 border-b">
               <tr>
-                <th className="px-4 py-3 w-10 md:sticky md:left-0 md:z-20 bg-muted/50">
+                <th className="px-4 py-3 w-10">
                   <Checkbox 
                     checked={isAllSelected}
                     onCheckedChange={toggleSelectAll}
@@ -1557,12 +1557,10 @@ export default function AttendeesPage() {
                     className={isSomeSelected ? "data-[state=checked]:bg-primary/50" : ""}
                   />
                 </th>
-                {visibleColumnList.map((col, index) => (
+                {visibleColumnList.map((col) => (
                   <th 
                     key={col.key} 
-                    className={`px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap ${
-                      col.key === "name" ? "md:sticky md:left-10 md:z-20 bg-muted/50" : ""
-                    }`}
+                    className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap"
                   >
                     {col.key !== "actions" ? (
                       <SortableHeader columnKey={col.key}>{col.label}</SortableHeader>
@@ -1602,7 +1600,7 @@ export default function AttendeesPage() {
                     data-testid={`row-attendee-${person.id}`}
                     onClick={() => handleRowClick(person)}
                   >
-                    <td className="px-4 py-3 w-10 md:sticky md:left-0 md:z-10 bg-background" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-4 py-3 w-10" onClick={(e) => e.stopPropagation()}>
                       <Checkbox
                         checked={selectedPeople.has(person.id)}
                         onCheckedChange={() => toggleSelectPerson(person.id)}
@@ -1613,9 +1611,7 @@ export default function AttendeesPage() {
                     {visibleColumnList.map((col) => (
                       <td 
                         key={col.key} 
-                        className={`px-4 py-3 ${
-                          col.key === "name" ? "md:sticky md:left-10 md:z-10 bg-background" : ""
-                        }`}
+                        className="px-4 py-3"
                       >
                         {renderCell(person, col.key)}
                       </td>
