@@ -752,9 +752,23 @@ export default function RegistrationPage() {
         });
       }
     } catch (error: any) {
+      // Parse error message - it may be in format "400: {\"error\":\"...\"}
+      let errorMessage = language === "es" ? "Por favor verifica tu código e intenta de nuevo" : "Please check your code and try again";
+      if (error.message) {
+        try {
+          // Try to extract JSON from error message like "400: {...}"
+          const jsonMatch = error.message.match(/\{.*\}/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            errorMessage = parsed.error || errorMessage;
+          }
+        } catch {
+          // If parsing fails, use default message
+        }
+      }
       toast({
-        title: language === "es" ? "C\u00f3digo inv\u00e1lido" : "Invalid Code",
-        description: error.message || "Please check your code and try again",
+        title: language === "es" ? "Código inválido" : "Invalid Code",
+        description: errorMessage,
         variant: "destructive",
       });
       setOtpCode("");
@@ -1255,9 +1269,22 @@ export default function RegistrationPage() {
         registerMutation.mutate(pendingSubmissionData);
       }
     } catch (error: any) {
+      // Parse error message - it may be in format "400: {\"error\":\"...\"}
+      let errorMessage = language === "es" ? "Por favor verifica tu código e intenta de nuevo" : "Please check your code and try again";
+      if (error.message) {
+        try {
+          const jsonMatch = error.message.match(/\{.*\}/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            errorMessage = parsed.error || errorMessage;
+          }
+        } catch {
+          // If parsing fails, use default message
+        }
+      }
       toast({
         title: language === "es" ? "Código inválido" : "Invalid Code",
-        description: error.message || "Please check your code and try again",
+        description: errorMessage,
         variant: "destructive",
       });
       setOtpCode("");
