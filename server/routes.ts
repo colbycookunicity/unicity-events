@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertEventSchema, insertRegistrationSchema, insertGuestSchema, insertFlightSchema, insertReimbursementSchema, insertSwagItemSchema, insertSwagAssignmentSchema, insertQualifiedRegistrantSchema, insertUserSchema, insertPrinterSchema, insertPrintLogSchema, userRoleEnum, deriveRegistrationFlags, deriveRegistrationMode, type RegistrationMode, generateCheckInToken, parseCheckInQRPayload, buildCheckInQRPayload } from "@shared/schema";
+import { insertEventSchema, insertRegistrationSchema, insertGuestSchema, insertFlightSchema, insertReimbursementSchema, insertSwagItemSchema, insertSwagAssignmentSchema, insertQualifiedRegistrantSchema, insertUserSchema, insertPrinterSchema, insertPrintLogSchema, insertBadgeTemplateSchema, userRoleEnum, deriveRegistrationFlags, deriveRegistrationMode, type RegistrationMode, generateCheckInToken, parseCheckInQRPayload, buildCheckInQRPayload } from "@shared/schema";
 import { z } from "zod";
 import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
@@ -4366,7 +4366,7 @@ export async function registerRoutes(
   // Forward print job to print bridge (proxy endpoint)
   app.post("/api/print-bridge/print", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
     try {
-      const { registrationId, printerId, guestId } = req.body;
+      const { registrationId, printerId, guestId, templateId } = req.body;
 
       if (!registrationId || !printerId) {
         return res.status(400).json({ error: "Missing registrationId or printerId" });
@@ -4387,15 +4387,27 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Printer not found" });
       }
 
+      // Build QR data for the badge
+      const qrData = `REG:${registration.id}:${event.id}:attendee`;
+
       const badgeData = {
         firstName: registration.firstName,
         lastName: registration.lastName,
         eventName: event.name,
         registrationId: registration.id,
         eventId: event.id,
-        unicityId: registration.unicityId || undefined,
-        role: undefined,
+        unicityId: registration.unicityId || "",
+        role: "",
+        qrData,
       };
+
+      // Check if we should use a custom template
+      let badgeTemplate = null;
+      if (templateId) {
+        badgeTemplate = await storage.getBadgeTemplate(templateId);
+      } else {
+        badgeTemplate = await storage.getDefaultBadgeTemplate(registration.eventId);
+      }
 
       const printLog = await storage.createPrintLog({
         registrationId,
@@ -4411,21 +4423,52 @@ export async function registerRoutes(
       try {
         await storage.updatePrintLog(printLog.id, { status: "sent", sentAt: new Date() });
 
-        const bridgeResponse = await fetch(`${bridgeUrl}/print`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            printer: {
-              id: printer.id,
-              name: printer.name,
-              ipAddress: printer.ipAddress,
-              port: printer.port || 9100,
-            },
-            badge: badgeData,
-          }),
-        });
+        let bridgeResponse;
+        let bridgeResult;
 
-        const bridgeResult = await bridgeResponse.json();
+        if (badgeTemplate) {
+          // Use custom template with /print-raw endpoint
+          let zpl = badgeTemplate.zplTemplate;
+          
+          // Interpolate all placeholders
+          Object.entries(badgeData).forEach(([key, value]) => {
+            zpl = zpl.replace(new RegExp(`{{${key}}}`, 'g'), String(value || ""));
+          });
+
+          // Save ZPL snapshot for debugging
+          await storage.updatePrintLog(printLog.id, { zplSnapshot: zpl });
+
+          bridgeResponse = await fetch(`${bridgeUrl}/print-raw`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              printer: {
+                id: printer.id,
+                name: printer.name,
+                ipAddress: printer.ipAddress,
+                port: printer.port || 9100,
+              },
+              zpl,
+            }),
+          });
+        } else {
+          // Use default print bridge rendering (backward compatible)
+          bridgeResponse = await fetch(`${bridgeUrl}/print`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              printer: {
+                id: printer.id,
+                name: printer.name,
+                ipAddress: printer.ipAddress,
+                port: printer.port || 9100,
+              },
+              badge: badgeData,
+            }),
+          });
+        }
+
+        bridgeResult = await bridgeResponse.json();
 
         if (bridgeResponse.ok) {
           await storage.updatePrintLog(printLog.id, { 
@@ -4440,6 +4483,7 @@ export async function registerRoutes(
             success: true,
             jobId: bridgeResult.jobId,
             printLogId: printLog.id,
+            usedTemplate: badgeTemplate?.name || null,
           });
         } else {
           await storage.updatePrintLog(printLog.id, {
@@ -4515,6 +4559,199 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error updating print log:", error);
       res.status(500).json({ error: "Failed to update print log" });
+    }
+  });
+
+  // ==================== BADGE TEMPLATES ====================
+
+  // Get badge templates for an event (includes global templates)
+  app.get("/api/events/:eventId/badge-templates", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const templates = await storage.getBadgeTemplatesByEvent(req.params.eventId);
+      res.json(templates);
+    } catch (error) {
+      console.error("Error fetching badge templates:", error);
+      res.status(500).json({ error: "Failed to fetch badge templates" });
+    }
+  });
+
+  // Get a single badge template
+  app.get("/api/badge-templates/:id", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const template = await storage.getBadgeTemplate(req.params.id);
+      if (!template) {
+        return res.status(404).json({ error: "Badge template not found" });
+      }
+      res.json(template);
+    } catch (error) {
+      console.error("Error fetching badge template:", error);
+      res.status(500).json({ error: "Failed to fetch badge template" });
+    }
+  });
+
+  // Get default badge template for an event
+  app.get("/api/events/:eventId/badge-templates/default", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const template = await storage.getDefaultBadgeTemplate(req.params.eventId);
+      res.json(template || null);
+    } catch (error) {
+      console.error("Error fetching default badge template:", error);
+      res.status(500).json({ error: "Failed to fetch default badge template" });
+    }
+  });
+
+  // Create a badge template
+  app.post("/api/events/:eventId/badge-templates", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const parsed = insertBadgeTemplateSchema.safeParse({
+        ...req.body,
+        eventId: req.params.eventId,
+      });
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid badge template data", details: parsed.error.errors });
+      }
+      const template = await storage.createBadgeTemplate(parsed.data);
+      res.status(201).json(template);
+    } catch (error) {
+      console.error("Error creating badge template:", error);
+      res.status(500).json({ error: "Failed to create badge template" });
+    }
+  });
+
+  // Create a global badge template (no event association)
+  app.post("/api/badge-templates", authenticateToken, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const parsed = insertBadgeTemplateSchema.safeParse({
+        ...req.body,
+        eventId: null,
+      });
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid badge template data", details: parsed.error.errors });
+      }
+      const template = await storage.createBadgeTemplate(parsed.data);
+      res.status(201).json(template);
+    } catch (error) {
+      console.error("Error creating global badge template:", error);
+      res.status(500).json({ error: "Failed to create badge template" });
+    }
+  });
+
+  // Update a badge template
+  app.patch("/api/badge-templates/:id", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const template = await storage.updateBadgeTemplate(req.params.id, req.body);
+      if (!template) {
+        return res.status(404).json({ error: "Badge template not found" });
+      }
+      res.json(template);
+    } catch (error) {
+      console.error("Error updating badge template:", error);
+      res.status(500).json({ error: "Failed to update badge template" });
+    }
+  });
+
+  // Delete a badge template
+  app.delete("/api/badge-templates/:id", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const deleted = await storage.deleteBadgeTemplate(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Badge template not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting badge template:", error);
+      res.status(500).json({ error: "Failed to delete badge template" });
+    }
+  });
+
+  // Set default badge template for an event
+  app.post("/api/events/:eventId/badge-templates/:templateId/set-default", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      await storage.setDefaultBadgeTemplate(req.params.eventId, req.params.templateId);
+      const template = await storage.getBadgeTemplate(req.params.templateId);
+      res.json(template);
+    } catch (error) {
+      console.error("Error setting default badge template:", error);
+      res.status(500).json({ error: "Failed to set default badge template" });
+    }
+  });
+
+  // Test print badge template (sends sample data to printer)
+  app.post("/api/badge-templates/:id/test-print", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const { printerId } = req.body;
+      
+      if (!printerId) {
+        return res.status(400).json({ error: "Missing printerId" });
+      }
+
+      const template = await storage.getBadgeTemplate(req.params.id);
+      if (!template) {
+        return res.status(404).json({ error: "Badge template not found" });
+      }
+
+      const printer = await storage.getPrinter(printerId);
+      if (!printer) {
+        return res.status(404).json({ error: "Printer not found" });
+      }
+
+      // Use sample data for test print
+      const sampleData = {
+        firstName: "John",
+        lastName: "Doe",
+        eventName: "Sample Event",
+        unicityId: "12345678",
+        role: "Attendee",
+        qrData: "SAMPLE-QR-DATA",
+      };
+
+      // Interpolate template with sample data
+      let zpl = template.zplTemplate;
+      Object.entries(sampleData).forEach(([key, value]) => {
+        zpl = zpl.replace(new RegExp(`{{${key}}}`, 'g'), value);
+      });
+
+      const bridgeUrl = process.env.PRINT_BRIDGE_URL || "http://127.0.0.1:3100";
+
+      try {
+        const bridgeResponse = await fetch(`${bridgeUrl}/print-raw`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            printer: {
+              id: printer.id,
+              name: printer.name,
+              ipAddress: printer.ipAddress,
+              port: printer.port || 9100,
+            },
+            zpl,
+          }),
+        });
+
+        const bridgeResult = await bridgeResponse.json();
+
+        if (bridgeResponse.ok) {
+          await storage.updatePrinter(printerId, { status: "online" });
+          res.json({ success: true, jobId: bridgeResult.jobId });
+        } else {
+          await storage.updatePrinter(printerId, { status: "offline" });
+          res.status(500).json({
+            success: false,
+            error: bridgeResult.error || "Test print failed",
+            details: bridgeResult.details,
+          });
+        }
+      } catch (fetchError) {
+        const errorMsg = fetchError instanceof Error ? fetchError.message : "Bridge connection failed";
+        res.status(503).json({
+          success: false,
+          error: "Print bridge unavailable",
+          details: errorMsg,
+        });
+      }
+    } catch (error) {
+      console.error("Error sending test print:", error);
+      res.status(500).json({ error: "Failed to send test print" });
     }
   });
 

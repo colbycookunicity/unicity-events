@@ -268,6 +268,97 @@ app.get("/jobs/:jobId", (req: Request, res: Response) => {
   });
 });
 
+// Print raw ZPL directly (for custom templates)
+app.post("/print-raw", async (req: Request, res: Response) => {
+  const { printerId, printer: printerInfo, zpl } = req.body;
+
+  if (!zpl) {
+    return sendError(res, 400, "INVALID_REQUEST", "Missing required field: zpl");
+  }
+
+  let printer: Printer | undefined;
+
+  if (printerInfo) {
+    printer = {
+      id: printerInfo.id,
+      name: printerInfo.name,
+      ipAddress: printerInfo.ipAddress,
+      port: printerInfo.port || 9100,
+      status: "unknown",
+    };
+    const existingPrinter = getPrinter(printerInfo.id);
+    if (!existingPrinter) {
+      addPrinter(printer);
+    } else {
+      printer = existingPrinter;
+    }
+  } else if (printerId) {
+    printer = getPrinter(printerId);
+    if (!printer) {
+      return sendError(res, 404, "PRINTER_NOT_FOUND", `Printer ${printerId} not found`);
+    }
+  } else {
+    return sendError(res, 400, "INVALID_REQUEST", "Missing required field: printerId or printer");
+  }
+
+  const job: PrintJob = {
+    jobId: uuidv4(),
+    printerId: printer.id,
+    status: "pending",
+    badge: { firstName: "RAW", lastName: "ZPL", eventName: "Raw Print", registrationId: "raw" },
+    zpl,
+    retryCount: 0,
+  };
+
+  addJob(job);
+
+  console.log(`[Print-Raw] Job ${job.jobId} created for raw ZPL print`);
+
+  updateJob(job.jobId, { status: "sent", sentAt: new Date() });
+
+  const result = await sendToPrinter(printer, zpl);
+
+  if (result.success) {
+    updateJob(job.jobId, {
+      status: "success",
+      completedAt: new Date(),
+      retryCount: result.retryCount,
+    });
+    updatePrinter(printer.id, { status: "online", lastSeen: new Date() });
+
+    console.log(`[Print-Raw] Job ${job.jobId} completed successfully`);
+  } else {
+    updateJob(job.jobId, {
+      status: "failed",
+      completedAt: new Date(),
+      errorMessage: result.error,
+      retryCount: result.retryCount,
+    });
+    updatePrinter(printer.id, { status: "offline" });
+
+    console.log(`[Print-Raw] Job ${job.jobId} failed: ${result.error}`);
+  }
+
+  const updatedJob = getJob(job.jobId)!;
+  const response: PrintResponse = {
+    jobId: updatedJob.jobId,
+    status: updatedJob.status,
+    sentAt: updatedJob.sentAt?.toISOString(),
+  };
+
+  if (updatedJob.status === "failed") {
+    return sendError(
+      res,
+      500,
+      "PRINTER_OFFLINE",
+      "Print job failed",
+      updatedJob.errorMessage
+    );
+  }
+
+  res.json(response);
+});
+
 app.post("/printers/:printerId/test", async (req: Request, res: Response) => {
   const { printerId } = req.params;
   const printer = getPrinter(printerId);
@@ -324,6 +415,7 @@ app.listen(PORT, "0.0.0.0", () => {
 ║    POST /printers            - Register a printer          ║
 ║    DELETE /printers/:id      - Remove a printer            ║
 ║    POST /print               - Print a badge               ║
+║    POST /print-raw           - Print raw ZPL               ║
 ║    GET  /jobs/:id            - Get job status              ║
 ║    POST /printers/:id/test   - Send test print             ║
 ╚════════════════════════════════════════════════════════════╝
