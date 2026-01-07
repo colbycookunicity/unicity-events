@@ -1548,7 +1548,7 @@ export default function AttendeesPage() {
           <table className="w-full text-sm">
             <thead className="bg-muted/50 border-b">
               <tr>
-                <th className="px-4 py-3 w-10">
+                <th className="px-4 py-3 w-10 sticky left-0 z-20 bg-muted/50 after:absolute after:right-0 after:top-0 after:h-full after:w-px after:bg-border">
                   <Checkbox 
                     checked={isAllSelected}
                     onCheckedChange={toggleSelectAll}
@@ -1600,7 +1600,7 @@ export default function AttendeesPage() {
                     data-testid={`row-attendee-${person.id}`}
                     onClick={() => handleRowClick(person)}
                   >
-                    <td className="px-4 py-3 w-10" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-4 py-3 w-10 sticky left-0 z-10 bg-background after:absolute after:right-0 after:top-0 after:h-full after:w-px after:bg-border" onClick={(e) => e.stopPropagation()}>
                       <Checkbox
                         checked={selectedPeople.has(person.id)}
                         onCheckedChange={() => toggleSelectPerson(person.id)}
