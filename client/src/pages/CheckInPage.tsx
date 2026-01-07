@@ -676,101 +676,113 @@ export default function CheckInPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {filteredRegistrations?.map((reg) => (
-                <Card
-                  key={reg.id}
-                  className={reg.status === "checked_in" ? "border-green-200 dark:border-green-900" : ""}
-                  data-testid={`card-checkin-${reg.id}`}
-                >
-                  <CardHeader className="pb-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <CardTitle className="text-lg font-semibold truncate">
-                          {reg.firstName} {reg.lastName}
-                        </CardTitle>
-                        <CardDescription className="truncate">{reg.email}</CardDescription>
-                      </div>
-                      <StatusBadge status={reg.status} />
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
-                      {reg.unicityId && (
-                        <span className="flex items-center gap-1.5">
-                          <User className="h-4 w-4 shrink-0" />
-                          <span>{reg.unicityId}</span>
-                        </span>
-                      )}
-                      {reg.shirtSize && (
-                        <span className="flex items-center gap-1.5">
-                          <Shirt className="h-4 w-4 shrink-0" />
-                          <span>{reg.shirtSize}</span>
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <div className="flex items-center gap-1.5">
-                        <Package className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <StatusBadge status={reg.swagStatus || "pending"} type="swag" />
-                      </div>
-                      {reg.badgePrintCount && reg.badgePrintCount > 0 ? (
-                        <Badge variant="outline" className="text-xs">
-                          <Printer className="h-3 w-3 mr-1" />
-                          Printed {reg.badgePrintCount}x
-                        </Badge>
-                      ) : null}
-                    </div>
-
-                    <div className="pt-2 border-t space-y-2">
-                      {reg.status !== "checked_in" ? (
-                        <Button
-                          onClick={() => checkInMutation.mutate(reg.id)}
-                          disabled={checkInMutation.isPending}
-                          className="w-full"
-                          data-testid={`button-checkin-${reg.id}`}
-                        >
-                          <CheckCircle className="h-4 w-4 mr-2" />
-                          Check In
-                        </Button>
-                      ) : (
-                        <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400">
-                          <CheckCircle className="h-4 w-4 shrink-0" />
-                          <span>Checked in {reg.checkedInAt && `at ${format(new Date(reg.checkedInAt), "h:mm a")}`}</span>
-                        </div>
-                      )}
-
-                      {reg.swagStatus !== "picked_up" && (
-                        <Button
-                          variant="outline"
-                          onClick={() => markSwagMutation.mutate(reg.id)}
-                          disabled={markSwagMutation.isPending}
-                          className="w-full"
-                          data-testid={`button-swag-${reg.id}`}
-                        >
-                          <Package className="h-4 w-4 mr-2" />
-                          {t("markSwagPickedUp")}
-                        </Button>
-                      )}
-
-                      {reg.status === "checked_in" && selectedPrinter && (
-                        <Button
-                          variant="secondary"
-                          onClick={() => handlePrintBadge(reg)}
-                          disabled={printBadgeMutation.isPending}
-                          className="w-full"
-                          data-testid={`button-print-${reg.id}`}
-                        >
-                          <Printer className="h-4 w-4 mr-2" />
-                          {reg.badgePrintCount && reg.badgePrintCount > 0 ? "Reprint Badge" : "Print Badge"}
-                        </Button>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+            <Card>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/50">
+                      <th className="text-left px-4 py-3 font-medium">Name</th>
+                      <th className="text-left px-4 py-3 font-medium hidden md:table-cell">{t("email")}</th>
+                      <th className="text-left px-4 py-3 font-medium hidden lg:table-cell">ID</th>
+                      <th className="text-left px-4 py-3 font-medium">{t("status")}</th>
+                      <th className="text-left px-4 py-3 font-medium">Swag</th>
+                      <th className="text-right px-4 py-3 font-medium">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRegistrations?.map((reg) => (
+                      <tr
+                        key={reg.id}
+                        className={`border-b hover:bg-muted/50 transition-colors ${
+                          reg.status === "checked_in" ? "bg-green-50/50 dark:bg-green-950/20" : ""
+                        }`}
+                        data-testid={`row-checkin-${reg.id}`}
+                      >
+                        <td className="px-4 py-3">
+                          <div className="font-medium">
+                            {reg.firstName} {reg.lastName}
+                          </div>
+                          <div className="text-muted-foreground md:hidden text-xs truncate max-w-[180px]">
+                            {reg.email}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 hidden md:table-cell">
+                          <span className="text-muted-foreground">{reg.email}</span>
+                        </td>
+                        <td className="px-4 py-3 hidden lg:table-cell">
+                          <span className="text-muted-foreground">{reg.unicityId || "-"}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <StatusBadge status={reg.status} />
+                            {reg.status === "checked_in" && reg.checkedInAt && (
+                              <span className="text-xs text-muted-foreground hidden sm:inline">
+                                {format(new Date(reg.checkedInAt), "h:mm a")}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <StatusBadge status={reg.swagStatus || "pending"} type="swag" />
+                            {reg.badgePrintCount && reg.badgePrintCount > 0 && (
+                              <Badge variant="outline" className="text-xs hidden sm:flex">
+                                <Printer className="h-3 w-3 mr-1" />
+                                {reg.badgePrintCount}x
+                              </Badge>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-2">
+                            {reg.status !== "checked_in" ? (
+                              <Button
+                                size="sm"
+                                onClick={() => checkInMutation.mutate(reg.id)}
+                                disabled={checkInMutation.isPending}
+                                data-testid={`button-checkin-${reg.id}`}
+                              >
+                                <CheckCircle className="h-4 w-4 mr-1" />
+                                <span className="hidden sm:inline">Check In</span>
+                              </Button>
+                            ) : (
+                              <>
+                                {reg.swagStatus !== "picked_up" && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => markSwagMutation.mutate(reg.id)}
+                                    disabled={markSwagMutation.isPending}
+                                    data-testid={`button-swag-${reg.id}`}
+                                  >
+                                    <Package className="h-4 w-4 mr-1" />
+                                    <span className="hidden sm:inline">Swag</span>
+                                  </Button>
+                                )}
+                                {selectedPrinter && (
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    onClick={() => handlePrintBadge(reg)}
+                                    disabled={printBadgeMutation.isPending}
+                                    data-testid={`button-print-${reg.id}`}
+                                  >
+                                    <Printer className="h-4 w-4 mr-1" />
+                                    <span className="hidden sm:inline">
+                                      {reg.badgePrintCount && reg.badgePrintCount > 0 ? "Reprint" : "Print"}
+                                    </span>
+                                  </Button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
           )}
         </>
       )}
