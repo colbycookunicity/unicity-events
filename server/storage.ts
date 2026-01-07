@@ -1,7 +1,7 @@
 import {
   users, events, registrations, guests, flights, reimbursements, otpSessions, authSessions, attendeeSessions,
   swagItems, swagAssignments, qualifiedRegistrants, eventPages, eventPageSections, guestAllowanceRules,
-  formTemplates, eventManagerAssignments, printers, printLogs, checkInTokens,
+  formTemplates, eventManagerAssignments, printers, printLogs, checkInTokens, badgeTemplates,
   type User, type InsertUser,
   type Event, type InsertEvent,
   type Registration, type InsertRegistration,
@@ -21,6 +21,7 @@ import {
   type Printer, type InsertPrinter,
   type PrintLog, type InsertPrintLog,
   type CheckInToken, type InsertCheckInToken,
+  type BadgeTemplate, type InsertBadgeTemplate,
   type EventWithStats, type RegistrationWithDetails,
   type SwagItemWithStats, type SwagAssignmentWithDetails,
 } from "@shared/schema";
@@ -195,6 +196,15 @@ export interface IStorage {
   createCheckInToken(token: InsertCheckInToken): Promise<CheckInToken>;
   updateCheckInToken(id: string, data: Partial<InsertCheckInToken>): Promise<CheckInToken | undefined>;
   markCheckInTokenUsed(id: string): Promise<CheckInToken | undefined>;
+
+  // Badge Templates
+  getBadgeTemplatesByEvent(eventId: string): Promise<BadgeTemplate[]>;
+  getBadgeTemplate(id: string): Promise<BadgeTemplate | undefined>;
+  getDefaultBadgeTemplate(eventId: string): Promise<BadgeTemplate | undefined>;
+  createBadgeTemplate(template: InsertBadgeTemplate): Promise<BadgeTemplate>;
+  updateBadgeTemplate(id: string, data: Partial<InsertBadgeTemplate>): Promise<BadgeTemplate | undefined>;
+  deleteBadgeTemplate(id: string): Promise<boolean>;
+  setDefaultBadgeTemplate(eventId: string, templateId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1491,6 +1501,68 @@ export class DatabaseStorage implements IStorage {
       .where(eq(checkInTokens.id, id))
       .returning();
     return updated || undefined;
+  }
+
+  // Badge Templates
+  async getBadgeTemplatesByEvent(eventId: string): Promise<BadgeTemplate[]> {
+    // Get templates for this event plus global templates (eventId = null)
+    return db.select().from(badgeTemplates)
+      .where(or(eq(badgeTemplates.eventId, eventId), sql`${badgeTemplates.eventId} IS NULL`))
+      .orderBy(desc(badgeTemplates.isDefault), desc(badgeTemplates.createdAt));
+  }
+
+  async getBadgeTemplate(id: string): Promise<BadgeTemplate | undefined> {
+    const [template] = await db.select().from(badgeTemplates).where(eq(badgeTemplates.id, id));
+    return template || undefined;
+  }
+
+  async getDefaultBadgeTemplate(eventId: string): Promise<BadgeTemplate | undefined> {
+    // First try to find event-specific default
+    const [eventTemplate] = await db.select().from(badgeTemplates)
+      .where(and(eq(badgeTemplates.eventId, eventId), eq(badgeTemplates.isDefault, true)));
+    if (eventTemplate) return eventTemplate;
+
+    // Then try to find global default
+    const [globalTemplate] = await db.select().from(badgeTemplates)
+      .where(and(sql`${badgeTemplates.eventId} IS NULL`, eq(badgeTemplates.isDefault, true)));
+    if (globalTemplate) return globalTemplate;
+
+    // Finally, return any template for the event or global
+    const [anyTemplate] = await db.select().from(badgeTemplates)
+      .where(or(eq(badgeTemplates.eventId, eventId), sql`${badgeTemplates.eventId} IS NULL`))
+      .orderBy(desc(badgeTemplates.createdAt))
+      .limit(1);
+    return anyTemplate || undefined;
+  }
+
+  async createBadgeTemplate(template: InsertBadgeTemplate): Promise<BadgeTemplate> {
+    const [newTemplate] = await db.insert(badgeTemplates).values(template).returning();
+    return newTemplate;
+  }
+
+  async updateBadgeTemplate(id: string, data: Partial<InsertBadgeTemplate>): Promise<BadgeTemplate | undefined> {
+    const [updated] = await db.update(badgeTemplates)
+      .set({ ...data, lastModified: new Date() })
+      .where(eq(badgeTemplates.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteBadgeTemplate(id: string): Promise<boolean> {
+    const result = await db.delete(badgeTemplates).where(eq(badgeTemplates.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async setDefaultBadgeTemplate(eventId: string, templateId: string): Promise<void> {
+    // First, unset all defaults for this event
+    await db.update(badgeTemplates)
+      .set({ isDefault: false, lastModified: new Date() })
+      .where(eq(badgeTemplates.eventId, eventId));
+    
+    // Then set the specified template as default
+    await db.update(badgeTemplates)
+      .set({ isDefault: true, lastModified: new Date() })
+      .where(eq(badgeTemplates.id, templateId));
   }
 }
 

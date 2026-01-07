@@ -916,6 +916,40 @@ export const insertPrintLogSchema = createInsertSchema(printLogs).omit({
 export type InsertPrintLog = z.infer<typeof insertPrintLogSchema>;
 export type PrintLog = typeof printLogs.$inferSelect;
 
+// Badge Templates table - customizable ZPL templates for badge printing
+export const badgeTemplates = pgTable("badge_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  eventId: varchar("event_id").references(() => events.id), // null = global template
+  name: text("name").notNull(),
+  description: text("description"),
+  zplTemplate: text("zpl_template").notNull(), // Raw ZPL with {{placeholders}}
+  isDefault: boolean("is_default").default(false), // Default template for the event
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  lastModified: timestamp("last_modified").defaultNow().notNull(),
+});
+
+export const insertBadgeTemplateSchema = createInsertSchema(badgeTemplates).omit({
+  id: true,
+  createdAt: true,
+  lastModified: true,
+});
+export type InsertBadgeTemplate = z.infer<typeof insertBadgeTemplateSchema>;
+export type BadgeTemplate = typeof badgeTemplates.$inferSelect;
+
+// Default ZPL template for badge printing (matches current hardcoded template)
+export const DEFAULT_BADGE_ZPL_TEMPLATE = `^XA
+^PW812
+^LL1218
+
+^FO0,80^A0N,60,60^FB812,1,0,C^FD{{eventName}}^FS
+^FO100,160^GB612,4,4^FS
+^FO0,250^A0N,100,100^FB812,1,0,C^FD{{firstName}}^FS
+^FO0,370^A0N,100,100^FB812,1,0,C^FD{{lastName}}^FS
+^FO306,520^BQN,2,6^FDQA,{{qrData}}^FS
+^FO0,820^A0N,35,35^FB812,1,0,C^FDID: {{unicityId}}^FS
+
+^XZ`;
+
 // Check-in Tokens table - Secure tokens for email QR check-in
 // Each registration gets a unique, non-guessable token for QR scanning
 // QR payload format: CHECKIN:<eventId>:<registrationId>:<token>

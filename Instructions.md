@@ -1,3 +1,127 @@
+# Badge Templates Implementation
+
+## Overview
+
+Add editable badge templates to the Events Admin so admins can control font size and layout of printed badges using raw ZPL (Zebra Programming Language).
+
+## Current System Analysis
+
+### ZPL Generation Location
+- **File**: `print-bridge/src/zpl.ts`
+- **Function**: `renderBadgeZPL(badge: BadgeData)` - Currently hardcoded ZPL template
+- **Placeholders Used**:
+  - `${safeFirstName}` - Attendee first name (uppercase)
+  - `${safeLastName}` - Attendee last name (uppercase)
+  - `${safeEventName}` - Event name (uppercase)
+  - `${safeUnicityId}` - Unicity ID (optional)
+  - `${safeRole}` - Role badge (optional, with background box)
+  - `${qrData}` - QR code payload (`REG:registrationId:eventId:attendee`)
+
+### Print Flow
+1. Check-in page triggers print via `POST /api/print-bridge/print`
+2. Server prepares `badgeData` and forwards to Print Bridge
+3. Print Bridge calls `renderBadgeZPL(badge)` to generate ZPL
+4. ZPL sent to printer via TCP port 9100
+
+### Admin UI Location
+- **File**: `client/src/pages/PrintersPage.tsx` - Manages printers per event
+
+## Implementation Steps
+
+### Step 1: Add `badge_templates` Table
+- Create table in `shared/schema.ts`:
+  - `id` (varchar, PK, auto-generated UUID)
+  - `eventId` (varchar, FK to events, nullable for global templates)
+  - `name` (text, required) - Display name
+  - `description` (text, optional)
+  - `zplTemplate` (text, required) - Raw ZPL with placeholders
+  - `isDefault` (boolean) - Default template for event
+  - `createdAt`, `lastModified` (timestamps)
+- Placeholders format: `{{firstName}}`, `{{lastName}}`, `{{eventName}}`, `{{unicityId}}`, `{{role}}`, `{{qrData}}`
+
+### Step 2: Add Storage Methods
+- `getBadgeTemplatesByEvent(eventId: string)` - Get templates for event + global
+- `getBadgeTemplate(id: string)` - Get single template
+- `createBadgeTemplate(template)` - Create new template
+- `updateBadgeTemplate(id, updates)` - Update template
+- `deleteBadgeTemplate(id)` - Delete template
+- `getDefaultBadgeTemplate(eventId: string)` - Get default or fallback
+
+### Step 3: Add API Routes
+- `GET /api/events/:eventId/badge-templates` - List templates
+- `GET /api/badge-templates/:id` - Get single template
+- `POST /api/events/:eventId/badge-templates` - Create template
+- `PATCH /api/badge-templates/:id` - Update template
+- `DELETE /api/badge-templates/:id` - Delete template
+- `POST /api/badge-templates/:id/test-print` - Test print with sample data
+
+### Step 4: Update Print Bridge
+- Modify `POST /print` endpoint to accept optional `zplTemplate` field
+- If `zplTemplate` provided, use template interpolation instead of `renderBadgeZPL`
+- Add `renderTemplateZPL(template, badge)` function for placeholder substitution
+- Maintain backward compatibility: if no template, use existing `renderBadgeZPL`
+
+### Step 5: Update Server Print Endpoint
+- Modify `POST /api/print-bridge/print` to:
+  1. Look up event's default badge template (or specific template if provided)
+  2. If template exists, include `zplTemplate` in bridge request
+  3. If no template, bridge uses hardcoded fallback (backward compatible)
+
+### Step 6: Add Badge Templates Admin UI
+- Add "Badge Templates" section to PrintersPage.tsx (or create new page)
+- Components:
+  - Template list with name, description, default status
+  - Add/Edit dialog with:
+    - Name input
+    - Description textarea
+    - ZPL template textarea (monospace font, syntax hints)
+    - Set as default checkbox
+  - Delete confirmation
+  - Test Print button (uses sample data)
+- Show placeholder reference panel
+
+### Step 7: Test & Validate
+- Verify new templates flow through existing Print Bridge
+- Ensure backward compatibility (events without templates use default)
+- Test print from admin UI
+
+## Placeholder Reference
+
+Templates use `{{placeholder}}` syntax:
+
+| Placeholder | Description | Example |
+|------------|-------------|---------|
+| `{{firstName}}` | First name (uppercase) | JOHN |
+| `{{lastName}}` | Last name (uppercase) | DOE |
+| `{{eventName}}` | Event name (uppercase) | SUCCESS SUMMIT 2025 |
+| `{{unicityId}}` | Unicity ID | 123456789 |
+| `{{role}}` | Role/badge type | VIP |
+| `{{qrData}}` | QR code payload | REG:uuid:event:attendee |
+
+## Default Template (for migration)
+
+```zpl
+^XA
+^PW812
+^LL1218
+
+^FO0,80^A0N,60,60^FB812,1,0,C^FD{{eventName}}^FS
+^FO100,160^GB612,4,4^FS
+^FO0,250^A0N,100,100^FB812,1,0,C^FD{{firstName}}^FS
+^FO0,370^A0N,100,100^FB812,1,0,C^FD{{lastName}}^FS
+^FO306,520^BQN,2,6^FDQA,{{qrData}}^FS
+^FO0,820^A0N,35,35^FB812,1,0,C^FDID: {{unicityId}}^FS
+
+^XZ
+```
+
+## Constraints
+- No canvas/visual editor - raw ZPL only
+- Maintain backward compatibility with existing printing
+- All output flows through existing Print Bridge
+
+---
+
 # Admin Authentication Audit & Fix Plan
 
 ## Executive Summary
