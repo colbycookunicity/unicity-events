@@ -161,6 +161,13 @@ export const events = pgTable("events", {
   requiresVerification: boolean("requires_verification").notNull().default(true),
   // Default language for public pages (en or es) - only affects initial page load
   defaultLanguage: text("default_language").notNull().default("en"),
+  // Thank you page customization (post-registration)
+  thankYouHeadline: text("thank_you_headline"),
+  thankYouHeadlineEs: text("thank_you_headline_es"),
+  thankYouMessage: text("thank_you_message"),
+  thankYouMessageEs: text("thank_you_message_es"),
+  thankYouQrInstructions: text("thank_you_qr_instructions"),
+  thankYouQrInstructionsEs: text("thank_you_qr_instructions_es"),
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   lastModified: timestamp("last_modified").defaultNow().notNull(),

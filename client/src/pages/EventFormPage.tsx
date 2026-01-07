@@ -76,6 +76,13 @@ const eventFormSchema = z.object({
   formTemplateId: z.string().optional(),
   formFields: z.array(formFieldSchema).optional(),
   defaultLanguage: z.enum(["en", "es"]).default("en"),
+  // Thank you page customization
+  thankYouHeadline: z.string().optional(),
+  thankYouHeadlineEs: z.string().optional(),
+  thankYouMessage: z.string().optional(),
+  thankYouMessageEs: z.string().optional(),
+  thankYouQrInstructions: z.string().optional(),
+  thankYouQrInstructionsEs: z.string().optional(),
 }).refine(
   (data) => {
     if (data.startDate && data.endDate) {
@@ -145,6 +152,12 @@ export default function EventFormPage() {
       formTemplateId: "",
       formFields: [],
       defaultLanguage: "en",
+      thankYouHeadline: "",
+      thankYouHeadlineEs: "",
+      thankYouMessage: "",
+      thankYouMessageEs: "",
+      thankYouQrInstructions: "",
+      thankYouQrInstructionsEs: "",
     },
   });
 
@@ -173,6 +186,12 @@ export default function EventFormPage() {
         slug: event.slug || "",
         formTemplateId: (event as any).formTemplateId || "",
         defaultLanguage: ((event as any).defaultLanguage as EventFormData["defaultLanguage"]) || "en",
+        thankYouHeadline: (event as any).thankYouHeadline || "",
+        thankYouHeadlineEs: (event as any).thankYouHeadlineEs || "",
+        thankYouMessage: (event as any).thankYouMessage || "",
+        thankYouMessageEs: (event as any).thankYouMessageEs || "",
+        thankYouQrInstructions: (event as any).thankYouQrInstructions || "",
+        thankYouQrInstructionsEs: (event as any).thankYouQrInstructionsEs || "",
       });
       // Load custom fields if present
       if ((event as any).formFields) {
@@ -1184,6 +1203,135 @@ export default function EventFormPage() {
                     </FormItem>
                   )}
                 />
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Thank You Page Customization */}
+          {isEditing && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Check className="h-5 w-5" />
+                  Thank You Page
+                </CardTitle>
+                <CardDescription>
+                  Customize the confirmation page shown after registration. Leave blank to use defaults.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="thankYouHeadline"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Headline (English)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            {...field} 
+                            placeholder="Registration Successful!" 
+                            data-testid="input-thank-you-headline"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="thankYouHeadlineEs"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Headline (Spanish)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            {...field} 
+                            placeholder="Registro exitoso!" 
+                            data-testid="input-thank-you-headline-es"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="thankYouMessage"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Message (English)</FormLabel>
+                        <FormControl>
+                          <Textarea 
+                            {...field} 
+                            placeholder="Your registration has been completed. You will receive a confirmation email shortly."
+                            rows={3}
+                            data-testid="input-thank-you-message"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="thankYouMessageEs"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Message (Spanish)</FormLabel>
+                        <FormControl>
+                          <Textarea 
+                            {...field} 
+                            placeholder="Su registro ha sido completado. Recibira un correo de confirmacion pronto."
+                            rows={3}
+                            data-testid="input-thank-you-message-es"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="thankYouQrInstructions"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>QR Code Instructions (English)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            {...field} 
+                            placeholder="Show this code at check-in for fast entry"
+                            data-testid="input-thank-you-qr"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="thankYouQrInstructionsEs"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>QR Code Instructions (Spanish)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            {...field} 
+                            placeholder="Muestra este codigo en el registro para entrada rapida"
+                            data-testid="input-thank-you-qr-es"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
               </CardContent>
             </Card>
           )}

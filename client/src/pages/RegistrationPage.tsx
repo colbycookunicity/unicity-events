@@ -1559,6 +1559,11 @@ export default function RegistrationPage() {
     const eventDate = savedEventInfo?.startDate || event?.startDate;
     const formattedDate = eventDate ? parseLocalDate(eventDate) : null;
     
+    // Get custom thank you text from event (used for both CMS and default thank you pages)
+    const customQrInstructions = language === "es"
+      ? ((event as any).thankYouQrInstructionsEs || (event as any).thankYouQrInstructions || "Muestra este código en el registro para entrada rápida")
+      : ((event as any).thankYouQrInstructions || "Show this code at check-in for fast entry");
+
     // Use CMS thank_you section if available
     if (thankYouSection) {
       const content = thankYouSection.content as ThankYouSectionContent;
@@ -1579,9 +1584,7 @@ export default function RegistrationPage() {
                   showDownload={true}
                 />
                 <p className="text-xs text-muted-foreground">
-                  {language === "es" 
-                    ? "Muestra este código en el registro para entrada rápida"
-                    : "Show this code at check-in for fast entry"}
+                  {customQrInstructions}
                 </p>
                 {completedCheckInToken && (
                   <div className="mt-3">
@@ -1604,7 +1607,15 @@ export default function RegistrationPage() {
       );
     }
     
-    // Default thank you page
+    // Default thank you page - use custom text from event if available
+    const thankYouHeadline = language === "es"
+      ? ((event as any).thankYouHeadlineEs || (event as any).thankYouHeadline || t("registrationSuccess"))
+      : ((event as any).thankYouHeadline || t("registrationSuccess"));
+    
+    const thankYouMessage = language === "es"
+      ? ((event as any).thankYouMessageEs || (event as any).thankYouMessage || "Su registro ha sido completado. Recibira un correo de confirmacion pronto.")
+      : ((event as any).thankYouMessage || "Your registration has been completed. You will receive a confirmation email shortly.");
+
     return (
       <div className="min-h-screen bg-background">
         <header className="flex items-center justify-end gap-2 p-4">
@@ -1617,11 +1628,9 @@ export default function RegistrationPage() {
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30 mb-6">
                 <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400" />
               </div>
-              <h2 className="text-2xl font-semibold mb-2 text-foreground">{t("registrationSuccess")}</h2>
+              <h2 className="text-2xl font-semibold mb-2 text-foreground">{thankYouHeadline}</h2>
               <p className="text-muted-foreground mb-4">
-                {language === "es"
-                  ? "Su registro ha sido completado. Recibira un correo de confirmacion pronto."
-                  : "Your registration has been completed. You will receive a confirmation email shortly."}
+                {thankYouMessage}
               </p>
               
               {completedRegistrationId && (
@@ -1636,9 +1645,7 @@ export default function RegistrationPage() {
                     showDownload={true}
                   />
                   <p className="text-xs text-muted-foreground mt-3">
-                    {language === "es" 
-                      ? "Muestra este código en el registro para entrada rápida"
-                      : "Show this code at check-in for fast entry"}
+                    {customQrInstructions}
                   </p>
                   {completedCheckInToken && (
                     <div className="mt-4">

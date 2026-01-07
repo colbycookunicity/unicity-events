@@ -1607,6 +1607,14 @@ export async function registerRoutes(
       if (normalizedSlug !== undefined) updates.slug = normalizedSlug;
       if (req.body.defaultLanguage !== undefined) updates.defaultLanguage = req.body.defaultLanguage;
       
+      // Thank you page customization
+      if (req.body.thankYouHeadline !== undefined) updates.thankYouHeadline = req.body.thankYouHeadline || null;
+      if (req.body.thankYouHeadlineEs !== undefined) updates.thankYouHeadlineEs = req.body.thankYouHeadlineEs || null;
+      if (req.body.thankYouMessage !== undefined) updates.thankYouMessage = req.body.thankYouMessage || null;
+      if (req.body.thankYouMessageEs !== undefined) updates.thankYouMessageEs = req.body.thankYouMessageEs || null;
+      if (req.body.thankYouQrInstructions !== undefined) updates.thankYouQrInstructions = req.body.thankYouQrInstructions || null;
+      if (req.body.thankYouQrInstructionsEs !== undefined) updates.thankYouQrInstructionsEs = req.body.thankYouQrInstructionsEs || null;
+      
       // Handle dates
       if (req.body.startDate) updates.startDate = new Date(req.body.startDate);
       if (req.body.endDate) updates.endDate = new Date(req.body.endDate);
