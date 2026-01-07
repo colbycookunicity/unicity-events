@@ -1,4 +1,198 @@
-# Attendee Portal Implementation Plan
+# Admin Authentication Audit & Fix Plan
+
+## Executive Summary
+
+This document outlines the root causes of admin authentication bugs and the proposed fixes to ensure a secure, single-source-of-truth authorization system.
+
+---
+
+## Root Cause Analysis
+
+### Bug #1: Valid Admin (carolina.martinez@unicity.com) Blocked at Login
+
+**Root Cause**: The `isAdminEmail()` function checks two things:
+1. Database: Does user exist with `role="admin"`?
+2. Fallback: Is email in `FALLBACK_ADMIN_EMAILS` hardcoded list?
+
+Carolina fails both checks:
+- She is **not** in the `FALLBACK_ADMIN_EMAILS` list (only 4 emails: colby.cook, biani.gonzalez, ashley.milliken, william.hall)
+- She either:
+  - Was never added to the `users` table, OR
+  - Was added with `role="readonly"` instead of `role="admin"`, OR
+  - There's a **case-sensitivity issue** - emails are stored/compared without consistent normalization
+
+**File**: `server/routes.ts` (lines 25-41)
+
+### Bug #2: Non-Admin User (colby.cook+001@unicity.com) Added as "Read Only"
+
+**Root Cause**: Two code paths auto-create users in the `users` table:
+
+#### Path A: Admin OTP Validate (lines 269-289)
+```javascript
+// After successful OTP validation
+if (!user) {
+  const role = await isAdminEmail(email) ? "admin" : "readonly";
+  user = await storage.createUser({...});  // Creates user!
+}
+```
+
+This is gated by `isAdminEmail()` check at the generate step, but if bypassed, creates "readonly" users.
+
+#### Path B: Registration OTP Validate (lines 647-658) - PRIMARY CULPRIT
+```javascript
+// For ANY @unicity.com email during event registration
+if (email.toLowerCase().endsWith("@unicity.com")) {
+  let user = await storage.getUserByEmail(email);
+  if (!user) {
+    const role = await isAdminEmail(email) ? "admin" : "readonly";
+    user = await storage.createUser({...});  // Auto-creates users!
+  }
+}
+```
+
+This code runs during **attendee registration** when a @unicity.com employee verifies their email. It incorrectly treats the `users` table (admin accounts) as a general user store.
+
+**Files Involved**:
+- `server/routes.ts` (lines 269-289, 647-671)
+- `server/storage.ts` (lines 211-214 - case-sensitive email lookup)
+
+### Bug #3: Case-Sensitive Email Comparison
+
+**Root Cause**: `storage.getUserByEmail()` does exact string matching:
+```javascript
+const [user] = await db.select().from(users).where(eq(users.email, email));
+```
+
+But `isAdminEmail()` normalizes to lowercase before querying. If a user was added with mixed-case email, lookups will fail.
+
+---
+
+## Files Involved
+
+| File | Lines | Issue |
+|------|-------|-------|
+| `server/routes.ts` | 17-22 | `FALLBACK_ADMIN_EMAILS` - hardcoded bootstrap list |
+| `server/routes.ts` | 25-41 | `isAdminEmail()` - authorization check |
+| `server/routes.ts` | 143-153 | `/api/auth/otp/generate` - blocks non-admins |
+| `server/routes.ts` | 269-289 | `/api/auth/otp/validate` - auto-creates users |
+| `server/routes.ts` | 647-671 | `/api/register/otp/validate` - auto-creates admin users during registration |
+| `server/storage.ts` | 211-214 | `getUserByEmail()` - case-sensitive lookup |
+| `shared/schema.ts` | 12-13 | `userRoleEnum` - role definitions |
+| `client/src/pages/SettingsPage.tsx` | 54 | Admin UI uses correct roles |
+
+---
+
+## Authorization Flow: Before vs After
+
+### BEFORE (Current - Broken)
+
+```
+Admin Login:
+  Email -> isAdminEmail() check -> If passes, send OTP
+  OTP -> Validate -> If user !exists, CREATE USER with role
+  
+Registration:
+  Email -> Send OTP (no admin check)
+  OTP -> Validate -> If @unicity.com, CREATE USER in admin table!
+```
+
+**Problems**:
+- Registration flow pollutes admin users table
+- Auto-creation bypasses explicit admin approval
+- Case-sensitivity causes lookups to fail
+
+### AFTER (Fixed)
+
+```
+Admin Login:
+  Email -> isAdminEmail() check (case-insensitive) -> If passes, send OTP
+  OTP -> Validate -> If user !exists in admin table, REJECT (no auto-create)
+  
+Registration:
+  Email -> Send OTP
+  OTP -> Validate -> DO NOT touch admin users table at all
+  
+Admin Creation:
+  ONLY via Settings Page UI by existing administrator
+```
+
+---
+
+## Fix Plan
+
+### Fix 1: Remove Auto-Creation from Admin OTP Validate
+
+**Location**: `server/routes.ts` lines 269-289
+
+**Change**: If user doesn't exist after successful OTP validation, return error instead of creating user.
+
+```javascript
+// BEFORE
+if (!user) {
+  const role = await isAdminEmail(email) ? "admin" : "readonly";
+  user = await storage.createUser({...});
+}
+
+// AFTER  
+if (!user) {
+  return res.status(403).json({ 
+    error: "Account not found. Please contact an administrator to create your account." 
+  });
+}
+```
+
+### Fix 2: Remove Admin User Creation from Registration Flow
+
+**Location**: `server/routes.ts` lines 647-671
+
+**Change**: Remove the entire block that creates admin users during registration. The registration flow should never touch the admin users table.
+
+### Fix 3: Make Email Lookups Case-Insensitive
+
+**Location**: `server/storage.ts` line 212
+
+**Change**: Normalize email to lowercase before lookup.
+
+### Fix 4: Normalize Email on User Creation
+
+**Location**: `server/storage.ts` line 216
+
+**Change**: Always store emails in lowercase.
+
+### Fix 5: Add Carolina to FALLBACK_ADMIN_EMAILS (Temporary)
+
+**Location**: `server/routes.ts` line 17
+
+**Change**: Add Carolina to bootstrap list so she can log in and manage users.
+
+### Fix 6: Database Cleanup
+
+**Action**: Remove any non-admin users from the `users` table that were incorrectly added.
+
+---
+
+## Confirmation Checklist
+
+After implementing fixes, verify:
+
+- [ ] Carolina can successfully log in to admin dashboard
+- [ ] Non-admin @unicity.com employees registering for events do NOT get added to users table
+- [ ] Emails with plus signs (aliases) are rejected at admin login
+- [ ] Case variations of admin emails work (e.g., Carolina.Martinez vs carolina.martinez)
+- [ ] New admin accounts can ONLY be created via Settings page by existing admin
+- [ ] Existing readonly users who shouldn't be admins are removed from database
+- [ ] Role values are consistently enforced (admin, event_manager, marketing, readonly)
+
+---
+
+## Approval Required
+
+Please review this plan before implementation begins. Respond with approval to proceed with code changes.
+
+---
+---
+
+# Attendee Portal Implementation Plan (Previous Documentation)
 
 ## Overview
 

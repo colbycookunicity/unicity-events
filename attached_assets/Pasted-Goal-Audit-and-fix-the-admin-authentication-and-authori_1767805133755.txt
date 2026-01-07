@@ -1,0 +1,49 @@
+Goal:
+Audit and fix the admin authentication and authorization system so that only explicitly approved admins can access the admin dashboard, and non-admin users are never inserted into admin settings.
+
+I want you to:
+• Research the entire codebase
+• Find all files related to admin login, OTP auth, and admin authorization
+• Identify where admin access is checked and where admin users are created
+• Detect any logic that auto-creates or upserts admin users
+• Ensure a single source of truth for admin access
+• Develop a fix plan
+• Write the plan to Instructions.md
+• Implement the fixes after the plan is approved
+
+Context:
+• There is an Admin Login page that sends OTP codes
+• There is an Admin Users table with roles:
+  - administrator
+  - read_only
+• Only users explicitly added via the Admin Users UI should exist in this table
+• Non-admin users (attendees, registrants, test users) must NEVER be added to admin_users
+• "Read Only" is a role for admins only, not a fallback role for normal users
+
+Current bugs to investigate:
+1. A valid admin (carolina.martinez@unicity.com) is blocked at admin login with "Access Denied"
+2. A non-admin test user (colby.cook+001@unicity.com) was incorrectly added to Admin Users as "Read Only"
+3. Admin Login authorization appears to be using a different check than the Admin Users table
+
+Requirements for the final system:
+• Admin login must check ONLY the admin_users table
+• If email does not exist in admin_users → Access Denied (no inserts, no upserts)
+• Admin users must only be created via the Admin Users UI by an existing administrator
+• No login flow, OTP flow, or middleware may create admin_users records
+• Role values must be normalized and consistently enforced
+• Email comparison must be case-insensitive
+
+Deliverables:
+1. Instructions.md explaining:
+   - Root cause(s)
+   - Files involved
+   - Authorization flow before vs after
+2. Code changes that:
+   - Remove any auto-creation of admin users
+   - Unify admin auth checks
+   - Prevent non-admins from ever appearing in Admin Users
+3. Confirmation checklist to verify the fix
+
+Do not add new features.
+Do not change attendee or registration flows.
+Focus strictly on correctness, security, and separation of admin vs user access.
