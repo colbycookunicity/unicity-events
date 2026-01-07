@@ -519,7 +519,9 @@ export async function registerRoutes(
             const event = await storage.getEventByIdOrSlug(eventId);
             if (event) {
               // Check if event is open registration (doesn't require qualification)
-              const isOpenRegistration = event.registrationMode === "open_verified" || event.registrationMode === "open_anonymous";
+              // Default to open if registrationMode is null (legacy events) or explicitly open
+              const registrationMode = event.registrationMode || "open_verified";
+              const isOpenRegistration = registrationMode === "open_verified" || registrationMode === "open_anonymous";
               
               if (isOpenRegistration) {
                 // Open registration - allow anyone with valid OTP
