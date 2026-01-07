@@ -1,351 +1,276 @@
-# Print Bridge Service
+# Unicity Events Print Bridge
 
-Local HTTP-to-ZPL bridge service for Zebra badge printing. Runs on a venue laptop and accepts print requests from the Events app, rendering ZPL and sending it directly to Zebra printers over TCP port 9100.
+A lightweight local service that allows the Unicity Events web app to print badges to Zebra printers on your local network.
 
-## Architecture
+## Overview
 
 ```
-┌─────────────┐     HTTPS      ┌────────────────────┐
-│   iPad      │ ──────────────▶│  events.unicity.com │
-│ (Check-in)  │                │   (Cloud App)       │
-└─────────────┘                └────────────────────┘
-       │                                 
-       │ HTTP (local network)            
-       ▼                                 
-┌─────────────────────────────────────────────────────┐
-│              Print Bridge (this service)            │
-│              Venue Laptop - Port 3100               │
-└─────────────────────────────────────────────────────┘
-       │                                 
-       │ TCP Port 9100 (ZPL raw)         
-       ▼                                 
-┌─────────────┐  ┌─────────────┐  ┌─────────────┐
-│   Zebra 1   │  │   Zebra 2   │  │   Zebra 3   │
-│  (VIP Desk) │  │ (General 1) │  │ (General 2) │
-└─────────────┘  └─────────────┘  └─────────────┘
+┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
+│  Events App     │ ──── │  Print Bridge   │ ──── │  Zebra Printer  │
+│  (Cloud)        │ HTTP │  (This Service) │ TCP  │  (LAN)          │
+└─────────────────┘      └─────────────────┘      └─────────────────┘
 ```
+
+Web browsers cannot directly communicate with network printers. This bridge accepts HTTP requests from the Events app and forwards ZPL commands to Zebra printers over TCP port 9100.
 
 ## Requirements
 
-- **Node.js 18+** (LTS recommended)
-- **Network access** to Zebra printers on port 9100
-- **Same network** as iPads and printers
+- Node.js 18 or higher
+- Network access to Zebra printers (same LAN or routable)
+- Zebra printer with ZPL support (ZD421, ZD621, ZT411, etc.)
 
-## Quick Start (Mac)
-
-### 1. Install Node.js
-
-If you don't have Node.js installed:
+## Installation
 
 ```bash
-# Using Homebrew (recommended)
-brew install node@20
-
-# Or download from https://nodejs.org/
-```
-
-Verify installation:
-
-```bash
-node --version  # Should show v18+ or v20+
-npm --version   # Should show 9+
-```
-
-### 2. Setup the Print Bridge
-
-```bash
-# Navigate to the print-bridge directory
 cd print-bridge
-
-# Install dependencies
-npm install
-
-# Copy environment config
-cp .env.example .env
+npm install express cors
 ```
 
-### 3. Configure Environment
-
-Edit `.env` with your settings:
-
-```env
-PORT=3100
-ALLOWED_ORIGINS=https://events.unicity.com,http://localhost:5000
-PRINTER_TIMEOUT_MS=5000
-MAX_RETRIES=3
-LOG_LEVEL=info
-```
-
-### 4. Start the Service
+## Running the Service
 
 ```bash
-# Development mode (auto-reload on changes)
-npm run dev
+# Default port 3100
+node bridge.js
 
-# Or production mode
-npm run build
-npm start
+# Custom port
+PORT=8080 node bridge.js
 ```
 
 You should see:
 
 ```
 ╔════════════════════════════════════════════════════════════╗
-║                    PRINT BRIDGE SERVICE                    ║
+║              UNICITY EVENTS PRINT BRIDGE                   ║
 ╠════════════════════════════════════════════════════════════╣
-║  Version: 1.0.0                                            ║
-║  Port: 3100                                                ║
-║  Status: Running                                           ║
+║  Server running on http://0.0.0.0:3100                      ║
+║                                                            ║
+║  Endpoints:                                                ║
+║    GET  /health           - Health check                   ║
+║    POST /print            - Send ZPL to printer            ║
+║    POST /printers/:id/test - Send test label               ║
 ╚════════════════════════════════════════════════════════════╝
 ```
 
-### 5. Get Your Local IP
-
-Find your Mac's local IP address:
-
-```bash
-# Show local network IP
-ipconfig getifaddr en0
-
-# Or for all interfaces
-ifconfig | grep "inet " | grep -v 127.0.0.1
-```
-
-Example output: `192.168.1.50`
-
-Your bridge URL will be: `http://192.168.1.50:3100`
-
 ## API Reference
 
-### Health Check
+### GET /health
+
+Health check endpoint.
 
 ```bash
-GET /health
+curl http://localhost:3100/health
+```
 
-# Response
+**Response:**
+```json
 {
-  "status": "healthy",
-  "version": "1.0.0",
-  "uptime": 3600,
-  "printers": 2
+  "status": "ok",
+  "service": "print-bridge",
+  "timestamp": "2025-01-07T18:30:00.000Z"
 }
 ```
 
-### Register a Printer
+### POST /print
 
+Send ZPL to a Zebra printer.
+
+**Option 1 - Raw ZPL:**
 ```bash
-POST /printers
-Content-Type: application/json
+curl -X POST http://localhost:3100/print \
+  -H "Content-Type: application/json" \
+  -d '{
+    "printerIp": "192.168.1.50",
+    "zpl": "^XA^FO50,50^A0N,50,50^FDHello World^FS^XZ"
+  }'
+```
 
-{
-  "name": "VIP Check-in",
-  "ipAddress": "192.168.1.101",
-  "port": 9100
-}
+**Option 2 - Events App Format (auto-generates ZPL):**
+```bash
+curl -X POST http://localhost:3100/print \
+  -H "Content-Type: application/json" \
+  -d '{
+    "printer": { "ipAddress": "192.168.1.50", "port": 9100 },
+    "badge": { "firstName": "Jane", "lastName": "Smith", "unicityId": "87654321" }
+  }'
+```
 
-# Response
+**Success Response:**
+```json
 {
-  "id": "printer-a1b2c3d4",
-  "name": "VIP Check-in",
-  "ipAddress": "192.168.1.101",
-  "port": 9100,
-  "status": "unknown"
+  "success": true,
+  "message": "Print job sent successfully"
 }
 ```
 
-### List Printers
-
-```bash
-GET /printers
-
-# Response (checks connectivity to each)
-[
-  {
-    "id": "printer-a1b2c3d4",
-    "name": "VIP Check-in",
-    "ipAddress": "192.168.1.101",
-    "port": 9100,
-    "status": "online",
-    "lastSeen": "2026-01-02T15:30:00Z"
-  }
-]
-```
-
-### Print a Badge
-
-```bash
-POST /print
-Content-Type: application/json
-
+**Error Response:**
+```json
 {
-  "printerId": "printer-a1b2c3d4",
-  "badge": {
-    "firstName": "John",
-    "lastName": "Smith",
-    "eventName": "Rise 2026",
-    "registrationId": "uuid-here",
-    "eventId": "event-uuid",
-    "unicityId": "12345678",
-    "role": "Distributor"
-  }
-}
-
-# Response
-{
-  "jobId": "job-uuid",
-  "status": "success",
-  "sentAt": "2026-01-02T15:30:00Z"
+  "error": "Printer not responding at 192.168.1.50:9100 - connection refused"
 }
 ```
 
-### Test Print
+### POST /printers/:id/test
+
+Send a test label to verify printer connectivity.
 
 ```bash
-POST /printers/printer-a1b2c3d4/test
+curl -X POST http://localhost:3100/printers/test-1/test \
+  -H "Content-Type: application/json" \
+  -d '{ "ipAddress": "192.168.1.50", "port": 9100 }'
+```
 
-# Response
+**Response:**
+```json
 {
   "success": true,
   "message": "Test label printed successfully"
 }
 ```
 
-### Get Job Status
+## Testing Without a Real Printer
+
+Use netcat to simulate a printer:
 
 ```bash
-GET /jobs/job-uuid
+# Terminal 1: Start fake printer listener
+nc -l 9100
 
-# Response
-{
-  "jobId": "job-uuid",
-  "status": "success",
-  "sentAt": "2026-01-02T15:30:00Z",
-  "completedAt": "2026-01-02T15:30:02Z",
-  "errorMessage": null
-}
+# Terminal 2: Send print request
+curl -X POST http://localhost:3100/print \
+  -H "Content-Type: application/json" \
+  -d '{ "printerIp": "127.0.0.1", "zpl": "^XA^FDTest^FS^XZ" }'
 ```
 
-### Remove a Printer
+You should see the ZPL appear in Terminal 1.
 
+## Network Setup
+
+### Venue Configuration
+
+1. **Print Bridge Host** - A computer running this service
+   - Windows, Mac, Linux, or Raspberry Pi
+   - Must be on the same network as the printers
+   - Static IP recommended (e.g., 192.168.1.100)
+
+2. **Zebra Printers** - Connected via Ethernet or WiFi
+   - Configure each printer with a static IP
+   - Default ZPL port is 9100
+   - Find printer IP from: Settings → Network → IP Address
+
+3. **Staff Devices** - Running the Events web app
+   - Must be able to reach the Print Bridge host
+
+### Example Network
+
+```
+Venue Network (192.168.1.0/24)
+├── Print Bridge (192.168.1.100:3100)
+├── Zebra Printer 1 (192.168.1.50:9100)
+├── Zebra Printer 2 (192.168.1.51:9100)
+└── Staff iPads/Laptops (DHCP)
+```
+
+### Find Your Local IP
+
+**Mac:**
 ```bash
-DELETE /printers/printer-a1b2c3d4
-
-# Response
-{
-  "success": true,
-  "message": "Printer VIP Check-in removed"
-}
+ipconfig getifaddr en0
 ```
 
-## Zebra Printer Setup
+**Windows:**
+```cmd
+ipconfig | findstr IPv4
+```
 
-### Finding Printer IP Address
-
-1. **On the printer**: Print a configuration label (usually by holding a button on the printer)
-2. **On the network**: Use a network scanner app or check your router's DHCP client list
-3. **Using Zebra Setup Utilities**: Connect via USB first, then view network settings
-
-### Recommended Zebra Models
-
-- **Zebra ZD421** (4" desktop)
-- **Zebra ZD621** (4" desktop, higher speed)
-- **Zebra ZT411** (industrial, high volume)
-
-### Network Configuration
-
-Ensure the printer is configured for:
-
-- **Port 9100** (ZPL raw socket - usually default)
-- **Static IP** or **DHCP reservation** (prevents IP changes)
-- **Same subnet** as the bridge laptop
-
-### Testing Direct Connection
-
-Test printer connectivity without the bridge:
-
+**Linux:**
 ```bash
-# Send a test label directly
-echo '^XA^FO50,50^A0N,50,50^FDTest^FS^XZ' | nc 192.168.1.101 9100
+hostname -I
 ```
+
+### Configure Events App
+
+1. Go to **Printers** page in Events admin
+2. Enter Print Bridge URL: `http://YOUR_LOCAL_IP:3100`
+3. Click **Save** and verify connection status shows green
+4. Add printers with their IP addresses
+5. Test print from each printer
 
 ## Troubleshooting
 
-### Bridge Won't Start
+| Error | Cause | Solution |
+|-------|-------|----------|
+| "Connection refused" | Printer off or wrong IP | Verify printer is on and IP is correct |
+| "Host unreachable" | Network routing issue | Check printer is on same network |
+| "Connection timed out" | Printer not responding | Power cycle printer, check cables |
+| Bridge not reachable | Firewall blocking port 3100 | Allow incoming connections on port 3100 |
+
+### Test Direct Connection
 
 ```bash
-# Check if port is in use
-lsof -i :3100
+# Ping the printer
+ping 192.168.1.50
 
-# Kill existing process
-kill -9 $(lsof -t -i :3100)
+# Test port 9100
+nc -zv 192.168.1.50 9100
 
-# Or use a different port in .env
-PORT=3101
+# Send test label directly
+echo '^XA^FO50,50^A0N,50,50^FDTest^FS^XZ' | nc 192.168.1.50 9100
 ```
 
-### Can't Connect to Printer
+## Running as a Background Service
 
-1. **Verify network**: Can you ping the printer?
-   ```bash
-   ping 192.168.1.101
-   ```
+### macOS
 
-2. **Check port 9100**: Is the printer listening?
-   ```bash
-   nc -zv 192.168.1.101 9100
-   ```
+```bash
+# Keep running after closing terminal
+nohup node bridge.js > bridge.log 2>&1 &
+```
 
-3. **Firewall**: Is your Mac firewall blocking outbound connections?
-   - System Settings → Network → Firewall → Options → Allow incoming connections
+### Windows
 
-### CORS Errors
+Use Task Scheduler to start `node bridge.js` at login.
 
-If the Events app can't reach the bridge:
+### Linux
 
-1. Verify `ALLOWED_ORIGINS` in `.env` includes your app URL
-2. Check that the bridge URL in the app matches your local IP
-3. Ensure the laptop's firewall allows incoming connections on port 3100
+```bash
+# Using systemd
+sudo nano /etc/systemd/system/print-bridge.service
+```
 
-### Badge Not Printing Correctly
+```ini
+[Unit]
+Description=Print Bridge
+After=network.target
 
-1. **Wrong size**: Check printer is set for 4"x6" labels
-2. **Garbled text**: Verify printer DPI is 203 (adjust ZPL if using 300 DPI)
-3. **Misaligned**: Calibrate the printer using built-in calibration
+[Service]
+Type=simple
+WorkingDirectory=/path/to/print-bridge
+ExecStart=/usr/bin/node bridge.js
+Restart=always
 
-## Venue Setup Checklist
+[Install]
+WantedBy=multi-user.target
+```
 
-- [ ] Laptop connected to venue WiFi
-- [ ] Node.js 18+ installed
-- [ ] Print Bridge dependencies installed
-- [ ] `.env` configured with correct origins
-- [ ] Bridge service running
-- [ ] Local IP address noted
-- [ ] Each Zebra printer registered via API
-- [ ] Test print verified from each printer
-- [ ] Bridge URL shared with check-in staff
-- [ ] Staff trained on fallback procedures
+```bash
+sudo systemctl enable print-bridge
+sudo systemctl start print-bridge
+```
 
 ## Security Notes
 
-- The bridge runs on HTTP (not HTTPS) for local network simplicity
-- `ALLOWED_ORIGINS` restricts which web apps can make requests
-- The bridge stores printer data in memory only (lost on restart)
-- No authentication is implemented - rely on network isolation
-- Consider using a VPN or dedicated check-in network for added security
+- No authentication (local network only)
+- **Do not expose to the internet**
+- Use firewall rules to restrict access
+- Consider isolated event network VLAN
 
-## Development
+## Venue Setup Checklist
 
-```bash
-# Run in development mode with hot reload
-npm run dev
-
-# Build for production
-npm run build
-
-# Run production build
-npm start
-```
-
-## License
-
-Internal use only - Unicity Events
+- [ ] Laptop connected to venue network
+- [ ] Node.js 18+ installed
+- [ ] `npm install express cors` completed
+- [ ] Bridge running (`node bridge.js`)
+- [ ] Local IP address noted
+- [ ] Bridge URL configured in Events app
+- [ ] Printers added with correct IPs
+- [ ] Test print verified from each printer
