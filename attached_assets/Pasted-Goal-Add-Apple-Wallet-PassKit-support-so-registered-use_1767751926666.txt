@@ -1,0 +1,58 @@
+Goal:
+Add Apple Wallet (PassKit) support so registered users can add their event QR code to Apple Wallet.
+
+Context:
+We already have:
+• Per-registration check-in QR codes with payload format:
+  CHECKIN:<eventId>:<registrationId>:<token>
+• QR codes rendered on the registration success page
+• QR codes included in the registration confirmation email
+• A QR scanner that validates tokens and checks users in
+• Badge printing handled separately
+
+Apple Wallet should present the SAME QR payload (no new tokens).
+
+I want you to:
+• Add server-side Apple Wallet (.pkpass) generation using PassKit
+• Create a Wallet pass that includes:
+  - Event name
+  - Event date (if available)
+  - Attendee name
+  - QR code with payload:
+    CHECKIN:<eventId>:<registrationId>:<token>
+• Use PKBarcodeFormatQR with iso-8859-1 encoding
+• Add an endpoint:
+  GET /api/wallet/:checkinToken
+  that:
+    - Validates the token
+    - Generates and returns a signed .pkpass file
+    - Sets Content-Type to application/vnd.apple.pkpass
+• Ensure the Wallet pass works offline once added
+• Add an “Add to Apple Wallet” button that links to this endpoint:
+  - On the registration success page
+  - In the registration confirmation email (iOS-only if possible)
+• Reuse the existing check-in token (do NOT generate new tokens)
+• Ensure scanning the Wallet QR triggers the existing check-in flow
+
+Certificate handling:
+• Assume Apple Wallet certificates (Pass Type ID, cert, private key) will be provided via environment variables
+• Do NOT hardcode secrets
+• Document required env vars clearly
+
+Constraints:
+• Do NOT modify QR payload format
+• Do NOT modify QR scanner logic
+• Do NOT modify badge printing logic
+• Do NOT add new auth systems
+• Do NOT change admin or attendee portal flows
+• Touch only Wallet-related functionality
+
+Output:
+• Wallet pass generation logic
+• New API endpoint for Wallet pass delivery
+• UI + email updates to include “Add to Apple Wallet”
+• Clear explanation of how Wallet integrates with existing QR logic
+• Update Instructions.md with a section titled:
+  “Apple Wallet Check-In Pass”
+
+Let me know if anything blocks you.
