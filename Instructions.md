@@ -380,7 +380,14 @@ Frontend called `POST /api/registrations/:registrationId/record-print` but endpo
 
 | File | Change |
 |------|--------|
-| `server/routes.ts` | Added `POST /api/registrations/:registrationId/record-print` endpoint (lines ~4308-4343) |
+| `server/routes.ts` | Added `POST /api/registrations/:registrationId/record-print` endpoint (lines ~4306-4340) |
+| `client/src/pages/CheckInPage.tsx` | Hardened print bridge response handling to check content-type before calling `.json()` |
+
+## Additional Fixes
+
+The frontend was calling `.json()` on the external print bridge response without checking content-type. If the print bridge returns HTML (error page, misconfigured), this caused "Unexpected token '<'" errors. Fixed by:
+1. Checking `content-type` header before parsing as JSON
+2. Returning helpful error messages when bridge returns non-JSON
 
 ---
 ---

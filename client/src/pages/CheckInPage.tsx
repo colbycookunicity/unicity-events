@@ -124,15 +124,24 @@ export default function CheckInPage() {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to print badge");
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const error = await response.json();
+          throw new Error(error.error || "Failed to print badge");
+        } else {
+          throw new Error(`Print bridge error: ${response.status} ${response.statusText}`);
+        }
       }
 
       await apiRequest("POST", `/api/registrations/${reg.id}/record-print`, {
         printerId: selectedPrinter,
       });
 
-      return response.json();
+      const bridgeContentType = response.headers.get('content-type') || '';
+      if (bridgeContentType.includes('application/json')) {
+        return response.json();
+      }
+      return { success: true };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ predicate: (query) => 
@@ -352,8 +361,13 @@ export default function CheckInPage() {
             });
 
             if (!printResponse.ok) {
-              const errorData = await printResponse.json().catch(() => ({}));
-              throw new Error(errorData.error || "Failed to print badge");
+              const contentType = printResponse.headers.get('content-type') || '';
+              if (contentType.includes('application/json')) {
+                const errorData = await printResponse.json().catch(() => ({}));
+                throw new Error(errorData.error || "Failed to print badge");
+              } else {
+                throw new Error(`Print bridge error: ${printResponse.status} ${printResponse.statusText}`);
+              }
             }
 
             await apiRequest("POST", `/api/registrations/${reg.id}/record-print`, {
