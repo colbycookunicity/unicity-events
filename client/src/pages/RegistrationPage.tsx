@@ -918,10 +918,17 @@ export default function RegistrationPage() {
         fetchingExistingRef.current = null;
       }
       
-      // Strategy 2: Use OTP session (for users who just verified)
-      // Skip this for open_anonymous mode - it allows multiple registrations per email
-      // so we don't need to check for existing registrations
-      if (verificationStep === "form" && !openAnonymousMode) {
+      // Strategy 2: Use OTP session (for users who just verified via qualified_verified flow)
+      // Skip this for:
+      // - open_anonymous mode: allows multiple registrations per email, no existing check needed
+      // - open_verified mode: OTP verification happens at form submission, not page load
+      // Only call for qualified_verified mode where OTP was already completed before reaching form
+      const shouldFetchExisting = verificationStep === "form" && 
+                                   !openAnonymousMode && 
+                                   !openVerifiedMode &&
+                                   verifiedProfile; // Must have verified profile from OTP flow
+      
+      if (shouldFetchExisting) {
         fetchingExistingRef.current = currentKey;
         setIsLoadingExisting(true);
         
@@ -956,14 +963,15 @@ export default function RegistrationPage() {
         }
         
         setIsLoadingExisting(false);
-      } else if (verificationStep === "form" && openAnonymousMode) {
-        // For open_anonymous mode, just mark as loaded without fetching
+      } else if (verificationStep === "form" && (openAnonymousMode || openVerifiedMode)) {
+        // For open_anonymous and open_verified modes, just mark as loaded without fetching
+        // open_verified will fetch existing registration after OTP verification at form submission
         setLoadedForKey(currentKey);
       }
     };
     
     fetchExistingRegistration();
-  }, [verificationStep, verifiedProfile, verificationEmail, prePopulatedEmail, params.eventId, event, loadedForKey, openAnonymousMode]);
+  }, [verificationStep, verifiedProfile, verificationEmail, prePopulatedEmail, params.eventId, event, loadedForKey, openAnonymousMode, openVerifiedMode]);
 
   const registerMutation = useMutation({
     mutationFn: async (data: RegistrationFormData) => {
