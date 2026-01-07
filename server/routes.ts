@@ -270,10 +270,21 @@ export async function registerRoutes(
       let user = await storage.getUserByEmail(email);
       
       if (!user) {
-        // Admin users must be explicitly created via Admin UI - no auto-creation
-        return res.status(403).json({ 
-          error: "Account not found. Please contact an administrator to create your account." 
+        // Only fallback admin emails can bootstrap - all others must be created via Admin UI
+        const isFallbackAdmin = await isAdminEmail(email);
+        if (!isFallbackAdmin) {
+          return res.status(403).json({ 
+            error: "Account not found. Please contact an administrator to create your account." 
+          });
+        }
+        // Bootstrap fallback admin user
+        user = await storage.createUser({
+          email: email.toLowerCase().trim(),
+          name: email.split("@")[0],
+          role: "admin",
+          customerId,
         });
+        console.log(`Bootstrap: Created fallback admin user for ${email}`);
       }
 
       const token = generateToken();

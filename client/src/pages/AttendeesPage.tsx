@@ -288,7 +288,7 @@ export default function AttendeesPage() {
     },
     onSuccess: () => {
       toast({ title: "Badge sent to printer" });
-      queryClient.invalidateQueries({ queryKey: ['/api/registrations', selectedAttendee?.id, 'print-logs'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/registrations/${selectedAttendee?.id}/print-logs`] });
     },
     onError: (error: Error) => {
       toast({
@@ -296,7 +296,7 @@ export default function AttendeesPage() {
         description: error.message,
         variant: "destructive",
       });
-      queryClient.invalidateQueries({ queryKey: ['/api/registrations', selectedAttendee?.id, 'print-logs'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/registrations/${selectedAttendee?.id}/print-logs`] });
     },
   });
   
