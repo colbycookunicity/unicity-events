@@ -1164,12 +1164,16 @@ export default function AttendeesPage() {
         const assignedRule = person.qualifier?.guestAllowanceRuleId 
           ? guestRulesById.get(person.qualifier.guestAllowanceRuleId)
           : undefined;
+        const isCheckedIn = person.registration?.checkedInAt != null;
         return (
           <div className="min-w-[150px]">
             <div className="flex items-center gap-2">
               <span className="font-medium whitespace-nowrap" data-testid={`text-name-${person.id}`}>{person.firstName} {person.lastName}</span>
               {!person.isRegistered && (
-                <Badge variant="secondary" className="text-xs" data-testid={`badge-pending-${person.id}`}>Pending</Badge>
+                <Badge variant="secondary" className="text-xs" data-testid={`badge-not-registered-${person.id}`}>Not Registered</Badge>
+              )}
+              {person.isRegistered && isCheckedIn && (
+                <Badge variant="default" className="text-xs bg-green-600 hover:bg-green-600" data-testid={`badge-checked-in-${person.id}`}>Checked In</Badge>
               )}
               {person.isRegistered && person.qualifier && eventFilter !== "all" && (
                 <Badge variant="outline" className="text-xs" data-testid={`badge-qualified-${person.id}`}>Qualified</Badge>
@@ -1520,7 +1524,7 @@ export default function AttendeesPage() {
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>
             <SelectItem value="qualified">{t("qualified")}</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="pending">Not Registered</SelectItem>
             <SelectItem value="registered">{t("registered")}</SelectItem>
             <SelectItem value="checked_in">{t("checkedIn")}</SelectItem>
             <SelectItem value="not_coming">{t("notComing")}</SelectItem>
@@ -1544,7 +1548,7 @@ export default function AttendeesPage() {
           <table className="w-full text-sm">
             <thead className="bg-muted/50 border-b">
               <tr>
-                <th className="px-4 py-3 w-10">
+                <th className="px-4 py-3 w-10 md:sticky md:left-0 md:z-20 bg-muted/50">
                   <Checkbox 
                     checked={isAllSelected}
                     onCheckedChange={toggleSelectAll}
@@ -1553,10 +1557,12 @@ export default function AttendeesPage() {
                     className={isSomeSelected ? "data-[state=checked]:bg-primary/50" : ""}
                   />
                 </th>
-                {visibleColumnList.map((col) => (
+                {visibleColumnList.map((col, index) => (
                   <th 
                     key={col.key} 
-                    className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap"
+                    className={`px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap ${
+                      col.key === "name" ? "md:sticky md:left-10 md:z-20 bg-muted/50" : ""
+                    }`}
                   >
                     {col.key !== "actions" ? (
                       <SortableHeader columnKey={col.key}>{col.label}</SortableHeader>
@@ -1596,7 +1602,7 @@ export default function AttendeesPage() {
                     data-testid={`row-attendee-${person.id}`}
                     onClick={() => handleRowClick(person)}
                   >
-                    <td className="px-4 py-3 w-10" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-4 py-3 w-10 md:sticky md:left-0 md:z-10 bg-background" onClick={(e) => e.stopPropagation()}>
                       <Checkbox
                         checked={selectedPeople.has(person.id)}
                         onCheckedChange={() => toggleSelectPerson(person.id)}
@@ -1607,7 +1613,9 @@ export default function AttendeesPage() {
                     {visibleColumnList.map((col) => (
                       <td 
                         key={col.key} 
-                        className="px-4 py-3"
+                        className={`px-4 py-3 ${
+                          col.key === "name" ? "md:sticky md:left-10 md:z-10 bg-background" : ""
+                        }`}
                       >
                         {renderCell(person, col.key)}
                       </td>
