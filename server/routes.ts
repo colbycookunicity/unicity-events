@@ -1466,8 +1466,17 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Buy-in price is required and must be greater than 0 when guests are paid" });
       }
       
-      // registrationMode is required - no legacy fallback
-      const registrationMode: RegistrationMode = req.body.registrationMode || "open_verified";
+      // registrationMode is the source of truth, but derive from requiresQualification if not provided
+      // This maintains backward compatibility with the admin form which sends requiresQualification
+      let registrationMode: RegistrationMode;
+      if (req.body.registrationMode) {
+        registrationMode = req.body.registrationMode;
+      } else if (req.body.requiresQualification) {
+        // Legacy form field: requiresQualification=true -> qualified_verified
+        registrationMode = "qualified_verified";
+      } else {
+        registrationMode = "open_verified";
+      }
       // Derive legacy flags from mode for database consistency (schema still has these columns)
       const requiresQualification = registrationMode === "qualified_verified";
       const requiresVerification = registrationMode === "qualified_verified" || registrationMode === "open_verified";
@@ -1588,7 +1597,7 @@ export async function registerRoutes(
         }
       }
       // Handle registrationMode - it's the sole source of truth
-      // Legacy fields are kept in sync for database consistency only
+      // But also support requiresQualification from the admin form for backward compatibility
       if (req.body.registrationMode !== undefined) {
         updates.registrationMode = req.body.registrationMode;
         // Sync legacy fields from the new mode (for database consistency)
@@ -1596,8 +1605,13 @@ export async function registerRoutes(
         const requiresVerification = req.body.registrationMode === "qualified_verified" || req.body.registrationMode === "open_verified";
         updates.requiresQualification = requiresQualification;
         updates.requiresVerification = requiresVerification;
+      } else if (req.body.requiresQualification !== undefined) {
+        // Legacy form field: derive registrationMode from requiresQualification boolean
+        const registrationMode: RegistrationMode = req.body.requiresQualification ? "qualified_verified" : "open_verified";
+        updates.registrationMode = registrationMode;
+        updates.requiresQualification = req.body.requiresQualification;
+        updates.requiresVerification = true; // Both modes require verification
       }
-      // Ignore legacy fields in request body - registrationMode is the only way to set behavior
       if (req.body.registrationLayout !== undefined) updates.registrationLayout = req.body.registrationLayout;
       if (req.body.formFields !== undefined) updates.formFields = req.body.formFields;
       if (normalizedFormTemplateId !== undefined) updates.formTemplateId = normalizedFormTemplateId;

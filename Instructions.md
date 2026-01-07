@@ -2327,6 +2327,48 @@ The legacy fields (`requiresQualification`, `requiresVerification`) are preserve
 | `server/routes.ts` | Updated to derive from `registrationMode`, sync legacy fields |
 | `client/src/pages/RegistrationPage.tsx` | Updated to use `registrationMode` for verification logic |
 
+### qualified_verified Mode Implementation (January 2026)
+
+The `qualified_verified` mode provides a secure registration experience where:
+- Only pre-qualified users (in the `qualified_registrants` table) can register
+- Email verification (OTP) is required BEFORE seeing the registration form
+- User must enter their email first, receive OTP, then access the form
+
+**User Flow:**
+1. User visits `/register/:eventSlug` → Email entry screen is shown
+2. User enters email → Backend checks if email is in qualified_registrants
+3. If qualified, OTP is sent to email
+4. User enters 6-digit OTP code
+5. On successful verification → Registration form is shown with pre-populated data
+6. User completes form and submits → Registration saved
+
+**Frontend Implementation (RegistrationPage.tsx):**
+- `requiresVerification = (registrationMode !== "open_anonymous") && !skipVerification`
+- For qualified_verified: `verificationStep` starts as "email" (not "form")
+- `openVerifiedMode` is false, so form is NOT shown immediately
+- `handleSendOtp()` sends OTP via `/api/register/otp/generate`
+- `handleVerifyOtp()` validates OTP via `/api/register/otp/validate`
+- On successful verification: `verificationStep` changes to "form", profile data pre-populates form
+
+**Backend Implementation (routes.ts):**
+- `/api/register/otp/generate` checks `registrationMode === "qualified_verified"`
+- If qualified_verified: looks up email in `qualified_registrants` table
+- If not found in qualified list → Returns 403 with helpful error message
+- If found → Sends OTP and creates event-scoped session
+
+**Security:**
+- OTP sessions are event-scoped (`customerData.registrationEventId`)
+- Qualification check happens at OTP generation, not form submission
+- Session persistence: sessionStorage key `reg_verified_email_{eventId}` allows refresh without re-verification (30-minute window)
+
+**Admin Form Compatibility Fix (January 2026):**
+The admin event form uses the legacy `requiresQualification` boolean toggle. The backend now correctly derives `registrationMode` from this field:
+- When `requiresQualification: true` is sent → `registrationMode = "qualified_verified"`
+- When `requiresQualification: false` is sent → `registrationMode = "open_verified"`
+- Both CREATE and UPDATE endpoints support this derivation
+
+---
+
 ### open_verified Mode Implementation (January 2026)
 
 The `open_verified` mode provides a streamlined registration experience where:
@@ -2370,14 +2412,22 @@ The `open_verified` mode provides a streamlined registration experience where:
 Behavior should remain identical after this change. Verify:
 1. Qualified events still require qualification check at OTP generate
 2. Open events still allow anyone to register with OTP
-3. Admin UI toggle for "Requires Qualification" still works correctly
+3. Admin UI toggle for "Requires Qualification" now correctly sets `registrationMode`
 4. Public event API returns both `registrationMode` and legacy fields
 
+**qualified_verified Mode Testing:**
+1. Admin enables "Requires Qualification" toggle → event gets `registrationMode: "qualified_verified"`
+2. User visits `/register/:eventSlug` → sees email entry screen (NOT form)
+3. User enters email not in qualified list → sees 403 error
+4. User enters qualified email → receives OTP
+5. User enters correct OTP → sees registration form with pre-populated data
+6. Session persists across page refresh (30-minute window)
+
 **open_verified Mode Testing:**
-5. Form visible immediately for open_verified events (no email prompt first)
-6. Submitting without verification triggers OTP dialog
-7. After OTP verification, registration saves automatically
-8. Duplicate registration by same email updates existing record
+7. Form visible immediately for open_verified events (no email prompt first)
+8. Submitting without verification triggers OTP dialog
+9. After OTP verification, registration saves automatically
+10. Duplicate registration by same email updates existing record
 
 ### open_anonymous Mode Implementation (January 2026)
 
