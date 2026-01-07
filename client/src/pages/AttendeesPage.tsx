@@ -79,7 +79,7 @@ type ColumnKey =
 
 // Shared columns to show when "All Events" is selected (global view)
 const SHARED_COLUMNS: ColumnKey[] = [
-  "name", "unicityId", "email", "phone", "event", "status", "registeredAt", "lastModified", "swagStatus", "verifiedByHydra", "actions"
+  "name", "status", "unicityId", "email", "phone", "event", "registeredAt", "lastModified", "swagStatus", "verifiedByHydra", "actions"
 ];
 
 type SortConfig = {
@@ -89,13 +89,13 @@ type SortConfig = {
 
 const ALL_COLUMNS: { key: ColumnKey; label: string; defaultVisible: boolean }[] = [
   { key: "name", label: "Name", defaultVisible: true },
+  { key: "status", label: "Status", defaultVisible: true },
   { key: "unicityId", label: "Unicity ID", defaultVisible: false },
   { key: "email", label: "Email", defaultVisible: true },
   { key: "phone", label: "Phone", defaultVisible: true },
   { key: "gender", label: "Gender", defaultVisible: false },
   { key: "dateOfBirth", label: "Date of Birth", defaultVisible: false },
   { key: "event", label: "Event", defaultVisible: true },
-  { key: "status", label: "Status", defaultVisible: true },
   { key: "swagStatus", label: "Swag Status", defaultVisible: true },
   { key: "shirtSize", label: "Shirt Size", defaultVisible: false },
   { key: "pantSize", label: "Pant Size", defaultVisible: false },
