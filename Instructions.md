@@ -312,6 +312,28 @@ After implementing fixes, verify:
 - [ ] Print logs load in attendee modal
 
 ---
+
+# HTML Response Bug Fix (January 2026)
+
+## Root Cause
+
+When API routes don't match or fail to send a response, Vite's catch-all SPA handler (`app.use("*", ...)` in `server/vite.ts`) returns `index.html` with HTTP 200. Since the response is "OK" but contains HTML, `response.json()` fails with "Unexpected token '<'".
+
+## Files Changed
+
+| File | Change |
+|------|--------|
+| `server/index.ts` | Added `/api/*` catch-all returning JSON 404 before Vite |
+| `client/src/lib/queryClient.ts` | Hardened `throwIfResNotOk` to detect HTML responses for API routes |
+
+## Behavior After Fix
+
+- API endpoints return JSON on success, failure, and 404
+- Non-JSON responses to `/api/*` routes are detected and throw helpful error
+- Console logs `API returned non-JSON response:` for debugging
+- User sees "Server returned HTML instead of JSON" instead of cryptic parse error
+
+---
 ---
 
 # Attendee Portal Implementation Plan (Previous Documentation)

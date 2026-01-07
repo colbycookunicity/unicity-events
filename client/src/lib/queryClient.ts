@@ -10,6 +10,10 @@ export function getAuthHeaders(): HeadersInit {
 }
 
 async function throwIfResNotOk(res: Response) {
+  // Check content-type to detect HTML responses from catch-all routes
+  const contentType = res.headers.get('content-type') || '';
+  const isJson = contentType.includes('application/json');
+  
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
     // Try to parse JSON error response for better messages
@@ -17,9 +21,17 @@ async function throwIfResNotOk(res: Response) {
       const json = JSON.parse(text);
       throw new Error(json.error || json.message || `${res.status}: ${text}`);
     } catch (parseError) {
-      // If not JSON, use the raw text
-      throw new Error(`${res.status}: ${text}`);
+      // If not JSON, use the raw text (truncated for HTML responses)
+      const truncated = text.length > 200 ? text.substring(0, 200) + '...' : text;
+      throw new Error(`${res.status}: ${truncated}`);
     }
+  }
+  
+  // Even if res.ok, detect HTML responses that should be JSON (indicates routing issue)
+  // Only check for API routes to avoid issues with non-API endpoints
+  if (!isJson && res.url.includes('/api/')) {
+    console.error('API returned non-JSON response:', res.url, contentType);
+    throw new Error('Server returned HTML instead of JSON. Please try again or refresh the page.');
   }
 }
 
