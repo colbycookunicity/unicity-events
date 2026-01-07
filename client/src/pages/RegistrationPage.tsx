@@ -344,14 +344,16 @@ export default function RegistrationPage() {
   });
 
   // Fetch CMS page sections for this event (intro, thank_you, etc.)
-  const { data: pageData, isLoading: isPageDataLoading, isError: isPageDataError, error: pageDataError } = useQuery<PageData & { event?: Event } | null>({
+  // CMS content is OPTIONAL - endpoint returns { sections: [], cmsAvailable: false } if no CMS
+  const { data: pageData, isLoading: isPageDataLoading } = useQuery<PageData & { event?: Event; cmsAvailable?: boolean } | null>({
     queryKey: ["/api/public/event-pages", params.eventId],
     enabled: !!params.eventId,
-    retry: 2, // Retry twice on failure before giving up
+    retry: false, // CMS is optional, don't retry on failure
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes to prevent repeated requests
   });
 
   // Fetch LOGIN page CMS data for verification screens
-  const { data: loginPageData } = useQuery<PageData | null>({
+  const { data: loginPageData } = useQuery<PageData & { cmsAvailable?: boolean } | null>({
     queryKey: ["/api/public/event-pages", params.eventId, "login"],
     queryFn: async () => {
       const res = await fetch(`/api/public/event-pages/${params.eventId}?pageType=login`);
@@ -359,26 +361,24 @@ export default function RegistrationPage() {
       return res.json();
     },
     enabled: !!params.eventId,
-    retry: 1,
+    retry: false, // CMS is optional
+    staleTime: 5 * 60 * 1000,
   });
 
-  // Extract login hero content from CMS
-  const loginHeroSection = loginPageData?.sections?.find(s => s.type === "hero" && s.isEnabled);
+  // Extract login hero content from CMS (only if CMS is available and has sections)
+  const loginHeroSection = loginPageData?.cmsAvailable !== false 
+    ? loginPageData?.sections?.find(s => s.type === "hero" && s.isEnabled) 
+    : null;
   const loginHeroContent = loginHeroSection?.content as HeroSectionContent | undefined;
 
-  // Log CMS fetch errors for debugging (silent to users, falls back to default content)
-  if (isPageDataError && pageDataError) {
-    const errorMessage = pageDataError instanceof Error ? pageDataError.message : String(pageDataError);
-    console.error("Failed to fetch CMS page sections:", errorMessage);
-  }
-
-  // Find intro and thank_you sections from CMS (only when page data is loaded and no error)
-  const cmsDataReady = !isPageDataLoading && !isPageDataError && pageData;
+  // Find intro and thank_you sections from CMS (only when page data is loaded)
+  // Check cmsAvailable flag - if false, sections array is empty (CMS not configured for this event)
+  const cmsDataReady = !isPageDataLoading && pageData && pageData.cmsAvailable !== false;
   const introSection = cmsDataReady ? pageData?.sections?.find(s => s.type === "intro" && s.isEnabled) : null;
   const thankYouSection = cmsDataReady ? pageData?.sections?.find(s => s.type === "thank_you" && s.isEnabled) : null;
 
   // Fetch REGISTRATION page CMS data for form content
-  const { data: registrationPageData } = useQuery<PageData | null>({
+  const { data: registrationPageData } = useQuery<PageData & { cmsAvailable?: boolean } | null>({
     queryKey: ["/api/public/event-pages", params.eventId, "registration"],
     queryFn: async () => {
       const res = await fetch(`/api/public/event-pages/${params.eventId}?pageType=registration`);
@@ -386,13 +386,18 @@ export default function RegistrationPage() {
       return res.json();
     },
     enabled: !!params.eventId,
-    retry: 1,
+    retry: false, // CMS is optional
+    staleTime: 5 * 60 * 1000,
   });
 
-  // Extract registration page CMS sections
-  const registrationHeroSection = registrationPageData?.sections?.find(s => s.type === "hero" && s.isEnabled);
+  // Extract registration page CMS sections (only if CMS is available)
+  const registrationHeroSection = registrationPageData?.cmsAvailable !== false 
+    ? registrationPageData?.sections?.find(s => s.type === "hero" && s.isEnabled) 
+    : null;
   const registrationHeroContent = registrationHeroSection?.content as HeroSectionContent | undefined;
-  const formSection = registrationPageData?.sections?.find(s => s.type === "form" && s.isEnabled);
+  const formSection = registrationPageData?.cmsAvailable !== false 
+    ? registrationPageData?.sections?.find(s => s.type === "form" && s.isEnabled) 
+    : null;
   const formSectionContent = formSection?.content as FormSectionContent | undefined;
   
   // Store event info for thank you page (preserves data after mutation/refetch)

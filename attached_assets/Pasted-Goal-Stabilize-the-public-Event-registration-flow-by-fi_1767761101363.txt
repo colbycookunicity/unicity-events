@@ -1,0 +1,94 @@
+Goal:
+Stabilize the public Event registration flow by fixing CMS 404 noise, registration-required verification logic, and the /api/register/existing 403 error so form submission works cleanly.
+
+Context:
+We have a new Events platform with:
+• Public event pages by slug
+• Optional CMS-backed content for events
+• Registration forms (open + registration-required)
+• Email verification / OTP for registration-required events
+• Per-registration QR codes (email + UI)
+• On-site QR check-in
+
+Current issues observed:
+• Repeated 404 errors when fetching CMS page sections
+• CMS requests firing during form fill and submit
+• Form submission blocked by:
+  POST /api/register/existing → 403 Forbidden
+• Console noise obscuring real failures
+
+These issues are related but must be fixed holistically.
+
+I want you to:
+
+────────────────────────────────────────
+A) CMS PAGE & SECTION HANDLING (NON-FATAL)
+────────────────────────────────────────
+• Audit public CMS page resolution for events by slug
+• When an Event exists but CMS pages or sections do NOT exist:
+  - Do NOT return hard 404s that break flows
+  - Return a controlled, typed response the frontend understands
+• Ensure CMS content is OPTIONAL
+• Prevent repeated retries for missing CMS content
+• Log missing CMS pages once (or not at all)
+• Ensure default registration UI renders cleanly without CMS
+
+Supported pageTypes:
+• default
+• registration
+• login
+
+────────────────────────────────────────
+B) REGISTRATION-REQUIRED VERIFICATION FLOW
+────────────────────────────────────────
+• Audit the “registration required” event setting
+• Ensure the intended flow is enforced correctly:
+  1. User enters email
+  2. Email verification / OTP occurs
+  3. Verified users may proceed to registration form
+• Ensure unverified users are NOT allowed to submit protected registration endpoints
+• Ensure verified users are allowed to submit without hitting 403s
+• Make verification state explicit and reliable across requests
+
+────────────────────────────────────────
+C) FIX /api/register/existing 403 FAILURE
+────────────────────────────────────────
+• Audit the /api/register/existing endpoint
+• Clarify when it should be called and by whom
+• Ensure it:
+  - Accepts verified users for registration-required events
+  - Accepts users for open events without verification
+• Return clear error responses (not silent 403s)
+• Ensure frontend handles these responses gracefully
+
+────────────────────────────────────────
+D) FRONTEND STABILITY & ERROR NOISE
+────────────────────────────────────────
+• Ensure CMS fetch failures do NOT block form submission
+• Ensure form submission errors are clearly surfaced to the user
+• Reduce console noise so real errors are visible
+• Do NOT attempt to fix browser-extension-related errors (content.min.js, contentScript.bundle.js)
+
+────────────────────────────────────────
+Constraints:
+• Do NOT change QR code logic
+• Do NOT change check-in or badge printing logic
+• Do NOT add new auth systems
+• Do NOT change event creation UX
+• Do NOT add new CMS concepts
+• Focus only on correctness, stability, and clarity
+
+────────────────────────────────────────
+Output:
+• Backend fixes for CMS + registration endpoints
+• Frontend fallback and error-handling improvements
+• Clean registration flow for:
+  - Open events
+  - Registration-required events
+• Clear explanation of what changed and why
+• Update Instructions.md with sections:
+  - “CMS Optional Content Handling”
+  - “Registration-Required Verification Flow”
+  - “/api/register/existing Behavior”
+
+Let me know if anything blocks you.

@@ -6,9 +6,10 @@ import { Loader2 } from "lucide-react";
 import { useLanguage, type Language } from "@/lib/i18n";
 
 interface LandingPageData {
-  page: EventPage;
+  page: EventPage | null;
   sections: EventPageSection[];
   event: Event;
+  cmsAvailable?: boolean;
 }
 
 interface LandingPageRendererProps {
@@ -23,6 +24,8 @@ export function LandingPageRenderer({ eventSlug, isPreview }: LandingPageRendere
   const { data, isLoading, error } = useQuery<LandingPageData>({
     queryKey: ['/api/public/event-pages', eventSlug],
     enabled: !!eventSlug,
+    retry: false, // CMS is optional, don't retry on failure
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes to prevent repeated requests
   });
   
   // Set initial language from event's defaultLanguage on first load
@@ -60,7 +63,21 @@ export function LandingPageRenderer({ eventSlug, isPreview }: LandingPageRendere
     );
   }
 
-  const { page, sections, event } = data;
+  const { page, sections, event, cmsAvailable } = data;
+  
+  // If CMS is not available (no published page), show default content
+  if (cmsAvailable === false || !page) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold mb-4">{event.name}</h1>
+          <p className="text-muted-foreground">
+            Landing page coming soon.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const enabledSections = sections
     .filter(s => s.isEnabled)

@@ -790,7 +790,9 @@ export async function registerRoutes(
   });
 
   // Get existing registration for verified user (called after OTP verification)
-  // Security: Requires a valid, verified OTP session for the email
+  // Security: ALWAYS requires a valid, verified OTP session for the email
+  // For open_anonymous mode, this endpoint returns exists: false (no existing registration lookup)
+  // since open_anonymous mode allows multiple registrations per email
   // Note: This endpoint can be called multiple times within the session window for the same email+event
   app.post("/api/register/existing", async (req, res) => {
     try {
@@ -805,17 +807,38 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Event not found" });
       }
 
+      // Check registration mode - open_anonymous events don't need existing registration lookup
+      // (they allow multiple registrations per email)
+      const registrationMode: RegistrationMode = (event.registrationMode as RegistrationMode) || "open_verified";
+      const isAnonymousMode = registrationMode === "open_anonymous";
+      
+      // For open_anonymous mode, just return that no existing registration applies
+      // This is not an error - it's expected behavior for anonymous events
+      if (isAnonymousMode) {
+        return res.json({ 
+          success: true, 
+          exists: false,
+          reason: "open_anonymous mode allows multiple registrations per email"
+        });
+      }
+      
+      // For verified modes (qualified_verified, open_verified), require OTP session
       // Security check: Verify there's an active verified OTP session scoped to this event
-      // Use the event-specific lookup to avoid collisions with admin/other sessions
       const session = await storage.getOtpSessionForRegistration(email, event.id);
       if (!session || !session.verified) {
-        return res.status(403).json({ error: "Email not verified. Please complete OTP verification first." });
+        return res.status(403).json({ 
+          error: "Email not verified. Please complete OTP verification first.",
+          code: "VERIFICATION_REQUIRED"
+        });
       }
 
       // Check session hasn't expired (verified sessions are valid for 30 minutes for security)
       const verifiedAt = session.verifiedAt ? new Date(session.verifiedAt) : null;
       if (!verifiedAt || (Date.now() - verifiedAt.getTime()) > 30 * 60 * 1000) {
-        return res.status(403).json({ error: "Session expired. Please verify again." });
+        return res.status(403).json({ 
+          error: "Session expired. Please verify again.",
+          code: "SESSION_EXPIRED"
+        });
       }
 
       // Get existing registration with full details
@@ -3546,6 +3569,7 @@ export async function registerRoutes(
 
   // Get event page with sections (public - for rendering landing pages)
   // Accepts optional ?pageType=login|registration|thank_you query param (defaults to registration)
+  // Returns empty sections if CMS page doesn't exist (CMS content is OPTIONAL)
   app.get("/api/public/event-pages/:eventId", async (req, res) => {
     try {
       const event = await storage.getEventByIdOrSlug(req.params.eventId);
@@ -3555,18 +3579,22 @@ export async function registerRoutes(
       
       const pageType = (req.query.pageType as string) || "registration";
       const pageData = await storage.getEventPageWithSections(event.id, pageType);
-      if (!pageData) {
-        return res.status(404).json({ error: "Page not found" });
-      }
-      
-      // Only return published pages to public
-      if (pageData.page.status !== 'published') {
-        return res.status(404).json({ error: "Page not found" });
-      }
       
       // Strip deprecated registrationSettings from event response
       const { registrationSettings, ...eventWithoutLegacy } = event;
-      res.json({ ...pageData, event: eventWithoutLegacy });
+      
+      // CMS content is OPTIONAL - if no page exists or page is not published,
+      // return a controlled response with empty sections instead of 404
+      if (!pageData || pageData.page.status !== 'published') {
+        return res.json({ 
+          page: null, 
+          sections: [], 
+          event: eventWithoutLegacy,
+          cmsAvailable: false 
+        });
+      }
+      
+      res.json({ ...pageData, event: eventWithoutLegacy, cmsAvailable: true });
     } catch (error) {
       console.error("Error fetching event page:", error);
       res.status(500).json({ error: "Failed to fetch event page" });
