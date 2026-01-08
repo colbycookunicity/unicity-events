@@ -600,12 +600,16 @@ export default function AttendeesPage() {
       return { total: ids.length, failed };
     },
     onSuccess: (data) => {
-      // Invalidate all registration-related queries
+      // Invalidate all registration-related queries using the exact query keys
       queryClient.invalidateQueries({ queryKey: ["/api/registrations"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/registrations?eventId=${eventFilter}`] });
       if (eventFilter !== "all") {
-        queryClient.invalidateQueries({ queryKey: ["/api/registrations", { eventId: eventFilter }] });
         queryClient.invalidateQueries({ queryKey: [`/api/events/${eventFilter}/qualifiers`] });
       }
+      // Also invalidate any query that starts with /api/registrations
+      queryClient.invalidateQueries({ 
+        predicate: (query) => String(query.queryKey[0]).startsWith("/api/registrations")
+      });
       // Clear selection
       setSelectedPeople(new Set());
       setBulkDeleteDialogOpen(false);
