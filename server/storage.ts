@@ -473,6 +473,7 @@ export class DatabaseStorage implements IStorage {
 
   async deleteRegistration(id: string): Promise<boolean> {
     // Delete related data first (cascade)
+    await db.delete(printLogs).where(eq(printLogs.registrationId, id));
     await db.delete(guests).where(eq(guests.registrationId, id));
     await db.delete(flights).where(eq(flights.registrationId, id));
     await db.delete(reimbursements).where(eq(reimbursements.registrationId, id));
