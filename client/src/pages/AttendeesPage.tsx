@@ -146,6 +146,7 @@ export default function AttendeesPage() {
   const [qualifierToDelete, setQualifierToDelete] = useState<QualifiedRegistrant | null>(null);
   const [registrationDeleteDialogOpen, setRegistrationDeleteDialogOpen] = useState(false);
   const [registrationToDelete, setRegistrationToDelete] = useState<Registration | null>(null);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [registrationToMove, setRegistrationToMove] = useState<Registration | null>(null);
   const [targetEventId, setTargetEventId] = useState<string>("");
@@ -586,6 +587,41 @@ export default function AttendeesPage() {
     },
     onError: () => {
       toast({ title: t("error"), description: "Failed to delete registration", variant: "destructive" });
+    },
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      // Delete registrations one by one (API doesn't support bulk delete)
+      const results = await Promise.allSettled(
+        ids.map(id => apiRequest("DELETE", `/api/registrations/${id}`))
+      );
+      const failed = results.filter(r => r.status === "rejected").length;
+      return { total: ids.length, failed };
+    },
+    onSuccess: (data) => {
+      // Invalidate all registration-related queries
+      queryClient.invalidateQueries({ queryKey: ["/api/registrations"] });
+      if (eventFilter !== "all") {
+        queryClient.invalidateQueries({ queryKey: ["/api/registrations", { eventId: eventFilter }] });
+        queryClient.invalidateQueries({ queryKey: [`/api/events/${eventFilter}/qualifiers`] });
+      }
+      // Clear selection
+      setSelectedPeople(new Set());
+      setBulkDeleteDialogOpen(false);
+      
+      if (data.failed === 0) {
+        toast({ title: t("success"), description: `${data.total} registration(s) deleted successfully` });
+      } else {
+        toast({ 
+          title: "Partially completed", 
+          description: `Deleted ${data.total - data.failed} of ${data.total} registrations. ${data.failed} failed.`, 
+          variant: "destructive" 
+        });
+      }
+    },
+    onError: () => {
+      toast({ title: t("error"), description: "Failed to delete registrations", variant: "destructive" });
     },
   });
 
@@ -1450,6 +1486,16 @@ export default function AttendeesPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          {selectedPeople.size > 0 && (
+            <Button 
+              variant="destructive" 
+              onClick={() => setBulkDeleteDialogOpen(true)}
+              data-testid="button-delete-selected"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete Selected ({selectedPeople.size})
+            </Button>
+          )}
         </div>
       </div>
 
@@ -2322,6 +2368,40 @@ export default function AttendeesPage() {
               disabled={deleteRegistrationMutation.isPending}
             >
               {deleteRegistrationMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selectedPeople.size} Registration(s)</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {selectedPeople.size} selected registration(s)? 
+              This will permanently remove their registrations and all associated data. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => {
+                // Get only the IDs of people who are registrations (not just qualifiers)
+                const registrationIds = filteredPeople
+                  .filter(p => selectedPeople.has(p.id) && p.type === "registration" && p.registration)
+                  .map(p => p.registration!.id);
+                if (registrationIds.length > 0) {
+                  bulkDeleteMutation.mutate(registrationIds);
+                } else {
+                  toast({ title: "No registrations selected", description: "Only registered attendees can be deleted.", variant: "destructive" });
+                  setBulkDeleteDialogOpen(false);
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={bulkDeleteMutation.isPending}
+            >
+              {bulkDeleteMutation.isPending ? "Deleting..." : `Delete ${selectedPeople.size} Registration(s)`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
