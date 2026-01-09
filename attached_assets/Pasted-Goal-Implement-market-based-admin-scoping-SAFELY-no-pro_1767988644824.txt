@@ -1,0 +1,37 @@
+Goal:
+Implement market-based admin scoping SAFELY (no production disruption) by adding only backwards-compatible schema + scaffolding behind a disabled feature flag. Do NOT enforce any market restrictions yet.
+
+Instructions:
+• Research the existing codebase and read Instructions.md fully before making changes
+• Implement changes in a way that public registration routes (/register/:slug) are completely unaffected
+• Add a feature flag MARKET_SCOPING_ENABLED (default false) and ensure all new logic is gated behind it
+• Make ONLY additive, backwards-compatible changes in this first pass
+• Write a short rollout checklist at the top of Instructions.md describing how to enable later safely
+
+Scope for this pass (IMPLEMENT):
+1) Database (additive only)
+   - Add events.market_code (nullable, indexed). Do NOT make it required yet.
+   - Add users.assigned_markets (nullable text[] or json) to support future market_admin mapping.
+   - If role enum changes are risky, do NOT change the enum yet; defer role rename/migration to a later pass.
+
+2) Backend scaffolding (feature-flagged, non-enforced)
+   - Create middleware requireMarketAccess(...) but make it a no-op when MARKET_SCOPING_ENABLED=false
+   - Add helpers to read assigned markets from the user record
+   - Do NOT change existing route protections yet (no filtering, no blocking)
+
+3) Admin UI (optional, safe)
+   - Add non-functional UI placeholders only if they do not affect existing pages (e.g., a hidden market filter behind the flag)
+   - Do NOT change default event lists yet
+
+Constraints:
+• Do not modify public registration endpoints or behavior
+• Do not filter or block any admin queries while the flag is false
+• Avoid breaking migrations: all existing rows must remain valid without data backfill
+• If anything is unclear, choose the safest backward-compatible approach
+
+Deliverables:
+• PR-quality code changes (migrations + feature flag + scaffolding)
+• Update Instructions.md with:
+  - what changed
+  - how to backfill market_code later
+  - how to enable MARKET_SCOPING_ENABLED safely in staging first

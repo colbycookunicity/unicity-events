@@ -32,6 +32,10 @@ export type GuestPolicy = typeof guestPolicyEnum[number];
 export const reimbursementStatusEnum = ["pending", "processing", "completed"] as const;
 export type ReimbursementStatus = typeof reimbursementStatusEnum[number];
 
+// Market codes for regional scoping (Phase 1: scaffolding only, not enforced)
+export const marketCodeEnum = ["US", "CA", "PR", "EU", "MX", "CO", "TH", "KR", "JP", "AU", "NZ", "SG", "HK", "TW", "PH", "MY", "ID", "VN"] as const;
+export type MarketCode = typeof marketCodeEnum[number];
+
 // Users table - for admin/staff accounts
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -41,6 +45,9 @@ export const users = pgTable("users", {
   unicityId: text("unicity_id"),
   customerId: integer("customer_id"),
   language: text("language").notNull().default("en"),
+  // Market-based scoping (Phase 1: nullable, not enforced yet)
+  // null = global access (or feature not enabled), array = access to specific markets
+  assignedMarkets: text("assigned_markets").array(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   lastModified: timestamp("last_modified").defaultNow().notNull(),
 });
@@ -169,6 +176,9 @@ export const events = pgTable("events", {
   thankYouQrInstructions: text("thank_you_qr_instructions"),
   thankYouQrInstructionsEs: text("thank_you_qr_instructions_es"),
   createdBy: varchar("created_by").references(() => users.id),
+  // Market-based scoping (Phase 1: nullable, not enforced yet)
+  // null = no market assigned (legacy), string = market code (e.g., "US", "CA")
+  marketCode: text("market_code"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   lastModified: timestamp("last_modified").defaultNow().notNull(),
 });
