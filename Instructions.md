@@ -1,3 +1,526 @@
+# Market-Based Admin Scoping Design
+
+## Overview
+
+Design a market-based access control system for the Events platform that allows market-specific administrators to only create, view, and manage events and attendees within their assigned markets, while global administrators retain full access to all markets.
+
+---
+
+## Current System Analysis
+
+### 1. User Roles & Authentication
+
+**File**: `shared/schema.ts` (lines 12-13, 36-46)
+
+```typescript
+export const userRoleEnum = ["admin", "event_manager", "marketing", "readonly"] as const;
+```
+
+**Users Table Schema**:
+| Column | Type | Purpose |
+|--------|------|---------|
+| id | varchar (UUID) | Primary key |
+| email | text | Unique email |
+| name | text | Display name |
+| role | text | One of: admin, event_manager, marketing, readonly |
+| unicityId | text | Optional Unicity ID |
+| customerId | integer | Optional customer ID |
+| language | text | Preferred language |
+
+**Current Role Behaviors**:
+- `admin` → Full access to all events, users, and settings
+- `event_manager` → Access only to events they created or are assigned to (via `event_manager_assignments` table)
+- `marketing` → View-only access to all events
+- `readonly` → View-only access to all events
+
+**Gap**: No `market_code` or `assigned_markets` field exists on users.
+
+---
+
+### 2. Events Table
+
+**File**: `shared/schema.ts` (lines 131-174)
+
+**Events Table Schema** (key fields):
+| Column | Type | Purpose |
+|--------|------|---------|
+| id | varchar (UUID) | Primary key |
+| slug | text | URL-friendly identifier |
+| name | text | Event name |
+| status | text | draft, published, private, archived |
+| createdBy | varchar (FK) | References users.id |
+| ... | ... | Other event metadata |
+
+**Gap**: No `market_code` field exists on events table.
+
+---
+
+### 3. Event Manager Assignments
+
+**File**: `shared/schema.ts` (lines 575-591)
+
+```typescript
+export const eventManagerAssignments = pgTable("event_manager_assignments", {
+  id: varchar("id").primaryKey(),
+  eventId: varchar("event_id").references(() => events.id),
+  userId: varchar("user_id").references(() => users.id),
+  assignedBy: varchar("assigned_by").references(() => users.id),
+  assignedAt: timestamp("assigned_at"),
+});
+```
+
+**Current Behavior**: Event managers can only access events where:
+1. They are the `createdBy` user, OR
+2. They have an entry in `event_manager_assignments`
+
+**Relevance**: This per-event assignment model could coexist with market-based scoping.
+
+---
+
+### 4. Authentication Middleware
+
+**File**: `server/routes.ts` (lines 44-81)
+
+```typescript
+// authenticateToken - Verifies JWT and attaches user to req
+async function authenticateToken(req, res, next) {
+  // ... validates token, looks up user
+  req.user = { id: user.id, email: user.email, role: user.role };
+  next();
+}
+
+// requireRole - Checks if user has required role
+function requireRole(...roles: string[]) {
+  return (req, res, next) => {
+    if (!req.user || !roles.includes(req.user.role)) {
+      return res.status(403).json({ error: "Insufficient permissions" });
+    }
+    next();
+  };
+}
+```
+
+**Gap**: No market-based access checking middleware exists.
+
+---
+
+### 5. Storage Layer Access Control
+
+**File**: `server/storage.ts` (lines 1352-1381)
+
+```typescript
+async canUserAccessEvent(userId: string, eventId: string, userRole: string): Promise<boolean> {
+  // Admins can access all events
+  if (userRole === 'admin') return true;
+  
+  // Marketing and readonly can access all events (view only)
+  if (userRole === 'marketing' || userRole === 'readonly') return true;
+  
+  // Event managers: check creator OR assignment
+  // ...
+}
+```
+
+**Gap**: No market-based filtering in storage methods.
+
+---
+
+### 6. API Routes Requiring Market Scoping
+
+**File**: `server/routes.ts`
+
+#### Admin-Protected Routes (need market scoping):
+
+| Route | Method | Current Protection | Needs Market Scope |
+|-------|--------|-------------------|-------------------|
+| `/api/events` | GET | authenticateToken | YES - filter by market |
+| `/api/events` | POST | requireRole("admin", "event_manager") | YES - validate market |
+| `/api/events/:id` | PATCH | requireRole("admin", "event_manager") | YES - check market access |
+| `/api/events/:id` | DELETE | requireRole("admin") | YES - check market access |
+| `/api/registrations` | GET | authenticateToken | YES - filter by event market |
+| `/api/registrations/:id` | GET | authenticateToken | YES - check event market |
+| `/api/registrations/:id` | PATCH | requireRole("admin", "event_manager") | YES - check event market |
+| `/api/registrations/:id` | DELETE | requireRole("admin") | YES - check event market |
+| `/api/registrations/:id/check-in` | POST | requireRole("admin", "event_manager") | YES - check event market |
+| `/api/events/:eventId/qualifiers` | GET/POST | authenticateToken/requireRole | YES - check event market |
+| `/api/qualifiers/:id` | PATCH/DELETE | requireRole("admin", "event_manager") | YES - check event market |
+| `/api/events/:eventId/swag-items` | ALL | requireRole("admin", "event_manager") | YES - check event market |
+| `/api/events/:eventId/guest-rules` | ALL | requireRole("admin", "event_manager") | YES - check event market |
+| `/api/events/:eventId/badge-templates` | ALL | requireRole("admin", "event_manager") | YES - check event market |
+| `/api/events/:eventId/printers` | ALL | requireRole("admin", "event_manager") | YES - check event market |
+| `/api/events/:id/managers` | ALL | requireRole("admin") | YES - check event market |
+| `/api/admin/users` | ALL | role === "admin" | PARTIAL - global_admin only |
+| `/api/admin/stats` | GET | authenticateToken | YES - filter by market |
+| `/api/admin/reports/*` | GET | authenticateToken | YES - filter by market |
+
+#### Public Routes (NO market scoping needed):
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/api/events/:idOrSlug/public` | GET | Public event info |
+| `/api/events/:eventIdOrSlug/register` | POST | Public registration |
+| `/api/public/*` | ALL | All public endpoints |
+| `/api/register/*` | ALL | Registration flow |
+| `/api/attendee/*` | ALL | Attendee portal |
+
+---
+
+## Proposed Design
+
+### 1. New Role Structure
+
+Replace single `role` field with a more flexible model:
+
+```typescript
+// Updated user roles
+export const userRoleEnum = [
+  "global_admin",    // Full access to all markets
+  "market_admin",    // Admin access to assigned markets only
+  "event_manager",   // Per-event access (existing behavior)
+  "marketing",       // View-only all events in assigned markets
+  "readonly"         // View-only all events in assigned markets
+] as const;
+```
+
+**Migration**: Existing `admin` users → `global_admin`
+
+---
+
+### 2. Database Schema Changes
+
+#### A. Add `market_code` to Events Table
+
+```typescript
+// In shared/schema.ts - events table
+market_code: text("market_code").notNull().default("US"),
+```
+
+**Valid Market Codes**: `US`, `CA`, `PR`, `EU`, `MX`, `CO`, `TH`, `KR`, `JP`, `AU`, etc.
+
+#### B. Add `assigned_markets` to Users Table
+
+```typescript
+// In shared/schema.ts - users table
+assignedMarkets: text("assigned_markets").array(), // ["US", "CA"] or null for global
+```
+
+**Logic**:
+- `global_admin` → `assignedMarkets = null` (access all)
+- `market_admin` → `assignedMarkets = ["US", "CA"]` (access only listed)
+- Other roles → `assignedMarkets` used for filtering
+
+#### C. Optional: Markets Reference Table
+
+```typescript
+export const markets = pgTable("markets", {
+  code: varchar("code").primaryKey(), // "US", "CA", etc.
+  name: text("name").notNull(),       // "United States", "Canada"
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+```
+
+---
+
+### 3. Middleware Changes
+
+#### A. Enhanced User Context
+
+```typescript
+// In authenticateToken middleware
+req.user = {
+  id: user.id,
+  email: user.email,
+  role: user.role,
+  assignedMarkets: user.assignedMarkets, // NEW
+  isGlobalAdmin: user.role === "global_admin", // NEW helper
+};
+```
+
+#### B. New `requireMarketAccess` Middleware
+
+```typescript
+function requireMarketAccess(extractEventId?: (req) => string | undefined) {
+  return async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    // Global admins bypass all checks
+    if (req.user?.role === "global_admin") {
+      return next();
+    }
+    
+    // If we have an event ID, check market access
+    const eventId = extractEventId?.(req) || req.params.eventId || req.params.id;
+    if (eventId) {
+      const event = await storage.getEvent(eventId);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+      
+      // Check if user has access to this event's market
+      if (!userHasMarketAccess(req.user, event.market_code)) {
+        return res.status(403).json({ error: "Access denied to this market" });
+      }
+    }
+    
+    next();
+  };
+}
+
+function userHasMarketAccess(user: AuthUser, marketCode: string): boolean {
+  if (user.role === "global_admin") return true;
+  if (!user.assignedMarkets || user.assignedMarkets.length === 0) return false;
+  return user.assignedMarkets.includes(marketCode);
+}
+```
+
+---
+
+### 4. Storage Layer Changes
+
+#### A. Filtered Event Queries
+
+```typescript
+async getEvents(userMarkets?: string[]): Promise<EventWithStats[]> {
+  let query = db.select().from(events);
+  
+  // If user has market restrictions, filter
+  if (userMarkets && userMarkets.length > 0) {
+    query = query.where(inArray(events.market_code, userMarkets));
+  }
+  
+  return query.orderBy(desc(events.startDate));
+}
+```
+
+#### B. Enhanced Access Check
+
+```typescript
+async canUserAccessEvent(userId: string, eventId: string, userRole: string, userMarkets?: string[]): Promise<boolean> {
+  // Global admins can access all
+  if (userRole === "global_admin") return true;
+  
+  const event = await this.getEvent(eventId);
+  if (!event) return false;
+  
+  // Check market access first
+  if (userMarkets && userMarkets.length > 0) {
+    if (!userMarkets.includes(event.market_code)) {
+      return false;
+    }
+  }
+  
+  // Then apply role-specific logic
+  if (userRole === "market_admin" || userRole === "marketing" || userRole === "readonly") {
+    return true; // Already passed market check
+  }
+  
+  // Event managers: additional per-event check
+  if (userRole === "event_manager") {
+    return this.isEventManagerForEvent(userId, eventId);
+  }
+  
+  return false;
+}
+```
+
+---
+
+### 5. API Route Updates
+
+#### A. Events Listing
+
+```typescript
+app.get("/api/events", authenticateToken, async (req: AuthenticatedRequest, res) => {
+  const user = req.user!;
+  
+  if (user.role === "global_admin") {
+    const events = await storage.getEvents();
+    return res.json(events);
+  }
+  
+  if (user.role === "event_manager") {
+    const events = await storage.getEventsForManager(user.id);
+    // Further filter by market if user has market restrictions
+    const filtered = user.assignedMarkets 
+      ? events.filter(e => user.assignedMarkets!.includes(e.market_code))
+      : events;
+    return res.json(filtered);
+  }
+  
+  // market_admin, marketing, readonly - filter by assigned markets
+  const events = await storage.getEvents(user.assignedMarkets || undefined);
+  res.json(events);
+});
+```
+
+#### B. Event Creation
+
+```typescript
+app.post("/api/events", authenticateToken, requireRole("global_admin", "market_admin", "event_manager"), async (req, res) => {
+  const user = req.user!;
+  const marketCode = req.body.market_code || "US";
+  
+  // Validate user can create events in this market
+  if (user.role !== "global_admin") {
+    if (!user.assignedMarkets?.includes(marketCode)) {
+      return res.status(403).json({ error: "Cannot create events in this market" });
+    }
+  }
+  
+  // ... create event with market_code
+});
+```
+
+#### C. All Event-Scoped Routes
+
+Add `requireMarketAccess()` middleware to all routes that operate on events:
+
+```typescript
+app.patch("/api/events/:id", 
+  authenticateToken, 
+  requireRole("global_admin", "market_admin", "event_manager"),
+  requireMarketAccess(),  // NEW
+  async (req, res) => { ... }
+);
+
+app.delete("/api/events/:id",
+  authenticateToken,
+  requireRole("global_admin", "market_admin"),
+  requireMarketAccess(),  // NEW
+  async (req, res) => { ... }
+);
+```
+
+---
+
+### 6. Frontend Changes
+
+#### A. User Context Enhancement
+
+```typescript
+// In useAuth hook or context
+interface AuthUser {
+  id: string;
+  email: string;
+  role: UserRole;
+  assignedMarkets: string[] | null;
+  isGlobalAdmin: boolean;
+}
+```
+
+#### B. Market Filter in Admin UI
+
+- Add market selector dropdown in header (for global_admin only)
+- Auto-filter to user's market for market_admin
+- Show market badge on event cards
+- Add market_code field to event creation/edit form
+
+#### C. Conditional UI Elements
+
+```typescript
+// Hide elements based on market access
+{user.isGlobalAdmin && <UserManagementTab />}
+{user.isGlobalAdmin && <MarketSelector />}
+```
+
+---
+
+### 7. Migration Strategy
+
+#### Phase 1: Schema Updates (Backward Compatible)
+1. Add `market_code` column to events with default "US"
+2. Add `assigned_markets` column to users (nullable)
+3. Rename `admin` role to `global_admin` in user records
+4. Create markets reference table
+
+#### Phase 2: Middleware Updates
+1. Update `authenticateToken` to include market info
+2. Create `requireMarketAccess` middleware
+3. Add middleware to all event-scoped routes
+
+#### Phase 3: Storage Layer Updates
+1. Update `getEvents()` to accept market filter
+2. Update `canUserAccessEvent()` with market logic
+3. Add market filtering to registrations, qualifiers, etc.
+
+#### Phase 4: Frontend Updates
+1. Update user context with market info
+2. Add market selector for global_admin
+3. Add market_code to event forms
+4. Update all admin pages to respect market filtering
+
+#### Phase 5: Testing & Validation
+1. Test global_admin can access all markets
+2. Test market_admin can only access assigned markets
+3. Test public routes are unaffected
+4. Test event creation respects market assignment
+5. Regression test existing event_manager per-event assignments
+
+---
+
+## Security Considerations
+
+1. **Server-Side Enforcement**: All market filtering MUST be enforced server-side. Frontend filtering is UX only.
+
+2. **Double-Check Pattern**: Routes should verify market access even if middleware already checked (defense in depth).
+
+3. **Audit Logging**: Log all cross-market access attempts (even if denied).
+
+4. **Admin Escalation Prevention**: Only global_admin can:
+   - Create/modify users
+   - Assign markets to users
+   - Promote users to global_admin
+
+5. **Default Deny**: If market access cannot be determined, deny access.
+
+---
+
+## Files to Modify
+
+| File | Changes Required |
+|------|------------------|
+| `shared/schema.ts` | Add market_code to events, assigned_markets to users, markets table |
+| `server/routes.ts` | Add requireMarketAccess middleware, update all admin routes |
+| `server/storage.ts` | Add market filtering to queries, update access checks |
+| `client/src/lib/auth.ts` | Update user context with markets |
+| `client/src/pages/EventsPage.tsx` | Add market filter UI |
+| `client/src/pages/EventFormPage.tsx` | Add market_code field |
+| `client/src/pages/SettingsPage.tsx` | Add user market assignment UI |
+| `client/src/pages/AttendeesPage.tsx` | Respect market filtering |
+| `client/src/pages/AdminDashboard.tsx` | Market-scoped stats |
+| `client/src/pages/ReportsPage.tsx` | Market-scoped reports |
+
+---
+
+## Estimated Effort
+
+| Phase | Effort | Risk |
+|-------|--------|------|
+| Schema Updates | 2-3 hours | Low |
+| Middleware Updates | 4-6 hours | Medium |
+| Storage Layer Updates | 4-6 hours | Medium |
+| Frontend Updates | 6-8 hours | Low |
+| Testing & Validation | 4-6 hours | Medium |
+| **Total** | **20-29 hours** | |
+
+---
+
+## Open Questions
+
+1. Should event_manager role also respect market boundaries, or remain purely per-event?
+2. Can an event's market_code be changed after creation?
+3. Should there be a "market_viewer" role (readonly for specific market)?
+4. How to handle events that span multiple markets (multi-market events)?
+5. Should market_admin be able to create new users within their market?
+
+---
+
+**Document Status**: DESIGN COMPLETE - Ready for implementation approval
+
+**Last Updated**: January 9, 2026
+
+---
+---
+
 # Badge Templates Implementation
 
 ## Overview
