@@ -1,3 +1,82 @@
+# Market-Based Admin Scoping
+
+## Phase 1 Implementation Status: COMPLETE
+
+**Last Updated**: January 9, 2026
+
+### What Was Implemented (Phase 1 - Scaffolding)
+
+1. **Database Schema Changes** (additive, backwards-compatible):
+   - `events.market_code` - nullable text column for market assignment
+   - `users.assigned_markets` - nullable text[] array for user market access
+   - `marketCodeEnum` - type-safe list of valid market codes
+
+2. **Feature Flag**:
+   - `MARKET_SCOPING_ENABLED` environment variable (default: `false`)
+   - All enforcement is disabled when flag is false
+
+3. **Middleware & Helpers** (`server/marketScoping.ts`):
+   - `requireMarketAccess()` - middleware (no-op when disabled)
+   - `getUserMarkets()` - get user's assigned markets
+   - `userHasMarketAccess()` - check if user can access a market
+   - `filterEventsByMarketAccess()` - filter events by user's markets
+   - `attachMarketContext()` - attach market info to request
+   - `validateMarketCode()` - validate market code format
+
+### Rollout Checklist (How to Enable Safely)
+
+#### Pre-Rollout (Staging)
+
+1. **Backfill market_code on events**:
+   ```sql
+   -- Set all existing events to a default market (e.g., US)
+   UPDATE events SET market_code = 'US' WHERE market_code IS NULL;
+   ```
+
+2. **Assign markets to users** (optional for testing):
+   ```sql
+   -- Example: Give user market_admin access to specific markets
+   UPDATE users SET assigned_markets = ARRAY['US', 'CA'] WHERE email = 'market-admin@example.com';
+   ```
+
+3. **Enable feature flag in staging**:
+   ```
+   MARKET_SCOPING_ENABLED=true
+   ```
+
+4. **Test in staging**:
+   - Verify admin users can still access all events
+   - Verify market-scoped users only see their events
+   - Verify public registration routes are unaffected
+
+#### Production Rollout
+
+1. **Pre-flight checks**:
+   - [ ] All events have market_code backfilled
+   - [ ] Admin users have correct assignedMarkets (null for global access)
+   - [ ] Staging testing passed
+
+2. **Enable feature flag**:
+   ```
+   MARKET_SCOPING_ENABLED=true
+   ```
+
+3. **Monitor**:
+   - Check logs for any access denied errors
+   - Verify event lists are correctly filtered
+   - Confirm no disruption to public routes
+
+#### Rollback
+
+If issues occur, simply disable the feature flag:
+```
+MARKET_SCOPING_ENABLED=false
+```
+
+All market restrictions will be immediately lifted with no data changes required.
+
+---
+
 # Market-Based Admin Scoping Design
 
 ## Overview
