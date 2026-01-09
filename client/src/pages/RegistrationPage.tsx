@@ -47,7 +47,6 @@ interface CustomFormField {
 
 import { IntroSection, ThankYouSection } from "@/components/landing-sections";
 import { RegistrationQRCode, QRCodeDialog } from "@/components/RegistrationQRCode";
-import { AppleWalletButtonBilingual } from "@/components/AppleWalletButton";
 
 interface PageData {
   page: EventPage;
@@ -1586,14 +1585,6 @@ export default function RegistrationPage() {
                 <p className="text-xs text-muted-foreground">
                   {customQrInstructions}
                 </p>
-                {completedCheckInToken && (
-                  <div className="mt-3">
-                    <AppleWalletButtonBilingual 
-                      checkInToken={completedCheckInToken} 
-                      language={language as "en" | "es"}
-                    />
-                  </div>
-                )}
               </div>
             )}
             <div className="text-sm text-muted-foreground">
@@ -1647,14 +1638,6 @@ export default function RegistrationPage() {
                   <p className="text-xs text-muted-foreground mt-3">
                     {customQrInstructions}
                   </p>
-                  {completedCheckInToken && (
-                    <div className="mt-4">
-                      <AppleWalletButtonBilingual 
-                        checkInToken={completedCheckInToken} 
-                        language={language as "en" | "es"}
-                      />
-                    </div>
-                  )}
                 </div>
               )}
               
