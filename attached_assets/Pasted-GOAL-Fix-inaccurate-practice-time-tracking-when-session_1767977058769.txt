@@ -1,0 +1,49 @@
+GOAL:
+Fix inaccurate practice time tracking when sessions are interrupted (loss of data, power, app closed early), and prevent inflated or incorrect session durations from being saved.
+
+CONTEXT:
+User feedback indicates that when a Method session is interrupted (traveling, low data, battery loss, or accidental close), the timer continues running or saves incorrect values.
+Examples:
+• Hundreds of minutes recorded when only ~20 minutes were completed
+• Evening session recorded as 20 seconds when closed early
+• Timer keeps ticking when app loses focus or connection
+
+This affects trust, streak accuracy, and analytics.
+
+INSTRUCTIONS:
+• Research the entire codebase
+• Find all practice session timing logic (Morning, Evening, Practice Mode)
+• Identify where timers start, pause, resume, and stop
+• Inspect how elapsed time is calculated and persisted
+• Check behavior on:
+  - App backgrounding
+  - Browser tab close
+  - Network disconnect
+  - Power loss / refresh
+• Verify whether timers rely on client-side intervals instead of timestamps
+• Identify any missing cleanup on unmount or visibility change
+• Inspect session save logic for:
+  - Minimum duration validation
+  - Maximum duration sanity checks
+  - Early exit handling
+• Compare intended duration vs recorded duration
+• Review how partial sessions should be treated (discard, cap, or save)
+
+REQUIREMENTS / FIXES:
+• Timer must pause or stop when app loses focus, connection, or visibility
+• Use timestamp-based duration calculation (startTime → endTime), not raw ticking intervals
+• Prevent unrealistic durations from being saved (e.g., multi-hour accidental sessions)
+• Clearly handle early exits:
+  - Option A: discard sessions under X seconds
+  - Option B: save but mark as partial
+• Ensure UI reflects actual saved duration, not optimistic values
+• Add logging for interrupted or abnormal sessions
+• Ensure streak logic is not broken by partial sessions
+
+DELIVERABLES:
+• Root cause explanation
+• File + line references
+• Clear fix plan
+• Implement the fixes
+• Add safeguards against bad data
+• Update Instructions.md with findings before finalizing
