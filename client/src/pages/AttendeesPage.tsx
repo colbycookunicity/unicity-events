@@ -591,13 +591,22 @@ export default function AttendeesPage() {
   });
 
   const bulkDeleteMutation = useMutation({
-    mutationFn: async (ids: string[]) => {
-      // Delete registrations one by one (API doesn't support bulk delete)
-      const results = await Promise.allSettled(
-        ids.map(id => apiRequest("DELETE", `/api/registrations/${id}`))
+    mutationFn: async ({ registrationIds, qualifierIds }: { registrationIds: string[]; qualifierIds: string[] }) => {
+      // Delete registrations and qualifiers one by one
+      const registrationResults = await Promise.allSettled(
+        registrationIds.map(id => apiRequest("DELETE", `/api/registrations/${id}`))
       );
-      const failed = results.filter(r => r.status === "rejected").length;
-      return { total: ids.length, failed };
+      const qualifierResults = await Promise.allSettled(
+        qualifierIds.map(id => apiRequest("DELETE", `/api/qualifiers/${id}`))
+      );
+      const registrationsFailed = registrationResults.filter(r => r.status === "rejected").length;
+      const qualifiersFailed = qualifierResults.filter(r => r.status === "rejected").length;
+      return { 
+        registrations: { total: registrationIds.length, failed: registrationsFailed },
+        qualifiers: { total: qualifierIds.length, failed: qualifiersFailed },
+        totalDeleted: (registrationIds.length - registrationsFailed) + (qualifierIds.length - qualifiersFailed),
+        totalFailed: registrationsFailed + qualifiersFailed,
+      };
     },
     onSuccess: (data) => {
       // Invalidate all registration-related queries using the exact query keys
@@ -606,26 +615,30 @@ export default function AttendeesPage() {
       if (eventFilter !== "all") {
         queryClient.invalidateQueries({ queryKey: [`/api/events/${eventFilter}/qualifiers`] });
       }
-      // Also invalidate any query that starts with /api/registrations
+      // Also invalidate any query that starts with /api/registrations or /api/qualifiers
       queryClient.invalidateQueries({ 
-        predicate: (query) => String(query.queryKey[0]).startsWith("/api/registrations")
+        predicate: (query) => {
+          const key = String(query.queryKey[0]);
+          return key.startsWith("/api/registrations") || key.includes("/qualifiers");
+        }
       });
       // Clear selection
       setSelectedPeople(new Set());
       setBulkDeleteDialogOpen(false);
       
-      if (data.failed === 0) {
-        toast({ title: t("success"), description: `${data.total} registration(s) deleted successfully` });
+      const total = data.registrations.total + data.qualifiers.total;
+      if (data.totalFailed === 0) {
+        toast({ title: t("success"), description: `${data.totalDeleted} attendee(s) deleted successfully` });
       } else {
         toast({ 
           title: "Partially completed", 
-          description: `Deleted ${data.total - data.failed} of ${data.total} registrations. ${data.failed} failed.`, 
+          description: `Deleted ${data.totalDeleted} of ${total} attendees. ${data.totalFailed} failed.`, 
           variant: "destructive" 
         });
       }
     },
     onError: () => {
-      toast({ title: t("error"), description: "Failed to delete registrations", variant: "destructive" });
+      toast({ title: t("error"), description: "Failed to delete attendees", variant: "destructive" });
     },
   });
 
@@ -2381,31 +2394,35 @@ export default function AttendeesPage() {
       <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {selectedPeople.size} Registration(s)</AlertDialogTitle>
+            <AlertDialogTitle>Delete {selectedPeople.size} Attendee(s)</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete {selectedPeople.size} selected registration(s)? 
-              This will permanently remove their registrations and all associated data. This action cannot be undone.
+              Are you sure you want to delete {selectedPeople.size} selected attendee(s)? 
+              This will permanently remove their data. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction 
               onClick={() => {
-                // Get only the IDs of people who are registrations (not just qualifiers)
+                // Separate registrations from qualifiers
                 const registrationIds = filteredPeople
                   .filter(p => selectedPeople.has(p.id) && p.type === "registration" && p.registration)
                   .map(p => p.registration!.id);
-                if (registrationIds.length > 0) {
-                  bulkDeleteMutation.mutate(registrationIds);
+                const qualifierIds = filteredPeople
+                  .filter(p => selectedPeople.has(p.id) && p.type === "qualifier" && p.qualifier)
+                  .map(p => p.qualifier!.id);
+                
+                if (registrationIds.length > 0 || qualifierIds.length > 0) {
+                  bulkDeleteMutation.mutate({ registrationIds, qualifierIds });
                 } else {
-                  toast({ title: "No registrations selected", description: "Only registered attendees can be deleted.", variant: "destructive" });
+                  toast({ title: "Nothing to delete", description: "No attendees could be deleted.", variant: "destructive" });
                   setBulkDeleteDialogOpen(false);
                 }
               }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={bulkDeleteMutation.isPending}
             >
-              {bulkDeleteMutation.isPending ? "Deleting..." : `Delete ${selectedPeople.size} Registration(s)`}
+              {bulkDeleteMutation.isPending ? "Deleting..." : `Delete ${selectedPeople.size} Attendee(s)`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
