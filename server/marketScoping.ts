@@ -70,6 +70,10 @@ export function getUserMarkets(user: Pick<User, "role" | "assignedMarkets">): st
 
 /**
  * Check if a user has access to a specific market
+ * 
+ * When MARKET_SCOPING_ENABLED=true:
+ * - Events without marketCode are RESTRICTED to global admins only
+ * - Scoped admins can only access events with explicit marketCode in their list
  */
 export function userHasMarketAccess(
   user: Pick<User, "role" | "assignedMarkets">,
@@ -80,16 +84,17 @@ export function userHasMarketAccess(
     return true;
   }
   
-  // No market code on event = legacy event, allow access
-  if (!marketCode) {
+  const userMarkets = getUserMarkets(user);
+  
+  // Null means global access (admin role or no assigned markets)
+  if (userMarkets === null) {
     return true;
   }
   
-  const userMarkets = getUserMarkets(user);
-  
-  // Null means global access
-  if (userMarkets === null) {
-    return true;
+  // Events without marketCode are restricted to global admins when enforcement is enabled
+  // This ensures legacy events are protected until they get market codes
+  if (!marketCode) {
+    return false;
   }
   
   return userMarkets.includes(marketCode);
@@ -108,6 +113,10 @@ export function canUserAccessEventMarket(
 /**
  * Filter a list of events to only those the user can access
  * Returns all events if feature is disabled or user has global access
+ * 
+ * When MARKET_SCOPING_ENABLED=true:
+ * - Events without marketCode are filtered OUT for scoped admins
+ * - Global admins see everything
  */
 export function filterEventsByMarketAccess<T extends Pick<Event, "marketCode">>(
   events: T[],
@@ -125,9 +134,10 @@ export function filterEventsByMarketAccess<T extends Pick<Event, "marketCode">>(
     return events;
   }
   
-  // Filter to events in user's markets (or legacy events with no market)
+  // Filter to events with explicit marketCode in user's markets only
+  // Events without marketCode are NOT visible to scoped admins
   return events.filter(event => 
-    !event.marketCode || userMarkets.includes(event.marketCode)
+    event.marketCode && userMarkets.includes(event.marketCode)
   );
 }
 
@@ -157,6 +167,7 @@ export function attachMarketContext() {
  * 1. Look up the event by ID (from params)
  * 2. Check if user has access to the event's market
  * 3. Return 403 if access denied
+ * 4. Events without marketCode are RESTRICTED to global admins only
  * 
  * When MARKET_SCOPING_ENABLED=false:
  * - Always passes through (no enforcement)
@@ -194,8 +205,11 @@ export function requireMarketAccess(
     // PHASE 2: Look up the event and check market access
     try {
       const event = await storage.getEvent(eventId);
-      if (event && event.marketCode && !userMarkets.includes(event.marketCode)) {
-        console.log(`[MarketScoping] Access denied: User ${req.user.email} tried to access event ${eventId} (market: ${event.marketCode}) but only has access to: ${userMarkets.join(", ")}`);
+      
+      // If event has no marketCode or user doesn't have access to that market, deny
+      if (!event || !event.marketCode || !userMarkets.includes(event.marketCode)) {
+        const marketInfo = event?.marketCode || 'unknown/unset';
+        console.log(`[MarketScoping] Access denied: User ${req.user.email} tried to access event ${eventId} (market: ${marketInfo}) but only has access to: ${userMarkets.join(", ")}`);
         return res.status(403).json({ 
           error: "Access denied to this market",
           code: "MARKET_ACCESS_DENIED"
@@ -203,7 +217,11 @@ export function requireMarketAccess(
       }
     } catch (err) {
       console.error(`[MarketScoping] Error checking event access:`, err);
-      // On error, allow through (fail open for safety during rollout)
+      // On error, deny (fail closed for security)
+      return res.status(403).json({ 
+        error: "Access denied - market verification failed",
+        code: "MARKET_ACCESS_ERROR"
+      });
     }
     
     next();
@@ -247,6 +265,10 @@ export function getMarketScopingStatus() {
 /**
  * Filter registrations based on their event's market code
  * Used by admin routes to limit registrations to user's markets
+ * 
+ * When MARKET_SCOPING_ENABLED=true:
+ * - Registrations for events without marketCode are filtered OUT for scoped admins
+ * - Global admins see all registrations
  */
 export async function filterRegistrationsByMarketAccess<T extends { eventId: string }>(
   registrations: T[],
@@ -273,21 +295,26 @@ export async function filterRegistrationsByMarketAccess<T extends { eventId: str
         eventMarkets.set(eventId, event.marketCode);
       }
     } catch (err) {
-      // On error, assume access allowed
+      // On error, treat as restricted (fail closed)
       eventMarkets.set(eventId, null);
     }
   }
   
-  // Filter registrations to those in user's markets
+  // Filter registrations to those with explicit marketCode in user's markets
+  // Events without marketCode are NOT visible to scoped admins
   return registrations.filter(reg => {
     const marketCode = eventMarkets.get(reg.eventId);
-    return !marketCode || userMarkets.includes(marketCode);
+    return marketCode && userMarkets.includes(marketCode);
   });
 }
 
 /**
  * Middleware: Check market access for registration-based routes
  * Looks up the registration, gets its event, and checks market access
+ * 
+ * When MARKET_SCOPING_ENABLED=true:
+ * - Events without marketCode are RESTRICTED to global admins only
+ * - Scoped admins can only access registrations for events with explicit marketCode in their list
  */
 export function requireMarketAccessForRegistration() {
   return async (req: MarketScopedRequest, res: Response, next: NextFunction) => {
@@ -316,8 +343,11 @@ export function requireMarketAccessForRegistration() {
       }
       
       const event = await storage.getEvent(registration.eventId);
-      if (event && event.marketCode && !userMarkets.includes(event.marketCode)) {
-        console.log(`[MarketScoping] Registration access denied: User ${req.user.email} tried to access registration ${registrationId} in market ${event.marketCode}`);
+      
+      // If event has no marketCode or user doesn't have access to that market, deny
+      if (!event || !event.marketCode || !userMarkets.includes(event.marketCode)) {
+        const marketInfo = event?.marketCode || 'unknown/unset';
+        console.log(`[MarketScoping] Registration access denied: User ${req.user.email} tried to access registration ${registrationId} in market ${marketInfo}`);
         return res.status(403).json({
           error: "Access denied to this market",
           code: "MARKET_ACCESS_DENIED"
@@ -325,6 +355,11 @@ export function requireMarketAccessForRegistration() {
       }
     } catch (err) {
       console.error(`[MarketScoping] Error checking registration access:`, err);
+      // On error, deny (fail closed for security)
+      return res.status(403).json({ 
+        error: "Access denied - market verification failed",
+        code: "MARKET_ACCESS_ERROR"
+      });
     }
     
     next();
