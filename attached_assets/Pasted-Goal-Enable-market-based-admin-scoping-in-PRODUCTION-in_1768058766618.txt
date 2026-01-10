@@ -1,0 +1,56 @@
+Goal:
+Enable market-based admin scoping in PRODUCTION in a controlled, reversible manner without disrupting any existing public events, registrations, or links.
+
+Preconditions:
+• Phase 1 and Phase 2 are complete
+• Market scoping has been validated in development/staging
+• All existing production events already have a non-null market_code (or safe default)
+• Public registration routes are confirmed unaffected
+• Instant rollback via feature flag is available
+
+Instructions:
+• Read Instructions.md fully before making any changes
+• Confirm all changes are production-safe and backwards compatible
+• Proceed carefully and log each step
+
+Scope (IMPLEMENT ONLY THESE):
+
+1) Enable enforcement in production
+   • Set MARKET_SCOPING_ENABLED=true in PRODUCTION environment
+   • Do NOT modify any other environment variables
+   • Do NOT redeploy schema changes at this step
+
+2) Enforce admin-only scoping
+   • Ensure requireMarketAccess middleware is applied ONLY to admin-protected routes:
+     - Admin event list, updates, deletes
+     - Admin registration reads, updates, check-ins
+     - Admin exports and payments
+   • Confirm public routes remain completely unguarded:
+     - /register/:slug
+     - public confirmation pages
+     - email links
+     - QR code registration/check-in endpoints that do not require admin auth
+
+3) Validate live behavior (REQUIRED)
+   • Confirm public registration links still load and accept registrations
+   • Confirm global admins retain full access across all markets
+   • Confirm scoped admins only see events/registrations for assigned markets
+   • Confirm unauthorized access returns 403 (not 500)
+   • Confirm no admin routes are unintentionally blocked
+
+4) Production safety & rollback
+   • Verify that setting MARKET_SCOPING_ENABLED=false immediately restores pre-Phase behavior
+   • Document rollback steps clearly in Instructions.md
+   • Log any unexpected findings or risks
+
+Constraints:
+• Do NOT make market_code non-null in production
+• Do NOT modify event slugs, URLs, or existing registrations
+• Do NOT introduce breaking role changes
+• If any unexpected risk is detected, STOP and report instead of proceeding
+
+Deliverables:
+• Confirmation that enforcement is live in production
+• Validation checklist results
+• Rollback confirmation
+• Notes added to Instructions.md documenting Phase 3 completion
