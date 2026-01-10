@@ -1,16 +1,19 @@
 /**
- * Market-Based Admin Scoping - Phase 1 Scaffolding
+ * Market-Based Admin Scoping - Phase 2 Enforcement
  * 
- * This module provides scaffolding for market-based access control.
- * All functionality is DISABLED by default and gated behind MARKET_SCOPING_ENABLED.
+ * This module provides market-based access control for admin routes.
+ * Enforcement is gated behind MARKET_SCOPING_ENABLED feature flag.
  * 
- * Phase 1: Adds structure without enforcing restrictions.
- * Phase 2: Will enable filtering and access control.
+ * Phase 1: Completed - Schema and scaffolding added
+ * Phase 2: Active - Server-side enforcement for admin routes
+ * 
+ * IMPORTANT: Public routes (registration, confirmation, etc.) are NOT affected.
  */
 
 import type { Request, Response, NextFunction } from "express";
 import type { User, Event, MarketCode } from "@shared/schema";
 import { marketCodeEnum } from "@shared/schema";
+import { storage } from "./storage";
 
 // Feature flag - default FALSE, all market scoping is disabled
 export const MARKET_SCOPING_ENABLED = process.env.MARKET_SCOPING_ENABLED === "true";
@@ -150,12 +153,13 @@ export function attachMarketContext() {
 /**
  * Middleware: Require market access for event-based routes
  * 
- * CURRENTLY A NO-OP when MARKET_SCOPING_ENABLED=false
- * 
- * When enabled, this will:
+ * When MARKET_SCOPING_ENABLED=true:
  * 1. Look up the event by ID (from params)
  * 2. Check if user has access to the event's market
  * 3. Return 403 if access denied
+ * 
+ * When MARKET_SCOPING_ENABLED=false:
+ * - Always passes through (no enforcement)
  * 
  * @param extractEventId - Optional function to extract event ID from request
  */
@@ -163,16 +167,17 @@ export function requireMarketAccess(
   extractEventId?: (req: MarketScopedRequest) => string | undefined
 ) {
   return async (req: MarketScopedRequest, res: Response, next: NextFunction) => {
-    // PHASE 1: Always pass through - no enforcement yet
+    // Feature flag disabled = no enforcement
     if (!MARKET_SCOPING_ENABLED) {
       return next();
     }
     
-    // If user has global access, skip checks
+    // No user = no enforcement (should be caught by authenticateToken)
     if (!req.user) {
       return next();
     }
     
+    // Get user's markets - null means global access
     const userMarkets = getUserMarkets(req.user as Pick<User, "role" | "assignedMarkets">);
     if (userMarkets === null) {
       return next();
@@ -186,15 +191,20 @@ export function requireMarketAccess(
       return next();
     }
     
-    // PHASE 2: This is where we would look up the event and check market access
-    // For now, just pass through - the actual enforcement will be added later
-    // when we're ready to enable the feature
-    
-    // Placeholder for future enforcement:
-    // const event = await storage.getEvent(eventId);
-    // if (event && event.marketCode && !userMarkets.includes(event.marketCode)) {
-    //   return res.status(403).json({ error: "Access denied to this market" });
-    // }
+    // PHASE 2: Look up the event and check market access
+    try {
+      const event = await storage.getEvent(eventId);
+      if (event && event.marketCode && !userMarkets.includes(event.marketCode)) {
+        console.log(`[MarketScoping] Access denied: User ${req.user.email} tried to access event ${eventId} (market: ${event.marketCode}) but only has access to: ${userMarkets.join(", ")}`);
+        return res.status(403).json({ 
+          error: "Access denied to this market",
+          code: "MARKET_ACCESS_DENIED"
+        });
+      }
+    } catch (err) {
+      console.error(`[MarketScoping] Error checking event access:`, err);
+      // On error, allow through (fail open for safety during rollout)
+    }
     
     next();
   };
@@ -227,7 +237,96 @@ export function getMarketScopingStatus() {
   return {
     enabled: MARKET_SCOPING_ENABLED,
     validMarketCodes: [...marketCodeEnum],
-    phase: 1,
-    description: "Scaffolding only - no enforcement active",
+    phase: MARKET_SCOPING_ENABLED ? 2 : 1,
+    description: MARKET_SCOPING_ENABLED 
+      ? "Phase 2 - Server-side enforcement active for admin routes" 
+      : "Phase 1 - Scaffolding only, no enforcement",
+  };
+}
+
+/**
+ * Filter registrations based on their event's market code
+ * Used by admin routes to limit registrations to user's markets
+ */
+export async function filterRegistrationsByMarketAccess<T extends { eventId: string }>(
+  registrations: T[],
+  user: Pick<User, "role" | "assignedMarkets">
+): Promise<T[]> {
+  if (!MARKET_SCOPING_ENABLED) {
+    return registrations;
+  }
+  
+  const userMarkets = getUserMarkets(user);
+  if (userMarkets === null) {
+    return registrations;
+  }
+  
+  // Get all unique event IDs
+  const eventIds = Array.from(new Set(registrations.map(r => r.eventId)));
+  
+  // Look up events and their markets
+  const eventMarkets = new Map<string, string | null>();
+  for (const eventId of eventIds) {
+    try {
+      const event = await storage.getEvent(eventId);
+      if (event) {
+        eventMarkets.set(eventId, event.marketCode);
+      }
+    } catch (err) {
+      // On error, assume access allowed
+      eventMarkets.set(eventId, null);
+    }
+  }
+  
+  // Filter registrations to those in user's markets
+  return registrations.filter(reg => {
+    const marketCode = eventMarkets.get(reg.eventId);
+    return !marketCode || userMarkets.includes(marketCode);
+  });
+}
+
+/**
+ * Middleware: Check market access for registration-based routes
+ * Looks up the registration, gets its event, and checks market access
+ */
+export function requireMarketAccessForRegistration() {
+  return async (req: MarketScopedRequest, res: Response, next: NextFunction) => {
+    if (!MARKET_SCOPING_ENABLED) {
+      return next();
+    }
+    
+    if (!req.user) {
+      return next();
+    }
+    
+    const userMarkets = getUserMarkets(req.user as Pick<User, "role" | "assignedMarkets">);
+    if (userMarkets === null) {
+      return next();
+    }
+    
+    const registrationId = req.params.id || req.params.registrationId;
+    if (!registrationId) {
+      return next();
+    }
+    
+    try {
+      const registration = await storage.getRegistration(registrationId);
+      if (!registration) {
+        return next(); // Let the route handler return 404
+      }
+      
+      const event = await storage.getEvent(registration.eventId);
+      if (event && event.marketCode && !userMarkets.includes(event.marketCode)) {
+        console.log(`[MarketScoping] Registration access denied: User ${req.user.email} tried to access registration ${registrationId} in market ${event.marketCode}`);
+        return res.status(403).json({
+          error: "Access denied to this market",
+          code: "MARKET_ACCESS_DENIED"
+        });
+      }
+    } catch (err) {
+      console.error(`[MarketScoping] Error checking registration access:`, err);
+    }
+    
+    next();
   };
 }

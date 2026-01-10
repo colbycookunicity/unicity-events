@@ -1,0 +1,57 @@
+Goal:
+Execute Phase 2 of market-based admin scoping in STAGING ONLY by backfilling market_code for existing events and enabling enforcement behind a feature flag. Public registration flows must remain completely unaffected.
+
+Preconditions:
+• Phase 1 is complete (schema added, feature flag + middleware exist, enforcement disabled by default)
+• Instructions.md contains the approved design and migration plan
+• Production must NOT be impacted
+
+Instructions:
+• Read Instructions.md fully before making any changes
+• Confirm you are operating in STAGING only (never production)
+• Enable MARKET_SCOPING_ENABLED=true in staging environment only
+• Do NOT enable or change anything in production
+
+Scope (IMPLEMENT ONLY THESE):
+1) Backfill existing events
+   • Ensure every existing event in staging has a non-null market_code
+   • Use documented mappings where available
+   • Any unknown or legacy events should receive a safe default (e.g. 'US' or 'GLOBAL')
+   • Do NOT modify event slugs or public URLs
+
+2) Enable server-side enforcement (admin routes only)
+   • Apply requireMarketAccess middleware ONLY to admin-protected routes:
+     - Admin events list
+     - Admin attendees list
+     - Admin exports
+     - Admin payments
+     - Admin check-in views
+   • Global admins must retain full access
+   • Market admins must be restricted to assigned markets
+   • Event managers retain per-event access (do not widen permissions)
+
+3) Explicit exclusions (MUST NOT CHANGE)
+   • Public registration routes (/register/:slug or equivalent)
+   • Public confirmation pages
+   • Email links
+   • QR check-in endpoints used without admin authentication
+
+Validation (REQUIRED):
+• Verify existing public registration URLs still work
+• Verify global_admin sees all events
+• Verify market_admin cannot access other markets (including via guessed IDs)
+• Verify event_manager behavior unchanged
+• Verify disabling MARKET_SCOPING_ENABLED restores original behavior
+• Log validation results clearly
+
+Constraints:
+• Do NOT deploy enforcement to production
+• Do NOT make market_code non-null in production
+• Do NOT remove legacy access paths
+• If any unexpected risk is discovered, stop and report instead of proceeding
+
+Deliverables:
+• Backfill script or migration details
+• List of routes updated with enforcement
+• Validation results
+• Any risks or follow-up items documented in Instructions.md

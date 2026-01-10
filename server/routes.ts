@@ -8,6 +8,7 @@ import { getStripePublishableKey } from "./stripeClient";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
 import { iterableService } from "./iterable";
+import { filterEventsByMarketAccess, filterRegistrationsByMarketAccess, requireMarketAccess, requireMarketAccessForRegistration, MARKET_SCOPING_ENABLED, getMarketScopingStatus } from "./marketScoping";
 
 const HYDRA_API_BASE = process.env.NODE_ENV === "production" 
   ? "https://hydra.unicity.net/v6"
@@ -866,6 +867,11 @@ export async function registerRoutes(
     }
   });
 
+  // Market scoping status (for debugging/admin)
+  app.get("/api/admin/market-scoping-status", authenticateToken, requireRole("admin"), async (req, res) => {
+    res.json(getMarketScopingStatus());
+  });
+
   // Dashboard Stats
   app.get("/api/admin/stats", authenticateToken, async (req, res) => {
     try {
@@ -1077,15 +1083,24 @@ export async function registerRoutes(
   app.get("/api/events", authenticateToken as any, async (req: AuthenticatedRequest, res) => {
     try {
       const user = req.user!;
+      const fullUser = await storage.getUser(user.id);
       
       // Event managers only see their own events
       if (user.role === "event_manager") {
         const events = await storage.getEventsForManager(user.id);
-        res.json(events);
+        // Apply market filtering for event managers with market restrictions
+        const filteredEvents = fullUser 
+          ? filterEventsByMarketAccess(events, fullUser)
+          : events;
+        res.json(filteredEvents);
       } else {
-        // Admins, marketing, readonly see all events
+        // Admins, marketing, readonly see all events (subject to market restrictions)
         const events = await storage.getEvents();
-        res.json(events);
+        // Apply market filtering based on user's assigned markets
+        const filteredEvents = fullUser 
+          ? filterEventsByMarketAccess(events, fullUser)
+          : events;
+        res.json(filteredEvents);
       }
     } catch (error) {
       console.error("Get events error:", error);
@@ -1569,7 +1584,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/events/:id", authenticateToken, requireRole("admin", "event_manager"), async (req, res) => {
+  app.patch("/api/events/:id", authenticateToken, requireRole("admin", "event_manager"), requireMarketAccess() as any, async (req, res) => {
     try {
       // Normalize slug: empty/whitespace -> null
       const normalizedSlug = req.body.slug !== undefined 
@@ -1662,7 +1677,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/events/:id", authenticateToken, requireRole("admin"), async (req, res) => {
+  app.delete("/api/events/:id", authenticateToken, requireRole("admin"), requireMarketAccess() as any, async (req, res) => {
     try {
       await storage.deleteEvent(req.params.id);
       res.json({ success: true });
@@ -2145,14 +2160,21 @@ export async function registerRoutes(
   });
 
   // Registrations Routes
-  app.get("/api/registrations", authenticateToken, async (req, res) => {
+  app.get("/api/registrations", authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
       const eventId = req.query.eventId as string | undefined;
       const registrations = await storage.getRegistrations(eventId);
       
+      // Apply market filtering for admin users
+      const user = req.user!;
+      const fullUser = await storage.getUser(user.id);
+      const filteredRegistrations = fullUser 
+        ? await filterRegistrationsByMarketAccess(registrations, fullUser)
+        : registrations;
+      
       // Compute swag status dynamically from actual assignments
       const registrationIdsWithSwag = await storage.getRegistrationIdsWithSwagAssigned(eventId);
-      const registrationsWithComputedSwagStatus = registrations.map(reg => ({
+      const registrationsWithComputedSwagStatus = filteredRegistrations.map(reg => ({
         ...reg,
         swagStatus: registrationIdsWithSwag.has(reg.id) ? "assigned" : "pending"
       }));
@@ -2164,13 +2186,20 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/registrations/recent", authenticateToken, async (req, res) => {
+  app.get("/api/registrations/recent", authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
       const registrations = await storage.getRecentRegistrations(10);
       
+      // Apply market filtering for admin users
+      const user = req.user!;
+      const fullUser = await storage.getUser(user.id);
+      const filteredRegistrations = fullUser 
+        ? await filterRegistrationsByMarketAccess(registrations, fullUser)
+        : registrations;
+      
       // Compute swag status dynamically from actual assignments
       const registrationIdsWithSwag = await storage.getRegistrationIdsWithSwagAssigned();
-      const registrationsWithComputedSwagStatus = registrations.map(reg => ({
+      const registrationsWithComputedSwagStatus = filteredRegistrations.map(reg => ({
         ...reg,
         swagStatus: registrationIdsWithSwag.has(reg.id) ? "assigned" : "pending"
       }));
@@ -2182,7 +2211,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/registrations/:id", authenticateToken, async (req, res) => {
+  app.get("/api/registrations/:id", authenticateToken, requireMarketAccessForRegistration() as any, async (req, res) => {
     try {
       const registration = await storage.getRegistration(req.params.id);
       if (!registration) {
@@ -2200,7 +2229,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/registrations/:id", authenticateToken, requireRole("admin", "event_manager"), async (req, res) => {
+  app.patch("/api/registrations/:id", authenticateToken, requireRole("admin", "event_manager"), requireMarketAccessForRegistration() as any, async (req, res) => {
     try {
       // Convert date strings to Date objects for timestamp fields
       const updateData = { ...req.body };
@@ -2240,7 +2269,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/registrations/:id/check-in", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+  app.post("/api/registrations/:id/check-in", authenticateToken, requireRole("admin", "event_manager"), requireMarketAccessForRegistration() as any, async (req: AuthenticatedRequest, res) => {
     try {
       // Check if already checked in BEFORE performing check-in (to prevent duplicate emails)
       const existingReg = await storage.getRegistration(req.params.id);
