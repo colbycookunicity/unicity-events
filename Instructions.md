@@ -1,10 +1,18 @@
 # Market-Based Admin Scoping
 
-## Phase 1 Implementation Status: COMPLETE
+## Phase 2 Implementation Status: ACTIVE IN DEVELOPMENT
 
-**Last Updated**: January 9, 2026
+**Last Updated**: January 10, 2026
 
-### What Was Implemented (Phase 1 - Scaffolding)
+### Current Status
+
+- **Phase 1**: COMPLETE - Schema and scaffolding
+- **Phase 2**: ACTIVE - Server-side enforcement enabled in development (`MARKET_SCOPING_ENABLED=true`)
+- **Production**: Feature flag remains OFF until testing complete
+
+### What Was Implemented
+
+#### Phase 1 - Scaffolding (Complete)
 
 1. **Database Schema Changes** (additive, backwards-compatible):
    - `events.market_code` - nullable text column for market assignment
@@ -16,12 +24,45 @@
    - All enforcement is disabled when flag is false
 
 3. **Middleware & Helpers** (`server/marketScoping.ts`):
-   - `requireMarketAccess()` - middleware (no-op when disabled)
+   - `requireMarketAccess()` - middleware for event routes
+   - `requireMarketAccessForRegistration()` - middleware for registration routes
    - `getUserMarkets()` - get user's assigned markets
    - `userHasMarketAccess()` - check if user can access a market
    - `filterEventsByMarketAccess()` - filter events by user's markets
+   - `filterRegistrationsByMarketAccess()` - filter registrations by event's market
    - `attachMarketContext()` - attach market info to request
    - `validateMarketCode()` - validate market code format
+
+#### Phase 2 - Server-Side Enforcement (Active)
+
+1. **Backfilled Data**:
+   - All existing events (3 total) have `market_code='US'`
+
+2. **Protected Admin Routes**:
+   - `PATCH /api/events/:id` - requires market access
+   - `DELETE /api/events/:id` - requires market access
+   - `GET /api/registrations/:id` - requires market access for registration's event
+   - `PATCH /api/registrations/:id` - requires market access for registration's event
+   - `POST /api/registrations/:id/check-in` - requires market access for registration's event
+
+3. **Filtered List Routes**:
+   - `GET /api/events` - filtered by user's markets
+   - `GET /api/registrations` - filtered by event's market
+   - `GET /api/registrations/recent` - filtered by event's market
+
+4. **Hardened Security**:
+   - Events without `marketCode` are RESTRICTED to global admins only
+   - Scoped admins can only access events with explicit marketCode in their assigned list
+   - All middleware fails closed (returns 403) on lookup errors
+
+### Access Control Rules
+
+| User Type | Criteria | Access |
+|-----------|----------|--------|
+| Global Admin | `role="admin"` | All events and registrations |
+| Legacy Admin | `role="admin"` with `assignedMarkets=null` | All events and registrations |
+| Scoped Admin | `role="event_manager"` with `assignedMarkets=['US', 'CA']` | Only events with matching marketCode |
+| Public Users | Unauthenticated | Public registration routes unaffected |
 
 ### Rollout Checklist (How to Enable Safely)
 
