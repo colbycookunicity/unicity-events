@@ -52,3 +52,6 @@ ITERABLE_QUALIFICATION_GRANTED_CAMPAIGN_ID = "16336320"
 
 [userenv.development]
 MARKET_SCOPING_ENABLED = "true"
+
+[userenv.production]
+MARKET_SCOPING_ENABLED = "true"

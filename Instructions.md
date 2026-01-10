@@ -1,14 +1,14 @@
 # Market-Based Admin Scoping
 
-## Phase 2 Implementation Status: ACTIVE IN DEVELOPMENT
+## Phase 3 Implementation Status: LIVE IN PRODUCTION
 
 **Last Updated**: January 10, 2026
 
 ### Current Status
 
 - **Phase 1**: COMPLETE - Schema and scaffolding
-- **Phase 2**: ACTIVE - Server-side enforcement enabled in development (`MARKET_SCOPING_ENABLED=true`)
-- **Production**: Feature flag remains OFF until testing complete
+- **Phase 2**: COMPLETE - Server-side enforcement validated in development
+- **Phase 3**: LIVE - Production enforcement enabled (`MARKET_SCOPING_ENABLED=true` in production)
 
 ### What Was Implemented
 
@@ -54,6 +54,34 @@
    - Events without `marketCode` are RESTRICTED to global admins only
    - Scoped admins can only access events with explicit marketCode in their assigned list
    - All middleware fails closed (returns 403) on lookup errors
+
+#### Phase 3 - Production Rollout (Live)
+
+**Deployed**: January 10, 2026
+
+1. **Pre-Rollout Validation**:
+   - ✅ All events confirmed to have non-null `market_code` (3 events with 'US')
+   - ✅ Public routes verified unguarded (no requireMarketAccess middleware)
+   - ✅ Admin routes verified protected (requireMarketAccess/requireMarketAccessForRegistration applied)
+   - ✅ Development/staging testing completed
+
+2. **Production Enablement**:
+   - Set `MARKET_SCOPING_ENABLED=true` in production environment
+   - No schema changes or data modifications required
+   - Instant rollback available via feature flag
+
+3. **Protected Admin Routes** (require market access):
+   - `PATCH /api/events/:id`
+   - `DELETE /api/events/:id`
+   - `GET /api/registrations/:id`
+   - `PATCH /api/registrations/:id`
+   - `POST /api/registrations/:id/check-in`
+   - List routes filtered: `GET /api/events`, `GET /api/registrations`, `GET /api/registrations/recent`
+
+4. **Unaffected Public Routes** (no market restrictions):
+   - `/api/register/*` - OTP generation, validation, session management
+   - `/api/public/*` - Guest registration, qualifier lookup, event pages
+   - Public confirmation pages, email links, QR code endpoints
 
 ### Access Control Rules
 
@@ -107,14 +135,29 @@
    - Verify event lists are correctly filtered
    - Confirm no disruption to public routes
 
-#### Rollback
+#### Rollback (CRITICAL - KEEP THIS SECTION VISIBLE)
 
-If issues occur, simply disable the feature flag:
-```
-MARKET_SCOPING_ENABLED=false
+**If issues occur, immediately disable the feature flag:**
+
+```bash
+# Via Replit Secrets panel:
+# Set MARKET_SCOPING_ENABLED=false in BOTH development and production environments
+
+# Or via environment variable tools in Agent:
+# set_env_vars with environment="production" and values={"MARKET_SCOPING_ENABLED": "false"}
 ```
 
-All market restrictions will be immediately lifted with no data changes required.
+**Rollback Effects:**
+- All market restrictions are immediately lifted
+- No database changes required
+- No code deployment needed
+- All admin users regain full access to all events
+- Public routes remain unaffected (they never had restrictions)
+
+**Rollback Verification:**
+1. Server logs should show: `[MarketScoping] Feature flag MARKET_SCOPING_ENABLED=false`
+2. All admins should see all events regardless of assignedMarkets
+3. No 403 MARKET_ACCESS_DENIED errors should occur
 
 ---
 
