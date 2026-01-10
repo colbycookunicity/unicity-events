@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Pencil, Trash2, Users, Shield } from "lucide-react";
+import { Plus, Pencil, Trash2, Users, Shield, Globe } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,10 +48,32 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
 import { format } from "date-fns";
 
+const AVAILABLE_MARKETS = [
+  { code: "US", label: "United States" },
+  { code: "CA", label: "Canada" },
+  { code: "PR", label: "Puerto Rico" },
+  { code: "MX", label: "Mexico" },
+  { code: "CO", label: "Colombia" },
+  { code: "EU", label: "Europe" },
+  { code: "TH", label: "Thailand" },
+  { code: "KR", label: "Korea" },
+  { code: "JP", label: "Japan" },
+  { code: "AU", label: "Australia" },
+  { code: "NZ", label: "New Zealand" },
+  { code: "SG", label: "Singapore" },
+  { code: "HK", label: "Hong Kong" },
+  { code: "TW", label: "Taiwan" },
+  { code: "PH", label: "Philippines" },
+  { code: "MY", label: "Malaysia" },
+  { code: "ID", label: "Indonesia" },
+  { code: "VN", label: "Vietnam" },
+];
+
 const userFormSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
   name: z.string().min(1, "Name is required"),
   role: z.enum(["admin", "event_manager", "marketing", "readonly"]),
+  assignedMarkets: z.array(z.string()).nullable().optional(),
 });
 
 type UserFormData = z.infer<typeof userFormSchema>;
@@ -88,6 +110,7 @@ export default function SettingsPage() {
       email: "",
       name: "",
       role: "readonly",
+      assignedMarkets: null,
     },
   });
 
@@ -161,6 +184,7 @@ export default function SettingsPage() {
       email: "",
       name: "",
       role: "readonly",
+      assignedMarkets: null,
     });
     setIsAddDialogOpen(true);
   };
@@ -170,6 +194,7 @@ export default function SettingsPage() {
       email: user.email,
       name: user.name,
       role: user.role as UserFormData["role"],
+      assignedMarkets: user.assignedMarkets || null,
     });
     setEditingUser(user);
   };
@@ -377,6 +402,62 @@ export default function SettingsPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="assignedMarkets"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-2">
+                      <Globe className="h-4 w-4" />
+                      Assigned Markets
+                    </FormLabel>
+                    <div className="text-xs text-muted-foreground mb-2">
+                      Leave empty for global access to all markets. Select specific markets to restrict access.
+                    </div>
+                    <FormControl>
+                      <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto border rounded-md p-3">
+                        {AVAILABLE_MARKETS.map((market) => {
+                          const isSelected = field.value?.includes(market.code) || false;
+                          return (
+                            <label
+                              key={market.code}
+                              className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 p-1 rounded"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  const currentValue = field.value || [];
+                                  if (e.target.checked) {
+                                    field.onChange([...currentValue, market.code]);
+                                  } else {
+                                    field.onChange(currentValue.filter((m: string) => m !== market.code));
+                                  }
+                                }}
+                                className="rounded border-input"
+                                data-testid={`checkbox-market-${market.code}`}
+                              />
+                              <span className="text-sm">
+                                {market.code} - {market.label}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </FormControl>
+                    {field.value && field.value.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {field.value.map((code: string) => (
+                          <Badge key={code} variant="secondary" className="text-xs">
+                            {code}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
