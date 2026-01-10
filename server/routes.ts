@@ -237,13 +237,14 @@ export async function registerRoutes(
         isValid = true;
       } else {
         // Validate with Hydra (works in all environments)
-        // Include the validation_id from the OTP session
-        console.log("Admin Hydra OTP validation - email:", email, "validation_id:", session.validationId);
+        // IMPORTANT: Use the email from the stored session to ensure exact match with what Hydra received
+        const sessionEmail = session.email;
+        console.log("Admin Hydra OTP validation - sessionEmail:", sessionEmail, "inputEmail:", email, "validation_id:", session.validationId);
         const response = await fetch(`${HYDRA_API_BASE}/otp/magic-link`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
-            email, 
+            email: sessionEmail, 
             code,
             validation_id: session.validationId 
           }),
