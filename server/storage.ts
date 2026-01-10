@@ -583,8 +583,9 @@ export class DatabaseStorage implements IStorage {
 
   // OTP Sessions
   async getOtpSession(email: string): Promise<OtpSession | undefined> {
+    const normalized = email.toLowerCase().trim();
     const [session] = await db.select().from(otpSessions)
-      .where(and(eq(otpSessions.email, email), gte(otpSessions.expiresAt, new Date())))
+      .where(and(eq(otpSessions.email, normalized), gte(otpSessions.expiresAt, new Date())))
       .orderBy(desc(otpSessions.createdAt));
     return session || undefined;
   }
@@ -617,7 +618,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createOtpSession(session: InsertOtpSession): Promise<OtpSession> {
-    const [newSession] = await db.insert(otpSessions).values(session).returning();
+    const normalizedSession = {
+      ...session,
+      email: session.email.toLowerCase().trim(),
+    };
+    const [newSession] = await db.insert(otpSessions).values(normalizedSession).returning();
     return newSession;
   }
 

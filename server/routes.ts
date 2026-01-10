@@ -145,10 +145,13 @@ export async function registerRoutes(
   // Auth Routes
   app.post("/api/auth/otp/generate", async (req, res) => {
     try {
-      const { email } = req.body;
-      if (!email) {
+      const { email: rawEmail } = req.body;
+      if (!rawEmail) {
         return res.status(400).json({ error: "Email is required" });
       }
+      
+      // Normalize email to prevent case/whitespace mismatches
+      const email = rawEmail.toLowerCase().trim();
 
       // Only allow whitelisted admin emails to log in (exact match, no plus aliases)
       if (!(await isAdminEmail(email))) {
@@ -207,10 +210,13 @@ export async function registerRoutes(
 
   app.post("/api/auth/otp/validate", async (req, res) => {
     try {
-      const { email, code } = req.body;
-      if (!email || !code) {
+      const { email: rawEmail, code } = req.body;
+      if (!rawEmail || !code) {
         return res.status(400).json({ error: "Email and code are required" });
       }
+      
+      // Normalize email to match how it was stored
+      const email = rawEmail.toLowerCase().trim();
 
       // Verify there's a pending session
       const session = await storage.getOtpSession(email);
