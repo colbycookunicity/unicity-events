@@ -591,9 +591,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getOtpSessionForRegistration(email: string, eventId: string): Promise<OtpSession | undefined> {
+    const normalized = email.toLowerCase().trim();
     // Fetch all active sessions for this email and filter for the specific event
     const sessions = await db.select().from(otpSessions)
-      .where(and(eq(otpSessions.email, email), gte(otpSessions.expiresAt, new Date())))
+      .where(and(eq(otpSessions.email, normalized), gte(otpSessions.expiresAt, new Date())))
       .orderBy(desc(otpSessions.createdAt));
     
     // Find session scoped to this registration event
@@ -605,8 +606,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getOtpSessionForAttendeePortal(email: string): Promise<OtpSession | undefined> {
+    const normalized = email.toLowerCase().trim();
     const sessions = await db.select().from(otpSessions)
-      .where(and(eq(otpSessions.email, email), gte(otpSessions.expiresAt, new Date())))
+      .where(and(eq(otpSessions.email, normalized), gte(otpSessions.expiresAt, new Date())))
       .orderBy(desc(otpSessions.createdAt));
     
     // Find the most recent session with attendeePortal flag set
