@@ -23,22 +23,23 @@ const FALLBACK_ADMIN_EMAILS = [
   "carolina.martinez@unicity.com",
 ];
 
-// Check if email is an authorized admin (database-driven with fallback)
+// Check if email is an authorized admin user (database-driven with fallback)
+// Allows all user roles: admin, event_manager, marketing, readonly
 async function isAdminEmail(email: string): Promise<boolean> {
   const normalized = email.toLowerCase().trim();
-  // Reject any email with a plus sign - these are aliases
+  
+  // First check: Does user exist in database with ANY admin role?
+  const user = await storage.getUserByEmail(normalized);
+  if (user) {
+    // Any role is valid for admin panel access (admin, event_manager, marketing, readonly)
+    return true;
+  }
+  
+  // Fallback for bootstrapping: Check hardcoded list (only for primary admins, no aliases)
+  // Plus-sign aliases cannot bootstrap - they must be added via Admin UI
   if (normalized.includes('+')) {
     return false;
   }
-  
-  // Check if user exists in database AND has admin role
-  const user = await storage.getUserByEmail(normalized);
-  if (user && user.role === "admin") {
-    return true; // User exists and is an admin
-  }
-  
-  // Fallback: Check hardcoded list (for bootstrapping first admin)
-  // This allows initial admins to log in before they're in the database
   return FALLBACK_ADMIN_EMAILS.includes(normalized);
 }
 
