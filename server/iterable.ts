@@ -1,6 +1,44 @@
 const ITERABLE_API_KEY = process.env.ITERABLE_API_KEY;
 const ITERABLE_API_BASE = 'https://api.iterable.com/api';
 
+// Required campaign environment variables
+const REQUIRED_CAMPAIGN_ENV_VARS = [
+  'ITERABLE_EVENT_CONFIRMATION_CAMPAIGN_ID',
+  'ITERABLE_EVENT_CONFIRMATION_CAMPAIGN_ID_ES',
+  'ITERABLE_CHECKED_IN_CAMPAIGN_ID',
+  'ITERABLE_CHECKED_IN_CAMPAIGN_ID_ES',
+] as const;
+
+// Validate Iterable configuration on startup
+export function validateIterableConfig(): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+  
+  if (!ITERABLE_API_KEY) {
+    errors.push('ITERABLE_API_KEY is not configured - emails will not be sent');
+  }
+  
+  for (const envVar of REQUIRED_CAMPAIGN_ENV_VARS) {
+    const value = process.env[envVar];
+    if (!value) {
+      errors.push(`Missing campaign ID: ${envVar}`);
+    } else {
+      const parsed = parseInt(value, 10);
+      if (isNaN(parsed) || parsed <= 0) {
+        errors.push(`Invalid campaign ID for ${envVar}: ${value}`);
+      }
+    }
+  }
+  
+  if (errors.length > 0) {
+    console.error('[Iterable] Configuration validation failed:');
+    errors.forEach(err => console.error(`  - ${err}`));
+  } else {
+    console.log('[Iterable] Configuration validated successfully');
+  }
+  
+  return { valid: errors.length === 0, errors };
+}
+
 function getBaseUrl(): string {
   return process.env.REPLIT_DEPLOYMENT_URL 
     || process.env.REPLIT_DEV_DOMAIN 
@@ -78,7 +116,10 @@ export class IterableService {
       throw new Error('ITERABLE_API_KEY is not configured');
     }
 
-    const response = await fetch(`${ITERABLE_API_BASE}${endpoint}`, {
+    const url = `${ITERABLE_API_BASE}${endpoint}`;
+    log('info', `API Request: ${method} ${endpoint}`, { campaignId: body?.campaignId, email: body?.recipientEmail });
+
+    const response = await fetch(url, {
       method,
       headers: {
         'Api-Key': ITERABLE_API_KEY,
@@ -87,12 +128,25 @@ export class IterableService {
       body: body ? JSON.stringify(body) : undefined,
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Iterable API error (${response.status}): ${errorText}`);
+    const responseText = await response.text();
+    let responseData: any;
+    try {
+      responseData = JSON.parse(responseText);
+    } catch {
+      responseData = { raw: responseText };
     }
 
-    return response.json();
+    if (!response.ok) {
+      const errorDetail = responseData?.msg || responseData?.message || responseData?.raw || responseText;
+      log('error', `API Error: ${method} ${endpoint} returned ${response.status}`, { 
+        status: response.status,
+        error: errorDetail,
+        campaignId: body?.campaignId 
+      });
+      throw new Error(`Iterable API error (${response.status}): ${errorDetail}`);
+    }
+
+    return responseData;
   }
 
   private async sendEmailInternal(params: SendEmailParams): Promise<EmailResult> {

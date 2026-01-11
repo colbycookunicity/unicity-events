@@ -4148,3 +4148,110 @@ server/pass-model/
 | `server/pass-model/` | Pass template and images |
 | `client/src/components/AppleWalletButton.tsx` | UI button components |
 | `server/iterable.ts` | Email integration with wallet URL |
+
+---
+
+# Iterable Email Configuration
+
+## Overview
+
+The Events platform uses Iterable for transactional emails. All emails are sent via Iterable's `/email/target` API endpoint, which requires campaigns to be in "Triggered" mode.
+
+## Required Configuration
+
+### Environment Variables
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `ITERABLE_API_KEY` | Iterable API key (secret) | YES |
+| `ITERABLE_EVENT_CONFIRMATION_CAMPAIGN_ID` | English registration confirmation campaign | YES |
+| `ITERABLE_EVENT_CONFIRMATION_CAMPAIGN_ID_ES` | Spanish registration confirmation campaign | YES |
+| `ITERABLE_CHECKED_IN_CAMPAIGN_ID` | English check-in confirmation campaign | YES |
+| `ITERABLE_CHECKED_IN_CAMPAIGN_ID_ES` | Spanish check-in confirmation campaign | YES |
+| `ITERABLE_REGISTRATION_UPDATE_CAMPAIGN_ID` | Registration update notification | Optional |
+| `ITERABLE_REGISTRATION_CANCELED_CAMPAIGN_ID` | Registration canceled notification | Optional |
+| `ITERABLE_REGISTRATION_TRANSFERRED_CAMPAIGN_ID` | Registration transferred notification | Optional |
+| `ITERABLE_QUALIFICATION_GRANTED_CAMPAIGN_ID` | Qualification granted notification | Optional |
+
+## Troubleshooting Email Failures
+
+### Spanish Emails Return 500 Error (Root Cause: January 2026)
+
+**Symptom**: English resend works, Spanish resend returns 500 error.
+
+**Root Cause**: The Spanish campaign (ID 16427183) was in Draft/Blast mode in Iterable, not Triggered mode.
+
+**Fix**: In Iterable dashboard:
+1. Navigate to Messaging → Campaigns
+2. Find the Spanish confirmation campaign (ID 16427183)
+3. Ensure it is set to "Triggered" type (not Blast/Draft)
+4. If Draft, publish the campaign
+5. If Blast, you need to recreate it as a Triggered campaign
+
+**Prevention**:
+- All campaigns used with `/email/target` MUST be Triggered campaigns
+- Startup validation logs missing/invalid campaign IDs
+- Server logs now include detailed Iterable API error responses
+
+### ITERABLE_API_KEY Not Configured
+
+**Symptom**: All emails fail silently or return "ITERABLE_API_KEY not configured" error.
+
+**Root Cause**: The API key secret was never added to Replit Secrets.
+
+**Fix**: Add `ITERABLE_API_KEY` in Replit Secrets panel with your Iterable API key.
+
+**Prevention**:
+- Startup validation now warns if API key is missing
+- Check server logs for: `[Iterable] Configuration validation failed`
+
+### Campaign ID Not Configured
+
+**Symptom**: Specific email type fails with "Campaign ID not configured" error.
+
+**Root Cause**: The environment variable for that campaign ID is missing or invalid.
+
+**Fix**: Add the missing environment variable with the correct Iterable campaign ID.
+
+**Verification**: On startup, server logs show:
+- `[Iterable] Configuration validated successfully` if all required IDs present
+- List of missing/invalid IDs if any are problematic
+
+## Testing Email Functionality
+
+### Verify English Resend (EN)
+1. Go to Attendees page
+2. Select a registration → 3-dot menu → Resend Confirmation
+3. Choose "English (English)" → Send Email
+4. Should succeed
+
+### Verify Spanish Resend (ES)  
+1. Go to Attendees page
+2. Select a registration → 3-dot menu → Resend Confirmation
+3. Choose "Spanish (Español)" → Send Email
+4. Should succeed (after Iterable campaign is published)
+
+### Check Server Logs
+After sending, logs should show:
+```
+[Iterable] API Request: POST /email/target { campaignId: 16427183, email: "..." }
+{"event":"EMAIL_SENT","type":"REGISTRATION_CONFIRMATION",...}
+```
+
+If error:
+```
+[Iterable] API Error: POST /email/target returned 400 { status: 400, error: "Campaign not found or not triggered", campaignId: 16427183 }
+```
+
+## Data Fields Sent to Iterable
+
+All confirmation emails include:
+- `firstName`, `lastName` - Attendee name
+- `eventId`, `eventName` - Event details
+- `eventLocation`, `eventUrl` - Event location and registration URL
+- `startDate`, `endDate` - Event dates
+- `registrationId` - Registration identifier
+- `language` - Selected language (en/es)
+- `checkInQrPayload` - QR code data string
+- `checkInQrImageUrl` - URL to QR code image
+- `appleWalletUrl` - Apple Wallet pass download URL

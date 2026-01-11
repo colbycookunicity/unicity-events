@@ -7,7 +7,7 @@ import { stripeService } from "./stripeService";
 import { getStripePublishableKey } from "./stripeClient";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
-import { iterableService } from "./iterable";
+import { iterableService, validateIterableConfig } from "./iterable";
 import { filterEventsByMarketAccess, filterRegistrationsByMarketAccess, requireMarketAccess, requireMarketAccessForRegistration, MARKET_SCOPING_ENABLED, getMarketScopingStatus } from "./marketScoping";
 
 const HYDRA_API_BASE = process.env.NODE_ENV === "production" 
@@ -141,6 +141,12 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  
+  // Validate Iterable configuration on startup
+  const iterableValidation = validateIterableConfig();
+  if (!iterableValidation.valid) {
+    console.warn('[Startup] Iterable configuration issues detected - some emails may fail');
+  }
   
   // Auth Routes
   app.post("/api/auth/otp/generate", async (req, res) => {
@@ -2353,11 +2359,17 @@ export async function registerRoutes(
       if (result.success) {
         res.json({ success: true, message: "Confirmation email sent" });
       } else {
-        res.status(500).json({ error: result.error || "Failed to send email" });
+        console.error(`[Resend] Failed for ${registration.email} (${emailLanguage}):`, result.error);
+        res.status(500).json({ 
+          error: result.error || "Failed to send email",
+          language: emailLanguage,
+          campaignType: 'registration_confirmation'
+        });
       }
     } catch (error) {
-      console.error("Resend confirmation error:", error);
-      res.status(500).json({ error: "Failed to resend confirmation email" });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error("Resend confirmation error:", errorMessage);
+      res.status(500).json({ error: errorMessage || "Failed to resend confirmation email" });
     }
   });
 
