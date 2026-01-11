@@ -1130,7 +1130,30 @@ export default function RegistrationPage() {
         return res;
       }
       // POST endpoint now uses UPSERT pattern - never returns duplicate error
-      return apiRequest("POST", `/api/events/${params.eventId}/register`, payload);
+      // Include attendee token if available (for users who verified via /my-events homepage)
+      const attendeeToken = localStorage.getItem("attendeeAuthToken");
+      const headers: HeadersInit = {
+        "Content-Type": "application/json",
+      };
+      if (attendeeToken) {
+        headers["Authorization"] = `Bearer ${attendeeToken}`;
+      }
+      const res = await fetch(`/api/events/${params.eventId}/register`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        try {
+          const json = JSON.parse(text);
+          throw json; // Throw parsed error object for onError handler
+        } catch {
+          throw new Error(`${res.status}: ${text}`);
+        }
+      }
+      return res;
     },
     onSuccess: async (response) => {
       setIsSuccess(true);
