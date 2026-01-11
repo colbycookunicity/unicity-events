@@ -148,7 +148,10 @@ export class IterableService {
     checkInQrPayload?: string | null,
     checkInToken?: string | null
   ): Promise<EmailResult> {
-    const campaignId = getCampaignId('ITERABLE_EVENT_CONFIRMATION_CAMPAIGN_ID');
+    const campaignEnvVar = language === 'es' 
+      ? 'ITERABLE_EVENT_CONFIRMATION_CAMPAIGN_ID_ES' 
+      : 'ITERABLE_EVENT_CONFIRMATION_CAMPAIGN_ID';
+    const campaignId = getCampaignId(campaignEnvVar);
     const eventName = (language === 'es' && event.nameEs) ? event.nameEs : event.name;
     const baseUrl = getBaseUrl();
 
