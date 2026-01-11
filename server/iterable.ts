@@ -263,7 +263,10 @@ export class IterableService {
     event: any,
     language: string = 'en'
   ): Promise<EmailResult> {
-    const campaignId = getCampaignId('ITERABLE_CHECKED_IN_CAMPAIGN_ID');
+    const campaignEnvVar = language === 'es' 
+      ? 'ITERABLE_CHECKED_IN_CAMPAIGN_ID_ES' 
+      : 'ITERABLE_CHECKED_IN_CAMPAIGN_ID';
+    const campaignId = getCampaignId(campaignEnvVar);
     const eventName = (language === 'es' && event.nameEs) ? event.nameEs : event.name;
 
     return this.sendEmailInternal({
