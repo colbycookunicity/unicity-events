@@ -2318,6 +2318,122 @@ export async function registerRoutes(
     }
   });
 
+  // Resend Confirmation Email (single registration)
+  app.post("/api/registrations/:id/resend-confirmation", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const { language } = req.body;
+      const registration = await storage.getRegistration(req.params.id);
+      if (!registration) {
+        return res.status(404).json({ error: "Registration not found" });
+      }
+
+      const event = await storage.getEvent(registration.eventId);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      // Get the check-in token for QR code
+      const checkInToken = await storage.getCheckInTokenByRegistration(registration.id);
+      const checkInQrPayload = checkInToken 
+        ? buildCheckInQRPayload(event.id, registration.id, checkInToken.token)
+        : null;
+
+      // Use provided language or fallback to registration's language
+      const emailLanguage = language || registration.language || 'en';
+
+      const result = await iterableService.sendRegistrationConfirmation(
+        registration.email,
+        registration,
+        event,
+        emailLanguage,
+        checkInQrPayload,
+        checkInToken?.token || null
+      );
+
+      if (result.success) {
+        res.json({ success: true, message: "Confirmation email sent" });
+      } else {
+        res.status(500).json({ error: result.error || "Failed to send email" });
+      }
+    } catch (error) {
+      console.error("Resend confirmation error:", error);
+      res.status(500).json({ error: "Failed to resend confirmation email" });
+    }
+  });
+
+  // Bulk Resend Confirmation Emails
+  app.post("/api/registrations/bulk-resend-confirmation", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const { registrationIds, language } = req.body;
+      
+      if (!Array.isArray(registrationIds) || registrationIds.length === 0) {
+        return res.status(400).json({ error: "No registration IDs provided" });
+      }
+
+      const results = {
+        success: 0,
+        failed: 0,
+        errors: [] as string[]
+      };
+
+      for (const registrationId of registrationIds) {
+        try {
+          const registration = await storage.getRegistration(registrationId);
+          if (!registration) {
+            results.failed++;
+            results.errors.push(`Registration ${registrationId} not found`);
+            continue;
+          }
+
+          const event = await storage.getEvent(registration.eventId);
+          if (!event) {
+            results.failed++;
+            results.errors.push(`Event not found for registration ${registrationId}`);
+            continue;
+          }
+
+          // Get the check-in token for QR code
+          const checkInToken = await storage.getCheckInTokenByRegistration(registration.id);
+          const checkInQrPayload = checkInToken 
+            ? buildCheckInQRPayload(event.id, registration.id, checkInToken.token)
+            : null;
+
+          // Use provided language or fallback to registration's language
+          const emailLanguage = language || registration.language || 'en';
+
+          const result = await iterableService.sendRegistrationConfirmation(
+            registration.email,
+            registration,
+            event,
+            emailLanguage,
+            checkInQrPayload,
+            checkInToken?.token || null
+          );
+
+          if (result.success) {
+            results.success++;
+          } else {
+            results.failed++;
+            results.errors.push(`Failed for ${registration.email}: ${result.error}`);
+          }
+        } catch (err) {
+          results.failed++;
+          results.errors.push(`Error processing ${registrationId}: ${err}`);
+        }
+      }
+
+      res.json({
+        success: true,
+        sent: results.success,
+        failed: results.failed,
+        errors: results.errors.slice(0, 10) // Limit error messages
+      });
+    } catch (error) {
+      console.error("Bulk resend confirmation error:", error);
+      res.status(500).json({ error: "Failed to process bulk resend" });
+    }
+  });
+
   // QR Code Check-In via Email Token
   // This endpoint is used by the check-in scanner to validate CHECKIN: format QR codes
   // QR payload format: CHECKIN:<eventId>:<registrationId>:<token>

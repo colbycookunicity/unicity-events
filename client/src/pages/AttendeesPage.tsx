@@ -164,6 +164,13 @@ export default function AttendeesPage() {
   const [selectedPeople, setSelectedPeople] = useState<Set<string>>(new Set());
   const [selectedPrinterId, setSelectedPrinterId] = useState<string>("");
   
+  // Resend confirmation dialog state
+  const [resendDialogOpen, setResendDialogOpen] = useState(false);
+  const [resendRegistration, setResendRegistration] = useState<Registration | null>(null);
+  const [resendLanguage, setResendLanguage] = useState<string>("en");
+  const [bulkResendDialogOpen, setBulkResendDialogOpen] = useState(false);
+  const [bulkResendLanguage, setBulkResendLanguage] = useState<string>("en");
+  
   const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -811,6 +818,47 @@ export default function AttendeesPage() {
     },
   });
 
+  // Resend confirmation email mutation (single)
+  const resendConfirmationMutation = useMutation({
+    mutationFn: async ({ registrationId, language }: { registrationId: string; language: string }) => {
+      const response = await apiRequest("POST", `/api/registrations/${registrationId}/resend-confirmation`, { language });
+      return response.json();
+    },
+    onSuccess: () => {
+      setResendDialogOpen(false);
+      setResendRegistration(null);
+      toast({ title: t("success"), description: "Confirmation email sent successfully" });
+    },
+    onError: () => {
+      toast({ title: t("error"), description: "Failed to send confirmation email", variant: "destructive" });
+    },
+  });
+
+  // Bulk resend confirmation emails mutation
+  const bulkResendConfirmationMutation = useMutation({
+    mutationFn: async ({ registrationIds, language }: { registrationIds: string[]; language: string }) => {
+      const response = await apiRequest("POST", "/api/registrations/bulk-resend-confirmation", { registrationIds, language });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      setBulkResendDialogOpen(false);
+      setSelectedPeople(new Set());
+      toast({ 
+        title: t("success"), 
+        description: `Sent ${data.sent} emails${data.failed > 0 ? `, ${data.failed} failed` : ''}` 
+      });
+    },
+    onError: () => {
+      toast({ title: t("error"), description: "Failed to send confirmation emails", variant: "destructive" });
+    },
+  });
+
+  const handleResendConfirmation = (reg: Registration) => {
+    setResendRegistration(reg);
+    setResendLanguage(reg.language || "en");
+    setResendDialogOpen(true);
+  };
+
   const handleSave = () => {
     if (!selectedAttendee) return;
     
@@ -1303,7 +1351,13 @@ export default function AttendeesPage() {
                   <Edit className="h-4 w-4 mr-2" />
                   {t("edit")}
                 </DropdownMenuItem>
-                <DropdownMenuItem data-testid={`action-email-${person.id}`}>
+                <DropdownMenuItem 
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    handleResendConfirmation(reg);
+                  }}
+                  data-testid={`action-email-${person.id}`}
+                >
                   <Mail className="h-4 w-4 mr-2" />
                   Resend Confirmation
                 </DropdownMenuItem>
@@ -1504,14 +1558,24 @@ export default function AttendeesPage() {
             </DropdownMenuContent>
           </DropdownMenu>
           {selectedPeople.size > 0 && (
-            <Button 
-              variant="destructive" 
-              onClick={() => setBulkDeleteDialogOpen(true)}
-              data-testid="button-delete-selected"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete Selected ({selectedPeople.size})
-            </Button>
+            <>
+              <Button 
+                variant="outline" 
+                onClick={() => setBulkResendDialogOpen(true)}
+                data-testid="button-bulk-resend"
+              >
+                <Send className="h-4 w-4 mr-2" />
+                Resend Confirmation ({selectedPeople.size})
+              </Button>
+              <Button 
+                variant="destructive" 
+                onClick={() => setBulkDeleteDialogOpen(true)}
+                data-testid="button-delete-selected"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete Selected ({selectedPeople.size})
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -2427,6 +2491,108 @@ export default function AttendeesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Resend Confirmation Dialog (Single) */}
+      <Dialog open={resendDialogOpen} onOpenChange={(open) => { setResendDialogOpen(open); if (!open) setResendRegistration(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Resend Confirmation Email</DialogTitle>
+            <DialogDescription>
+              {resendRegistration && (
+                <>Send confirmation email to <strong>{resendRegistration.firstName} {resendRegistration.lastName}</strong> ({resendRegistration.email})</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-4">
+            <div className="flex flex-col gap-2">
+              <Label>Email Language</Label>
+              <Select value={resendLanguage} onValueChange={setResendLanguage}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="en">English</SelectItem>
+                  <SelectItem value="es">Spanish (Español)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResendDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => {
+                if (resendRegistration) {
+                  resendConfirmationMutation.mutate({ 
+                    registrationId: resendRegistration.id, 
+                    language: resendLanguage 
+                  });
+                }
+              }}
+              disabled={resendConfirmationMutation.isPending}
+              data-testid="button-send-confirmation"
+            >
+              <Send className="h-4 w-4 mr-2" />
+              {resendConfirmationMutation.isPending ? "Sending..." : "Send Email"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Resend Confirmation Dialog */}
+      <Dialog open={bulkResendDialogOpen} onOpenChange={setBulkResendDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Resend Confirmation Emails</DialogTitle>
+            <DialogDescription>
+              Send confirmation emails to {selectedPeople.size} selected attendee(s)
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-4">
+            <div className="flex flex-col gap-2">
+              <Label>Email Language</Label>
+              <Select value={bulkResendLanguage} onValueChange={setBulkResendLanguage}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="en">English</SelectItem>
+                  <SelectItem value="es">Spanish (Español)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-sm text-muted-foreground">
+                All selected attendees will receive emails in this language
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkResendDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => {
+                const registrationIds = filteredPeople
+                  .filter(p => selectedPeople.has(p.id) && p.type === "registration" && p.registration)
+                  .map(p => p.registration!.id);
+                if (registrationIds.length > 0) {
+                  bulkResendConfirmationMutation.mutate({ 
+                    registrationIds, 
+                    language: bulkResendLanguage 
+                  });
+                } else {
+                  toast({ title: "No registrations selected", description: "Select at least one registered attendee", variant: "destructive" });
+                }
+              }}
+              disabled={bulkResendConfirmationMutation.isPending}
+              data-testid="button-bulk-send-confirmation"
+            >
+              <Send className="h-4 w-4 mr-2" />
+              {bulkResendConfirmationMutation.isPending ? "Sending..." : `Send ${selectedPeople.size} Emails`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* CSV Import Dialog */}
       <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
