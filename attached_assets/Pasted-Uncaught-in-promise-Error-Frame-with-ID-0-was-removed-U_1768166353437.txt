@@ -1,0 +1,61 @@
+Uncaught (in promise) Error: Frame with ID 0 was removed.Understand this error
+3background.js:2 Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'length')
+    at background.js:2:1038972
+    at async background.js:2:1038865
+(anonymous) @ background.js:2Understand this error
+contentScript.bundle.js:2 Loading the script 'https://events.unicity.com/43.bundle.js' violates the following Content Security Policy directive: "script-src 'self' 'wasm-unsafe-eval' 'inline-speculation-rules' chrome-extension://4774330e-1a86-4fa8-9bd6-95ee3efeb00f/". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.
+a.l @ contentScript.bundle.js:2Understand this error
+contentScript.bundle.js:2 Failed to load font styles: ChunkLoadError: Loading chunk 43 failed.
+(error: https://events.unicity.com/43.bundle.js)
+    at a.f.j (contentScript.bundle.js:2:2505284)
+    at contentScript.bundle.js:2:2503863
+    at Array.reduce (<anonymous>)
+    at a.e (contentScript.bundle.js:2:2503842)
+    at contentScript.bundle.js:2:4636362
+    at Generator.<anonymous> (contentScript.bundle.js:2:4629728)
+    at Generator.next (contentScript.bundle.js:2:4630666)
+    at NMe (contentScript.bundle.js:2:4631812)
+    at a (contentScript.bundle.js:2:4632016)
+    at contentScript.bundle.js:2:4632079
+(anonymous) @ contentScript.bundle.js:2Understand this warning
+contentScript.bundle.js:2 Loading the script 'https://events.unicity.com/43.bundle.js' violates the following Content Security Policy directive: "script-src 'self' 'wasm-unsafe-eval' 'inline-speculation-rules' chrome-extension://4774330e-1a86-4fa8-9bd6-95ee3efeb00f/". Note that 'script-src-elem' was not explicitly set, so 'script-src' is used as a fallback. The action has been blocked.
+a.l @ contentScript.bundle.js:2Understand this error
+contentScript.bundle.js:2 Failed to load font styles: ChunkLoadError: Loading chunk 43 failed.
+(error: https://events.unicity.com/43.bundle.js)
+    at a.f.j (contentScript.bundle.js:2:2505284)
+    at contentScript.bundle.js:2:2503863
+    at Array.reduce (<anonymous>)
+    at a.e (contentScript.bundle.js:2:2503842)
+    at contentScript.bundle.js:2:4636362
+    at Generator.<anonymous> (contentScript.bundle.js:2:4629728)
+    at Generator.next (contentScript.bundle.js:2:4630666)
+    at NMe (contentScript.bundle.js:2:4631812)
+    at a (contentScript.bundle.js:2:4632016)
+    at contentScript.bundle.js:2:4632079
+(anonymous) @ contentScript.bundle.js:2Understand this warning
+index.html:1 The resource https://apps.rokt.com/icons/rokt-icons.woff was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.Understand this warning
+index.html:1 The resource https://apps.rokt.com/icons/rokt-icons.woff was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.Understand this warning
+/api/registrations/573a2fbf-380d-4d50-9f2a-07b2fc2371ba/resend-confirmation:1  Failed to load resource: the server responded with a status of 500 ()Understand this error
+index.html:1 The resource https://apps.rokt.com/icons/rokt-icons.woff was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.Understand this warning
+index-Bev798n9.js:48  POST https://events.unicity.com/api/registrations/573a2fbf-380d-4d50-9f2a-07b2fc2371ba/resend-confirmation 500 (Internal Server Error)
+at @ index-Bev798n9.js:48
+mutationFn @ index-Bev798n9.js:768
+fn @ index-Bev798n9.js:48
+m @ index-Bev798n9.js:48
+start @ index-Bev798n9.js:48
+execute @ index-Bev798n9.js:48
+await in execute
+mutate @ index-Bev798n9.js:48
+(anonymous) @ index-Bev798n9.js:48
+onClick @ index-Bev798n9.js:770
+Uie @ index-Bev798n9.js:37
+Gie @ index-Bev798n9.js:37
+Wie @ index-Bev798n9.js:37
+rI @ index-Bev798n9.js:37
+I7 @ index-Bev798n9.js:37
+(anonymous) @ index-Bev798n9.js:37
+E$ @ index-Bev798n9.js:40
+i7 @ index-Bev798n9.js:37
+kN @ index-Bev798n9.js:37
+e$ @ index-Bev798n9.js:37
+lae @ index-Bev798n9.js:37Understand this error
