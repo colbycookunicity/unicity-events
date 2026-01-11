@@ -539,6 +539,77 @@ export default function RegistrationPage() {
     }
   }, [skipVerification, event, requiresVerification, openVerifiedMode, openAnonymousMode]);
 
+  // For open_verified mode: check if user already has a valid attendee token from homepage
+  // This prevents double verification when user verified on homepage then navigates to registration
+  useEffect(() => {
+    const checkAttendeeTokenForOpenVerified = async () => {
+      if (!openVerifiedMode || isEmailVerified || verifiedProfile || !params.eventId) {
+        return;
+      }
+      
+      const attendeeToken = localStorage.getItem("attendeeAuthToken");
+      const attendeeEmail = localStorage.getItem("attendeeEmail");
+      
+      if (!attendeeToken || !attendeeEmail) {
+        return;
+      }
+      
+      try {
+        // Validate the attendee session is still valid
+        const res = await fetch("/api/attendee/events", {
+          headers: { Authorization: `Bearer ${attendeeToken}` },
+        });
+        
+        if (res.ok) {
+          // Session is valid - mark email as verified to skip OTP dialog at submission
+          setIsEmailVerified(true);
+          setVerificationEmail(attendeeEmail);
+          
+          // Optionally set verifiedProfile to populate form fields
+          try {
+            const qualifierRes = await fetch(`/api/public/qualifier-info/${params.eventId}?email=${encodeURIComponent(attendeeEmail)}`);
+            if (qualifierRes.ok) {
+              const qualifierData = await qualifierRes.json();
+              setVerifiedProfile({
+                unicityId: qualifierData.unicityId || "",
+                email: attendeeEmail,
+                firstName: qualifierData.firstName || "",
+                lastName: qualifierData.lastName || "",
+                phone: "",
+              });
+              // Pre-populate form
+              form.setValue("email", attendeeEmail);
+              if (qualifierData.firstName) form.setValue("firstName", qualifierData.firstName);
+              if (qualifierData.lastName) form.setValue("lastName", qualifierData.lastName);
+              if (qualifierData.unicityId) form.setValue("unicityId", qualifierData.unicityId);
+            } else {
+              // No qualifier data but session is valid
+              setVerifiedProfile({
+                unicityId: "",
+                email: attendeeEmail,
+                firstName: "",
+                lastName: "",
+                phone: "",
+              });
+              form.setValue("email", attendeeEmail);
+            }
+          } catch (e) {
+            // Session valid, just set email
+            form.setValue("email", attendeeEmail);
+          }
+        } else {
+          // Token expired - clear it
+          localStorage.removeItem("attendeeAuthToken");
+          localStorage.removeItem("attendeeEmail");
+        }
+      } catch (error) {
+        console.error("Failed to validate attendee session for open_verified mode:", error);
+      }
+    };
+    
+    checkAttendeeTokenForOpenVerified();
+  }, [openVerifiedMode, isEmailVerified, verifiedProfile, params.eventId]);
+
   // Check for existing verified session on page load (for refresh persistence)
   // Also checks attendee token from /my-events authentication
   const [isCheckingSession, setIsCheckingSession] = useState(false);
