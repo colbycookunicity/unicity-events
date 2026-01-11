@@ -2292,11 +2292,19 @@ export async function registerRoutes(
       if (!wasAlreadyCheckedIn) {
         const event = await storage.getEvent(registration.eventId);
         if (event) {
+          // Get the check-in token for QR code
+          const checkInToken = await storage.getCheckInTokenByRegistration(registration.id);
+          const checkInQrPayload = checkInToken 
+            ? buildCheckInQRPayload(event.id, registration.id, checkInToken.token)
+            : null;
+          
           iterableService.sendCheckedInConfirmation(
             registration.email,
             registration,
             event,
-            registration.language
+            registration.language,
+            checkInQrPayload,
+            checkInToken?.token || null
           ).catch(err => {
             console.error('[Iterable] Failed to send check-in confirmation email:', err);
           });
@@ -2386,11 +2394,15 @@ export async function registerRoutes(
         // Send check-in confirmation email
         const event = await storage.getEvent(eventId);
         if (event) {
+          const checkInQrPayload = buildCheckInQRPayload(event.id, registration.id, checkInToken.token);
+          
           iterableService.sendCheckedInConfirmation(
             registration.email,
             registration,
             event,
-            registration.language
+            registration.language,
+            checkInQrPayload,
+            checkInToken.token
           ).catch(err => {
             console.error('[Iterable] Failed to send check-in confirmation email:', err);
           });

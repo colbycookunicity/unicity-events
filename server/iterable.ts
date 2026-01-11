@@ -261,13 +261,16 @@ export class IterableService {
     email: string,
     registration: any,
     event: any,
-    language: string = 'en'
+    language: string = 'en',
+    checkInQrPayload?: string | null,
+    checkInToken?: string | null
   ): Promise<EmailResult> {
     const campaignEnvVar = language === 'es' 
       ? 'ITERABLE_CHECKED_IN_CAMPAIGN_ID_ES' 
       : 'ITERABLE_CHECKED_IN_CAMPAIGN_ID';
     const campaignId = getCampaignId(campaignEnvVar);
     const eventName = (language === 'es' && event.nameEs) ? event.nameEs : event.name;
+    const baseUrl = getBaseUrl();
 
     return this.sendEmailInternal({
       campaignId,
@@ -283,6 +286,11 @@ export class IterableService {
         eventStartDate: formatDate(event.startDate, language),
         registrationId: registration.id,
         language,
+        checkInQrPayload: checkInQrPayload || null,
+        checkInQrImageUrl: checkInQrPayload 
+          ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(checkInQrPayload)}`
+          : null,
+        appleWalletUrl: checkInToken ? `${baseUrl}/api/wallet/${checkInToken}` : null,
       },
     });
   }
