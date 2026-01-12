@@ -4151,6 +4151,82 @@ server/pass-model/
 
 ---
 
+# Registration Blank Page Bug Fix (January 12, 2026)
+
+## Issue Summary
+
+Users reported a blank page after entering their OTP verification code during event registration. After refreshing, they were forced to restart the registration process from the beginning.
+
+## Root Cause Analysis
+
+Two issues were identified:
+
+### 1. Slug vs UUID Mismatch in Session Validation
+
+**Location**: `server/routes.ts` - `/api/register/session-status` endpoint
+
+**Problem**: The OTP session stores the event ID as a resolved UUID (from `storage.getEventByIdOrSlug`), but the session-status endpoint was comparing it directly with the URL parameter `eventId` which could be a slug (e.g., `skills-academy` instead of `9c505e51-...`).
+
+**Impact**: When users accessed registration via slug URLs, their valid sessions were incorrectly reported as invalid, causing the frontend to clear the verified state.
+
+**Fix**: Updated the session-status endpoint to resolve the eventId to UUID before comparing:
+```typescript
+// Before
+const sessionEventId = (session.customerData as any)?.registrationEventId;
+if (!sessionEventId || sessionEventId !== eventId) {
+  return res.json({ verified: false });
+}
+
+// After
+const event = await storage.getEventByIdOrSlug(eventId);
+const resolvedEventId = event.id;
+// Compare resolved UUIDs
+if (!sessionEventId || sessionEventId !== resolvedEventId) {
+  return res.json({ verified: false });
+}
+```
+
+### 2. Race Condition During OTP Verification
+
+**Location**: `client/src/pages/RegistrationPage.tsx` - `checkExistingSession` useEffect
+
+**Problem**: After OTP verification succeeded, the `verificationStep` state change triggered the `checkExistingSession` effect to re-run. Before the state transition completed, the effect would call session-status, and if it returned false (due to issue #1), it would clear the sessionStorage and reset the user to the email step.
+
+**Impact**: Users saw a blank flash and were reset to the beginning of the flow.
+
+**Fix**: Added an `otpJustVerified` flag that is set when OTP verification succeeds, and added a guard in the `checkExistingSession` effect to skip when this flag is true. The flag is reset in `resetToEmailVerification()` to allow session checks when restarting the flow:
+```typescript
+// New state flag
+const [otpJustVerified, setOtpJustVerified] = useState(false);
+
+// In handleVerifyOtp on success
+setOtpJustVerified(true);
+
+// In checkExistingSession effect guard
+if (verificationStep !== "email" || otpJustVerified || ...) {
+  return; // Skip session check
+}
+
+// In resetToEmailVerification()
+setOtpJustVerified(false); // Reset flag to allow session checks on restart
+```
+
+## Files Modified
+
+| File | Change |
+|------|--------|
+| `server/routes.ts` | Fixed `/api/register/session-status` to resolve slug to UUID |
+| `client/src/pages/RegistrationPage.tsx` | Added `otpJustVerified` flag and guard |
+
+## Verification
+
+1. Test registration flow using event slug URL
+2. Complete OTP verification
+3. Confirm form appears (no blank page)
+4. Refresh page - should retain verified state for 30 minutes
+
+---
+
 # Iterable Email Configuration
 
 ## Overview

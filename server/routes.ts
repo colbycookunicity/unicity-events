@@ -339,6 +339,13 @@ export async function registerRoutes(
         return res.json({ verified: false });
       }
 
+      // Resolve eventId to UUID (could be slug from URL)
+      const event = await storage.getEventByIdOrSlug(eventId);
+      if (!event) {
+        return res.json({ verified: false });
+      }
+      const resolvedEventId = event.id;
+
       const session = await storage.getOtpSession(email);
       if (!session || !session.verified) {
         return res.json({ verified: false });
@@ -350,9 +357,9 @@ export async function registerRoutes(
         return res.json({ verified: false });
       }
 
-      // Validate event scope
+      // Validate event scope - compare resolved UUIDs
       const sessionEventId = (session.customerData as any)?.registrationEventId;
-      if (!sessionEventId || sessionEventId !== eventId) {
+      if (!sessionEventId || sessionEventId !== resolvedEventId) {
         return res.json({ verified: false });
       }
 

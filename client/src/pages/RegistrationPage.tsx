@@ -317,6 +317,8 @@ export default function RegistrationPage() {
   // Track if we're consuming a token
   const [isConsumingToken, setIsConsumingToken] = useState(false);
   const [tokenConsumed, setTokenConsumed] = useState(false);
+  // Track if OTP was just verified (prevents session check from clearing state during state transition)
+  const [otpJustVerified, setOtpJustVerified] = useState(false);
   
   // Track existing registration for returning users
   const [existingRegistrationId, setExistingRegistrationId] = useState<string | null>(null);
@@ -615,8 +617,9 @@ export default function RegistrationPage() {
   const [isCheckingSession, setIsCheckingSession] = useState(false);
   useEffect(() => {
     const checkExistingSession = async () => {
-      // Skip if already verified, consuming token, or no event
-      if (verificationStep !== "email" || isConsumingToken || tokenConsumed || skipVerification || !params.eventId) {
+      // Skip if already verified, consuming token, OTP just verified, or no event
+      // otpJustVerified prevents race condition where this effect runs during OTP verification state transition
+      if (verificationStep !== "email" || isConsumingToken || tokenConsumed || skipVerification || otpJustVerified || !params.eventId) {
         return;
       }
       
@@ -710,7 +713,7 @@ export default function RegistrationPage() {
     };
 
     checkExistingSession();
-  }, [params.eventId, verificationStep, isConsumingToken, tokenConsumed, skipVerification]);
+  }, [params.eventId, verificationStep, isConsumingToken, tokenConsumed, skipVerification, otpJustVerified]);
 
   // Reset existing registration state when verification email or event changes (security: prevents cross-user/cross-event data leakage)
   useEffect(() => {
@@ -801,6 +804,9 @@ export default function RegistrationPage() {
       const data = await res.json();
       
       if (data.verified) {
+        // Set flag to prevent checkExistingSession from clearing state during transition
+        setOtpJustVerified(true);
+        
         setVerifiedProfile(data.profile);
         setVerifiedByHydra(data.verifiedByHydra || false);
         setIsQualified(data.isQualified);
@@ -933,6 +939,7 @@ export default function RegistrationPage() {
     setVerifiedProfile(null);
     setVerificationEmail("");
     setOtpCode("");
+    setOtpJustVerified(false); // Reset flag to allow session checks on restart
     setExistingRegistrationId(null);
     setCustomFormData({});
     setLoadedForKey(null);
@@ -1342,6 +1349,9 @@ export default function RegistrationPage() {
       const data = await res.json();
       
       if (data.verified) {
+        // Set flag to prevent checkExistingSession from clearing state during transition
+        setOtpJustVerified(true);
+        
         setIsEmailVerified(true);
         setVerifiedByHydra(data.verifiedByHydra || false);
         setShowOtpDialog(false);
