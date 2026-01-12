@@ -2245,6 +2245,13 @@ export async function registerRoutes(
 
   app.patch("/api/registrations/:id", authenticateToken, requireRole("admin", "event_manager"), requireMarketAccessForRegistration() as any, async (req, res) => {
     try {
+      // Get existing registration to check for status change
+      const existingRegistration = await storage.getRegistration(req.params.id);
+      if (!existingRegistration) {
+        return res.status(404).json({ error: "Registration not found" });
+      }
+      const previousStatus = existingRegistration.status;
+      
       // Convert date strings to Date objects for timestamp fields
       const updateData = { ...req.body };
       if (updateData.dateOfBirth && typeof updateData.dateOfBirth === 'string') {
@@ -2259,20 +2266,40 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Registration not found" });
       }
       
-      // Send update notification if important fields changed
-      if (process.env.ITERABLE_API_KEY && (req.body.status || req.body.roomType || req.body.shirtSize)) {
+      // Check if status changed to cancelled or not_coming
+      const cancelledStatuses = ['cancelled', 'not_coming'];
+      const isNowCancelled = cancelledStatuses.includes(registration.status);
+      const wasPreviouslyCancelled = cancelledStatuses.includes(previousStatus);
+      
+      if (process.env.ITERABLE_API_KEY) {
         try {
           const event = await storage.getEvent(registration.eventId);
           if (event) {
-            await iterableService.sendRegistrationUpdate(
-              registration.email,
-              registration,
-              event,
-              registration.language
-            );
+            // Send cancellation email if status just changed to cancelled/not_coming
+            if (isNowCancelled && !wasPreviouslyCancelled) {
+              iterableService.sendRegistrationCanceled(
+                registration.email,
+                registration,
+                event,
+                registration.language
+              ).catch(err => {
+                console.error('[Iterable] Failed to send cancellation email:', err);
+              });
+            }
+            // Send update notification for other important field changes
+            else if (req.body.status || req.body.roomType || req.body.shirtSize) {
+              iterableService.sendRegistrationUpdate(
+                registration.email,
+                registration,
+                event,
+                registration.language
+              ).catch(err => {
+                console.error('[Iterable] Failed to send update email:', err);
+              });
+            }
           }
         } catch (err) {
-          console.error('Failed to send update email:', err);
+          console.error('Failed to send email notification:', err);
         }
       }
       
