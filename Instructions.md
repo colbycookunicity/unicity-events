@@ -122,6 +122,73 @@ const updatedRegistration = await storage.updateRegistration(req.params.registra
 - Without the conditional check, `undefined` was written to the database, clearing any admin-entered phone values
 - This fix ensures fields not in the form template are preserved in the database
 
+#### Fix 5: Custom Phone Fields - Extract to Canonical Phone Column (January 13, 2026)
+
+**Problem:** When events use **custom phone-type fields** (with auto-generated IDs like `field_xxx`) instead of the **standard phone field** (with `name: "phone"`), the phone value is saved to `formData` (JSON column) instead of `registrations.phone` (canonical column). The admin panel reads from `registrations.phone`, so phone numbers entered via custom fields appear as "-" in the admin view.
+
+**Form Field Types:**
+```typescript
+// STANDARD phone field → saves directly to registrations.phone
+{ name: "phone", type: "tel", label: "Mobile Number" }
+
+// CUSTOM phone field → saves to formData[id], NOT registrations.phone!
+{ id: "field_1768336359694", type: "phone", label: "Phone Number" }
+```
+
+**Before Fix:**
+```typescript
+// Custom phone field value saved to formData, admin shows "-"
+{
+  phone: "",  // ← Empty! Admin shows "-"
+  formData: { "field_1768336359694": "+19998880987" }  // ← Phone is here but not read
+}
+```
+
+**After Fix:**
+```typescript
+// server/routes.ts - Helper function added
+function extractPhoneFromFormData(
+  formData: Record<string, any> | undefined,
+  formFields: any[] | undefined | null
+): string | undefined {
+  if (!formData || !formFields || !Array.isArray(formFields)) return undefined;
+  
+  for (const field of formFields) {
+    const fieldType = field.type?.toLowerCase();
+    const fieldName = field.name || field.id;
+    
+    // Match phone/tel type fields that are NOT the standard "phone" field
+    if ((fieldType === 'phone' || fieldType === 'tel') && fieldName && fieldName !== 'phone') {
+      const value = formData[fieldName];
+      if (value && typeof value === 'string' && value.trim()) {
+        return value.trim();
+      }
+    }
+  }
+  return undefined;
+}
+
+// Applied in all registration paths with empty-string handling:
+// 1. POST /api/events/:eventIdOrSlug/register (CREATE path)
+// 2. POST /api/events/:eventIdOrSlug/register (UPSERT path)
+// 3. PUT /api/events/:eventIdOrSlug/register/:registrationId
+
+// CRITICAL: Check for empty string as well as undefined
+const hasValidPhone = updateData.phone !== undefined && String(updateData.phone).trim() !== '';
+if (!hasValidPhone && req.body.formData) {
+  const customPhone = extractPhoneFromFormData(req.body.formData, event.formFields as any[]);
+  if (customPhone) {
+    updateData.phone = customPhone;
+  }
+}
+```
+
+**Why This Matters:**
+- Custom phone fields are created when using the form builder with id-based fields
+- The value is correctly stored in `formData` for form rendering
+- BUT the canonical `registrations.phone` column must be populated for admin display
+- This fix extracts phone from any `type: "phone"` or `type: "tel"` custom field and saves to `registrations.phone`
+
 ### Single Source of Truth Map
 
 | Field | Canonical Source | Read By | Written By |

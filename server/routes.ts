@@ -2042,12 +2042,14 @@ export async function registerRoutes(
         if (req.body.language !== undefined) updateData.language = req.body.language;
         if (req.body.formData !== undefined) updateData.formData = req.body.formData;
         
-        // Extract phone from custom formData fields if phone wasn't provided directly
-        if (updateData.phone === undefined && req.body.formData) {
+        // Extract phone from custom formData fields if phone wasn't provided directly or is empty
+        // Empty string phone ("") should also trigger custom field extraction
+        const hasValidPhone = updateData.phone !== undefined && String(updateData.phone).trim() !== '';
+        if (!hasValidPhone && req.body.formData) {
           const customPhone = extractPhoneFromFormData(req.body.formData, event.formFields as any[]);
           if (customPhone) {
             updateData.phone = customPhone;
-            console.log('[DataFlow] Using phone from custom formData field:', customPhone);
+            console.log('[DataFlow] POST UPSERT: Using phone from custom formData field:', customPhone);
           }
         }
         
@@ -2259,8 +2261,10 @@ export async function registerRoutes(
       if (req.body.language !== undefined) updateData.language = req.body.language;
       if (req.body.formData !== undefined) updateData.formData = req.body.formData;
       
-      // Extract phone from custom formData fields if phone wasn't provided directly
-      if (updateData.phone === undefined && req.body.formData) {
+      // Extract phone from custom formData fields if phone wasn't provided directly or is empty
+      // Empty string phone ("") should also trigger custom field extraction
+      const hasValidPhonePut = updateData.phone !== undefined && String(updateData.phone).trim() !== '';
+      if (!hasValidPhonePut && req.body.formData) {
         const customPhone = extractPhoneFromFormData(req.body.formData, event.formFields as any[]);
         if (customPhone) {
           updateData.phone = customPhone;
