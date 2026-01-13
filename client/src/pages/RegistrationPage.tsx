@@ -2028,6 +2028,29 @@ export default function RegistrationPage() {
                 </div>
               )}
 
+              {/* Show QR code for already registered users */}
+              {existingRegistrationId && verifiedProfile && (
+                <div className="mb-6 p-4 rounded-lg bg-muted/50 border border-border">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                      <QrCode className="w-4 h-4" />
+                      {language === "es" ? "Tu Código de Registro" : "Your Check-In Code"}
+                    </div>
+                    <RegistrationQRCode 
+                      registrationId={existingRegistrationId}
+                      eventName={language === "es" && event?.nameEs ? event.nameEs : event?.name || "Event"}
+                      size={160}
+                      showDownload={true}
+                    />
+                    <p className="text-xs text-muted-foreground text-center">
+                      {language === "es" 
+                        ? "Muestra este código en el registro para entrada rápida"
+                        : "Show this code at check-in for fast entry"}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <FormField
                 control={form.control}
                 name="unicityId"
