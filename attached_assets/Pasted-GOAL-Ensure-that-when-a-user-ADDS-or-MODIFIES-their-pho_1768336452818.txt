@@ -1,0 +1,100 @@
+GOAL:
+Ensure that when a user ADDS or MODIFIES their phone number on the public registration form, the phone is:
+1) Persisted to the canonical registration record
+2) Visible immediately in the Admin attendee list and detail view
+3) Updates the registration's last_modified timestamp so Admin can see when the change occurred
+
+This applies to ALL registration update paths (public + admin).
+
+Read Instructions.md and the entire codebase before making changes.
+
+CURRENT VERIFIED STATE:
+• Public registration form shows updated phone correctly
+• Admin attendee view still shows phone as "-"
+• DB phone was previously being cleared due to unguarded PUT logic
+• Conditional updates were added to ONE PUT path
+• At least one additional update path is still not persisting phone
+• last_modified does NOT update when phone is changed via public form
+
+NON-NEGOTIABLE RULES:
+• registrations.phone is the single source of truth
+• Admin reads only from registrations
+• Any successful phone change MUST:
+  - Persist to registrations.phone
+  - Update registrations.updated_at / last_modified
+• No UI state, cache, or localStorage counts as persistence
+
+YOUR TASKS (MANDATORY):
+
+1) FIND ALL REGISTRATION UPDATE PATHS
+Search for every endpoint that can modify a registration, including but not limited to:
+- Public registration update
+- OTP completion / existing registration update
+- Admin edit registration
+- Any PATCH/PUT/POST that writes to registrations
+
+List them explicitly in Instructions.md.
+
+2) NORMALIZE UPDATE SEMANTICS (CRITICAL)
+For EVERY registration update path:
+- Treat updates as PATCH, NOT REPLACE
+- Build updateData conditionally:
+  if (req.body.phone !== undefined) updateData.phone = req.body.phone;
+- Never overwrite existing values with undefined
+- Ensure phone updates are NOT dropped on any path
+
+3) ENSURE LAST-MODIFIED TIMESTAMP UPDATES
+When phone is added or changed:
+- Update registrations.updated_at (or equivalent last_modified column)
+- This must occur for:
+  • public user edits
+  • admin edits
+- Verify admin UI reflects the new timestamp
+
+4) VERIFY ADMIN READ PATH
+- Confirm admin attendee list and detail views read:
+  - phone from registrations.phone
+  - last_modified from registrations.updated_at
+- Ensure no derived or cached fields are used
+
+5) ADD PROOF LOGGING (TEMPORARY)
+Add [DataFlow] logs for:
+- Public phone update: registration.id, old phone, new phone, updated_at
+- Admin fetch: registration.id, phone, updated_at
+
+Remove or downgrade logs after verification.
+
+6) VERIFICATION CHECKLIST (MUST PASS ALL):
+A) User updates phone on public form
+   - DB registrations.phone updates
+   - DB updated_at changes
+   - Admin list shows phone
+   - Admin detail shows phone
+   - Admin last modified timestamp updates
+
+B) Admin edits phone
+   - DB updates correctly
+   - Public form reflects new value after reload
+   - updated_at changes again
+
+C) Event templates WITHOUT phone field
+   - Do NOT clear existing phone
+   - Do NOT block admin visibility
+
+DELIVERABLES:
+1) Implement fixes across all update paths
+2) Update Instructions.md with:
+   - Root cause summary
+   - List of affected endpoints
+   - Why PATCH semantics are required
+   - How last_modified is now guaranteed
+3) Confirm all verification steps passed
+
+CONSTRAINTS:
+• Do NOT add new tables
+• Do NOT add sync jobs
+• Do NOT use client-side storage as truth
+• Do NOT blame Hydra
+• Fix the architecture, not the symptom
+
+If admin does not see the phone AND updated timestamp after a user edit, the fix is incomplete.

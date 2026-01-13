@@ -82,6 +82,32 @@ function requireRole(...roles: string[]) {
   };
 }
 
+// Helper function to extract phone from custom formData fields
+// When events use custom phone-type fields (id-based), the value goes to formData instead of phone column
+// This extracts phone values from formData and returns them for saving to the canonical phone column
+function extractPhoneFromFormData(
+  formData: Record<string, any> | undefined,
+  formFields: any[] | undefined | null
+): string | undefined {
+  if (!formData || !formFields || !Array.isArray(formFields)) return undefined;
+  
+  // Find phone-type fields in the form template (both named and id-based)
+  for (const field of formFields) {
+    const fieldType = field.type?.toLowerCase();
+    const fieldName = field.name || field.id;
+    
+    // Match phone/tel type fields that are NOT the standard "phone" field (those go directly to phone column)
+    if ((fieldType === 'phone' || fieldType === 'tel') && fieldName && fieldName !== 'phone') {
+      const value = formData[fieldName];
+      if (value && typeof value === 'string' && value.trim()) {
+        console.log(`[DataFlow] Extracted phone from custom field "${fieldName}":`, value);
+        return value.trim();
+      }
+    }
+  }
+  return undefined;
+}
+
 // Helper function to get default sections for each page type
 function getDefaultSectionsForPageType(pageType: string, event: { name: string; nameEs?: string | null; heroImageUrl?: string | null }) {
   const defaultSections: Array<{ type: string; content: Record<string, unknown> }> = [];
@@ -2016,6 +2042,15 @@ export async function registerRoutes(
         if (req.body.language !== undefined) updateData.language = req.body.language;
         if (req.body.formData !== undefined) updateData.formData = req.body.formData;
         
+        // Extract phone from custom formData fields if phone wasn't provided directly
+        if (updateData.phone === undefined && req.body.formData) {
+          const customPhone = extractPhoneFromFormData(req.body.formData, event.formFields as any[]);
+          if (customPhone) {
+            updateData.phone = customPhone;
+            console.log('[DataFlow] Using phone from custom formData field:', customPhone);
+          }
+        }
+        
         // Update terms if re-accepted
         if (req.body.termsAccepted) {
           updateData.termsAccepted = true;
@@ -2040,9 +2075,19 @@ export async function registerRoutes(
       }
 
       // Create new registration (use normalizedEmail to prevent duplicates)
+      // Extract phone from custom formData fields if phone wasn't provided directly
+      let phoneValue = req.body.phone;
+      if ((!phoneValue || !phoneValue.trim()) && req.body.formData) {
+        const customPhone = extractPhoneFromFormData(req.body.formData, event.formFields as any[]);
+        if (customPhone) {
+          phoneValue = customPhone;
+          console.log('[DataFlow] Using phone from custom formData field for new registration:', customPhone);
+        }
+      }
+      
       console.log('[DataFlow] Creating registration - phone from request:', JSON.stringify({
-        phone: req.body.phone,
-        phoneType: typeof req.body.phone,
+        phone: phoneValue,
+        phoneType: typeof phoneValue,
         email: normalizedEmail,
         firstName: req.body.firstName,
       }));
@@ -2051,7 +2096,7 @@ export async function registerRoutes(
         email: normalizedEmail,
         firstName: req.body.firstName,
         lastName: req.body.lastName,
-        phone: req.body.phone,
+        phone: phoneValue,
         unicityId: req.body.unicityId,
         gender: req.body.gender,
         dateOfBirth: req.body.dateOfBirth ? new Date(req.body.dateOfBirth) : null,
@@ -2213,6 +2258,16 @@ export async function registerRoutes(
       if (req.body.roomType !== undefined) updateData.roomType = req.body.roomType;
       if (req.body.language !== undefined) updateData.language = req.body.language;
       if (req.body.formData !== undefined) updateData.formData = req.body.formData;
+      
+      // Extract phone from custom formData fields if phone wasn't provided directly
+      if (updateData.phone === undefined && req.body.formData) {
+        const customPhone = extractPhoneFromFormData(req.body.formData, event.formFields as any[]);
+        if (customPhone) {
+          updateData.phone = customPhone;
+          console.log('[DataFlow] PUT: Using phone from custom formData field:', customPhone);
+        }
+      }
+      
       if (req.body.termsAccepted) {
         updateData.termsAccepted = true;
         updateData.termsAcceptedAt = new Date();
