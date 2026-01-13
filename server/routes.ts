@@ -2219,6 +2219,11 @@ export async function registerRoutes(
         updateData.termsAcceptedIp = String(clientIp);
       }
       
+      // Update verifiedByHydra if newly verified
+      if (req.body.verifiedByHydra && !existingReg.verifiedByHydra) {
+        updateData.verifiedByHydra = true;
+      }
+      
       const updatedRegistration = await storage.updateRegistration(req.params.registrationId, updateData);
 
       if (!updatedRegistration) {
