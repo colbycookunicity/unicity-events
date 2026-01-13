@@ -2185,32 +2185,41 @@ export async function registerRoutes(
 
       const clientIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
 
-      // Update the registration
-      const updatedRegistration = await storage.updateRegistration(req.params.registrationId, {
-        firstName: req.body.firstName,
-        lastName: req.body.lastName,
-        phone: req.body.phone,
-        unicityId: req.body.unicityId,
-        gender: req.body.gender,
-        dateOfBirth: req.body.dateOfBirth ? new Date(req.body.dateOfBirth) : null,
-        passportNumber: req.body.passportNumber,
-        passportCountry: req.body.passportCountry,
-        passportExpiration: req.body.passportExpiration ? new Date(req.body.passportExpiration) : null,
-        emergencyContact: req.body.emergencyContact,
-        emergencyContactPhone: req.body.emergencyContactPhone,
-        shirtSize: req.body.shirtSize,
-        pantSize: req.body.pantSize,
-        dietaryRestrictions: req.body.dietaryRestrictions || [],
-        adaAccommodations: req.body.adaAccommodations || false,
-        adaAccommodationsAt: req.body.adaAccommodations && !existingReg.adaAccommodations ? new Date() : existingReg.adaAccommodationsAt,
-        adaAccommodationsIp: req.body.adaAccommodations && !existingReg.adaAccommodations ? String(clientIp) : existingReg.adaAccommodationsIp,
-        roomType: req.body.roomType,
-        language: req.body.language || "en",
-        formData: req.body.formData,
-        termsAccepted: req.body.termsAccepted,
-        termsAcceptedAt: req.body.termsAccepted ? new Date() : existingReg.termsAcceptedAt,
-        termsAcceptedIp: req.body.termsAccepted ? String(clientIp) : existingReg.termsAcceptedIp,
-      });
+      // Update the registration - only update fields that are explicitly provided
+      // This preserves existing values when form doesn't include certain fields (template-driven forms)
+      const updateData: Record<string, any> = {};
+      
+      if (req.body.firstName !== undefined) updateData.firstName = req.body.firstName;
+      if (req.body.lastName !== undefined) updateData.lastName = req.body.lastName;
+      if (req.body.phone !== undefined) updateData.phone = req.body.phone;
+      if (req.body.unicityId !== undefined) updateData.unicityId = req.body.unicityId;
+      if (req.body.gender !== undefined) updateData.gender = req.body.gender;
+      if (req.body.dateOfBirth !== undefined) updateData.dateOfBirth = req.body.dateOfBirth ? new Date(req.body.dateOfBirth) : null;
+      if (req.body.passportNumber !== undefined) updateData.passportNumber = req.body.passportNumber;
+      if (req.body.passportCountry !== undefined) updateData.passportCountry = req.body.passportCountry;
+      if (req.body.passportExpiration !== undefined) updateData.passportExpiration = req.body.passportExpiration ? new Date(req.body.passportExpiration) : null;
+      if (req.body.emergencyContact !== undefined) updateData.emergencyContact = req.body.emergencyContact;
+      if (req.body.emergencyContactPhone !== undefined) updateData.emergencyContactPhone = req.body.emergencyContactPhone;
+      if (req.body.shirtSize !== undefined) updateData.shirtSize = req.body.shirtSize;
+      if (req.body.pantSize !== undefined) updateData.pantSize = req.body.pantSize;
+      if (req.body.dietaryRestrictions !== undefined) updateData.dietaryRestrictions = Array.isArray(req.body.dietaryRestrictions) ? req.body.dietaryRestrictions : [];
+      if (req.body.adaAccommodations !== undefined) {
+        updateData.adaAccommodations = req.body.adaAccommodations;
+        if (req.body.adaAccommodations && !existingReg.adaAccommodations) {
+          updateData.adaAccommodationsAt = new Date();
+          updateData.adaAccommodationsIp = String(clientIp);
+        }
+      }
+      if (req.body.roomType !== undefined) updateData.roomType = req.body.roomType;
+      if (req.body.language !== undefined) updateData.language = req.body.language;
+      if (req.body.formData !== undefined) updateData.formData = req.body.formData;
+      if (req.body.termsAccepted) {
+        updateData.termsAccepted = true;
+        updateData.termsAcceptedAt = new Date();
+        updateData.termsAcceptedIp = String(clientIp);
+      }
+      
+      const updatedRegistration = await storage.updateRegistration(req.params.registrationId, updateData);
 
       if (!updatedRegistration) {
         return res.status(500).json({ error: "Failed to update registration" });
