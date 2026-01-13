@@ -852,32 +852,20 @@ export async function registerRoutes(
         return res.json({ success: true, exists: false });
       }
 
-      // Auto-sync missing phone from Hydra profile if registration has empty phone
-      let registrationPhone = registration.phone;
-      if (!registrationPhone && session.customerId) {
-        try {
-          // Fetch Hydra profile to get phone
-          const hydraUrl = process.env.HYDRA_ENV === "qa" 
-            ? "https://hydraqa.unicity.net/v6-test" 
-            : "https://hydra.unicity.net/v6";
-          const customerRes = await fetch(`${hydraUrl}/customers/${session.customerId}`, {
-            headers: { "Accept": "application/json" }
-          });
-          if (customerRes.ok) {
-            const customerData = await customerRes.json();
-            const hydraPhone = customerData?.phone || customerData?.mobilePhone;
-            if (hydraPhone && hydraPhone.length > 3) { // More than just country code
-              // Auto-update registration with Hydra phone
-              await storage.updateRegistration(registration.id, { phone: hydraPhone });
-              registrationPhone = hydraPhone;
-              console.log(`[Auto-sync] Updated registration ${registration.id} phone from Hydra: ${hydraPhone}`);
-            }
-          }
-        } catch (err) {
-          console.error("Failed to auto-sync phone from Hydra:", err);
-          // Continue with existing registration data if sync fails
-        }
-      }
+      // Log data hydration for debugging
+      console.log(`[DataFlow] /api/register/existing - Loading registration ${registration.id}:`, {
+        email: registration.email,
+        firstName: registration.firstName,
+        lastName: registration.lastName,
+        unicityId: registration.unicityId,
+        phone: registration.phone,
+        source: "database"
+      });
+
+      // NOTE: Removed Hydra auto-sync for phone. The database is the single source of truth.
+      // Admin updates in the DB should ALWAYS take precedence over Hydra data.
+      // If a phone is empty, it stays empty until the user or admin explicitly sets it.
+      const registrationPhone = registration.phone;
 
       // Return registration data (exclude sensitive nested details like reimbursements)
       res.json({
@@ -1385,6 +1373,16 @@ export async function registerRoutes(
       if (!registration) {
         return res.json({ success: true, exists: false });
       }
+
+      // Log data hydration for debugging
+      console.log(`[DataFlow] /api/attendee/registration - Loading registration ${registration.id}:`, {
+        email: registration.email,
+        firstName: registration.firstName,
+        lastName: registration.lastName,
+        unicityId: registration.unicityId,
+        phone: registration.phone,
+        source: "database"
+      });
 
       // Return registration data
       res.json({

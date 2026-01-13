@@ -1015,15 +1015,14 @@ export default function RegistrationPage() {
         fetchingExistingRef.current = null;
       }
       
-      // Strategy 2: Use OTP session (for users who just verified via qualified_verified flow)
-      // Skip this for:
-      // - open_anonymous mode: allows multiple registrations per email, no existing check needed
-      // - open_verified mode: OTP verification happens at form submission, not page load
-      // Only call for qualified_verified mode where OTP was already completed before reaching form
+      // Strategy 2: Use OTP session to fetch existing registration
+      // For qualified_verified: OTP was already completed before reaching form
+      // For open_verified: OTP may have been completed (isEmailVerified) - if so, fetch existing data
+      // For open_anonymous: skip fetching (allows multiple registrations per email)
+      const hasVerifiedSession = verifiedProfile || isEmailVerified;
       const shouldFetchExisting = verificationStep === "form" && 
                                    !openAnonymousMode && 
-                                   !openVerifiedMode &&
-                                   verifiedProfile; // Must have verified profile from OTP flow
+                                   hasVerifiedSession;
       
       if (shouldFetchExisting) {
         fetchingExistingRef.current = currentKey;
@@ -1044,10 +1043,13 @@ export default function RegistrationPage() {
               populateFormWithRegistration(data.registration);
             }
           } else if (res.status === 403) {
-            // OTP session expired - redirect to email verification
+            // OTP session expired - for open_verified, just mark as loaded (verification happens at submit)
+            // For qualified_verified, redirect to email verification
             fetchingExistingRef.current = null;
-            setLoadedForKey(currentKey); // Prevent retry
-            resetToEmailVerification(true);
+            setLoadedForKey(currentKey);
+            if (!openVerifiedMode) {
+              resetToEmailVerification(true);
+            }
             setIsLoadingExisting(false);
             return;
           } else {
@@ -1060,15 +1062,14 @@ export default function RegistrationPage() {
         }
         
         setIsLoadingExisting(false);
-      } else if (verificationStep === "form" && (openAnonymousMode || openVerifiedMode)) {
-        // For open_anonymous and open_verified modes, just mark as loaded without fetching
-        // open_verified will fetch existing registration after OTP verification at form submission
+      } else if (verificationStep === "form" && openAnonymousMode) {
+        // For open_anonymous mode only, skip fetching (allows multiple registrations)
         setLoadedForKey(currentKey);
       }
     };
     
     fetchExistingRegistration();
-  }, [verificationStep, verifiedProfile, verificationEmail, prePopulatedEmail, params.eventId, event, loadedForKey, openAnonymousMode, openVerifiedMode]);
+  }, [verificationStep, verifiedProfile, verificationEmail, prePopulatedEmail, params.eventId, event, loadedForKey, openAnonymousMode, openVerifiedMode, isEmailVerified]);
 
   const registerMutation = useMutation({
     mutationFn: async (data: RegistrationFormData) => {
@@ -1367,7 +1368,43 @@ export default function RegistrationPage() {
           description: language === "es" ? "Su correo ha sido verificado" : "Your email has been verified",
         });
         
-        // Now complete the registration
+        // For open_verified mode: Check for existing registration BEFORE submitting
+        // If user has existing registration, show them the DB data and let them review before resubmitting
+        if (openVerifiedMode && params.eventId) {
+          try {
+            const existingRes = await fetch("/api/register/existing", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email, eventId: params.eventId }),
+            });
+            
+            if (existingRes.ok) {
+              const existingData = await existingRes.json();
+              if (existingData.success && existingData.exists && existingData.registration) {
+                console.log("[DataFlow] open_verified OTP complete - Found existing registration:", existingData.registration.id);
+                
+                // Populate form with database values (admin-updated data takes precedence)
+                populateFormWithRegistration(existingData.registration);
+                setPendingSubmissionData(null); // Clear pending data so user can review
+                
+                toast({
+                  title: language === "es" ? "Registro encontrado" : "Existing Registration Found",
+                  description: language === "es" 
+                    ? "Hemos cargado su información existente. Por favor revise y actualice según sea necesario." 
+                    : "We've loaded your existing information. Please review and update as needed.",
+                });
+                
+                // Don't submit - let user review the loaded data first
+                return;
+              }
+            }
+          } catch (err) {
+            console.error("[DataFlow] Failed to fetch existing registration during OTP verification:", err);
+            // Fall through to submit (new registration)
+          }
+        }
+        
+        // Now complete the registration (no existing registration found or not open_verified)
         if (event) {
           setSavedEventInfo({
             name: event.name,

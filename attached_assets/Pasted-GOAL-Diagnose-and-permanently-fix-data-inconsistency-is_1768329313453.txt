@@ -1,0 +1,97 @@
+GOAL:
+Diagnose and permanently fix data inconsistency issues between the Events public registration form, Admin attendee view, and user verification flows.
+
+This includes mismatched phone numbers, missing distributor IDs, and fields appearing on the public registration page that do NOT appear in admin.
+
+Read Instructions.md and the entire codebase before making changes.
+
+CONTEXT:
+• events.unicity.com is a custom Events platform
+• Users authenticate via email / magic link
+• Events have:
+  - Public registration routes (/register/:slug)
+  - Admin-managed attendee records
+• There is NO intentional phone-number source other than what the user enters during registration
+• Hydra is NOT the source of these phone numbers (do not assume Hydra owns this data)
+• The same user email is showing different phone values depending on view
+• Admin updates do NOT reflect on public registration page
+• Public page shows persisted values even after admin edits
+• A second test user shows missing name/phone/UID on public form but data exists in admin
+
+KNOWN SYMPTOMS:
+1. Public registration form displays a phone number not visible in admin
+2. Updating phone in admin does not update public registration view
+3. Updating phone on public registration persists but is invisible to admin
+4. Distributor ID exists in admin but not on public page
+5. qualifier-info endpoint is returning 404
+6. Multiple users show inconsistent field hydration
+
+YOUR TASKS (DO ALL OF THESE):
+
+1. DATA SOURCE AUDIT (MANDATORY)
+   - Trace ALL possible sources of:
+     • phone
+     • name
+     • distributorId
+   - Explicitly identify:
+     • database tables
+     • API endpoints
+     • client-side persistence (localStorage, sessionStorage, cookies)
+     • prefill logic in frontend components
+   - Write a clear "Source of Truth Map" in Instructions.md
+
+2. PUBLIC FORM PREFILL TRACE
+   - Find exactly how the public registration form is populated
+   - Identify whether it is using:
+     • cached user profile
+     • verification payload
+     • previous registration record
+     • local/session storage
+   - Log the exact code path that injects the phone into the form
+
+3. ADMIN ↔ PUBLIC DATA DESYNC
+   - Identify why admin updates do not propagate to public views
+   - Identify whether admin and public are:
+     • writing to different tables
+     • using different schemas
+     • reading through different APIs
+   - Confirm with concrete evidence (queries + code references)
+
+4. QUALIFIER INFO ENDPOINT
+   - Investigate `/api/public/qualifier-info/:slug`
+   - Determine why it is returning 404
+   - Determine whether its failure causes fallback behavior or stale data usage
+   - Fix or remove broken dependency
+
+5. SINGLE SOURCE OF TRUTH FIX
+   - Enforce ONE canonical source for attendee data
+   - Ensure:
+     • public form reads from it
+     • admin reads from it
+     • admin writes update it
+     • public edits update it
+   - Eliminate shadow copies, stale hydration, or client-side persistence
+
+6. DATA NORMALIZATION RULES
+   - Ensure empty fields are not silently overridden
+   - Ensure distributorId cannot disappear between views
+   - Ensure phone updates always overwrite previous values
+
+7. SAFETY + LOGGING
+   - Add defensive logging where data is hydrated into forms
+   - Make mismatches observable in logs (not silent)
+
+OUTPUT REQUIREMENTS:
+• Write a detailed diagnosis in Instructions.md
+• Include:
+  - exact files
+  - exact functions
+  - exact tables
+  - before/after data flow diagrams (text is fine)
+• Implement the fix
+• Do NOT guess
+• Do NOT assume Hydra
+• Do NOT patch with hacks or localStorage
+• If multiple bad patterns exist, delete the bad ones instead of layering fixes
+
+If something blocks you, document it clearly instead of working around it.

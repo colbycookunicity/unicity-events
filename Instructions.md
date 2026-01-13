@@ -1,3 +1,152 @@
+# Data Consistency - Source of Truth Documentation
+
+**Last Updated**: January 13, 2026
+
+## Critical Bug Fixes Applied
+
+### Issue: Admin ↔ Public Registration Data Inconsistency
+
+**Symptoms:**
+1. Admin panel shows correct data (e.g., phone, distributorId) but public form shows different/blank values
+2. Admin updates do not propagate to public registration form
+3. Users see stale data after verifying via OTP
+
+**Root Cause Analysis:**
+
+#### 1. Multiple Data Sources (PROBLEM)
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         DATA SOURCES (BEFORE FIX)                        │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐   │
+│  │   registrations  │    │    Hydra API     │    │qualifiedRegistrants│  │
+│  │    (Database)    │    │  (External API)  │    │    (Database)    │   │
+│  └────────┬─────────┘    └────────┬─────────┘    └────────┬─────────┘   │
+│           │                       │                       │             │
+│           ▼                       ▼                       ▼             │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │              OTP Validation Response (profile object)           │   │
+│  │  - unicityId: Hydra → qualifier fallback                        │   │
+│  │  - firstName/lastName: Hydra → qualifier fallback               │   │
+│  │  - phone: Hydra ONLY (no DB or qualifier fallback!)             │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│           │                                                             │
+│           ▼                                                             │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │              Public Registration Form                            │   │
+│  │  • For open_verified: Used OTP profile data                     │   │
+│  │  • SKIPPED fetching from registrations table!                    │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+#### 2. Frontend Guard Prevented DB Fetch (PROBLEM)
+```typescript
+// client/src/pages/RegistrationPage.tsx (BEFORE FIX)
+const shouldFetchExisting = verificationStep === "form" && 
+                             !openAnonymousMode && 
+                             !openVerifiedMode &&  // ← BLOCKED for open_verified!
+                             verifiedProfile;
+```
+
+For `open_verified` events, `shouldFetchExisting` was `false`, so the code NEVER called `/api/register/existing` to load database values. The form only showed Hydra profile data.
+
+#### 3. Hydra Auto-Sync Overwrote DB Values (PROBLEM)
+```typescript
+// server/routes.ts /api/register/existing endpoint (BEFORE FIX)
+if (!registrationPhone && session.customerId) {
+  // Fetched phone from Hydra and OVERWROTE database!
+  await storage.updateRegistration(registration.id, { phone: hydraPhone });
+}
+```
+
+This auto-sync would replace admin-updated phone values with stale Hydra data.
+
+### Fixes Applied
+
+#### Fix 1: Frontend - Allow DB Fetch for open_verified When Verified
+```typescript
+// client/src/pages/RegistrationPage.tsx (AFTER FIX)
+const hasVerifiedSession = verifiedProfile || isEmailVerified;
+const shouldFetchExisting = verificationStep === "form" && 
+                             !openAnonymousMode && 
+                             hasVerifiedSession;  // ← Now includes open_verified after OTP
+```
+
+#### Fix 2: Backend - Removed Hydra Auto-Sync
+```typescript
+// server/routes.ts /api/register/existing endpoint (AFTER FIX)
+// NOTE: Removed Hydra auto-sync for phone. The database is the single source of truth.
+// Admin updates in the DB should ALWAYS take precedence over Hydra data.
+const registrationPhone = registration.phone;
+```
+
+#### Fix 3: Added Data Flow Logging
+```typescript
+console.log(`[DataFlow] /api/register/existing - Loading registration ${registration.id}:`, {
+  email, firstName, lastName, unicityId, phone, source: "database"
+});
+```
+
+### Single Source of Truth Map
+
+| Field | Canonical Source | Read By | Written By |
+|-------|------------------|---------|------------|
+| `phone` | `registrations.phone` | Admin + Public Form | Admin PATCH, Public registration submit |
+| `firstName` | `registrations.first_name` | Admin + Public Form | Admin PATCH, Public registration submit |
+| `lastName` | `registrations.last_name` | Admin + Public Form | Admin PATCH, Public registration submit |
+| `unicityId` | `registrations.unicity_id` | Admin + Public Form | Admin PATCH, Public registration submit |
+| `email` | `registrations.email` | Admin + Public Form | Initial registration only (immutable) |
+
+### Data Flow (AFTER FIX)
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         SINGLE SOURCE OF TRUTH                          │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │                    registrations table (PostgreSQL)              │   │
+│  │  • phone, firstName, lastName, unicityId, email, etc.            │   │
+│  │  • ALL reads and writes go through this table                    │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+│           │                              │                               │
+│           ▼                              ▼                               │
+│  ┌─────────────────────┐      ┌─────────────────────┐                   │
+│  │  Admin Panel        │      │  Public Form        │                   │
+│  │  GET /registrations │      │  GET /register/     │                   │
+│  │  PATCH /registrations│     │      existing       │                   │
+│  └─────────────────────┘      │  POST /register     │                   │
+│                               └─────────────────────┘                   │
+│                                                                          │
+│  Hydra API: Used ONLY for OTP verification, NOT for data population    │
+│  qualifiedRegistrants: Used ONLY for qualification check, not display   │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Qualifier-Info 404 (Expected Behavior)
+
+The `/api/public/qualifier-info/:eventId` endpoint returns 404 for:
+- Events with `registrationMode = "open_verified"` (no qualifiers table)
+- Events with `registrationMode = "open_anonymous"` (no qualifiers table)
+
+This is **expected behavior**, not an error. Only `qualified_verified` events have qualifier entries.
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `server/routes.ts` | API endpoints for registration data |
+| `server/storage.ts` | Database access layer |
+| `client/src/pages/RegistrationPage.tsx` | Public registration form |
+| `client/src/pages/AttendeesPage.tsx` | Admin attendee management |
+| `shared/schema.ts` | Database schema definitions |
+
+---
+
 # Market-Based Admin Scoping
 
 ## Phase 3 Implementation Status: LIVE IN PRODUCTION
