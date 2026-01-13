@@ -1,0 +1,83 @@
+GOAL:
+Fix the remaining one-way data persistence bug where phone numbers entered on the public registration form are NOT visible in the admin attendee view.
+
+This is a write/read divergence bug.
+
+Read Instructions.md and the entire codebase before making changes.
+
+CURRENT VERIFIED FACTS:
+• Public registration form displays a phone number after submit
+• Admin attendee view shows phone as empty ("—")
+• Same email + same distributor ID confirms same logical registration
+• This is NOT Hydra
+• This is NOT cache
+• This is NOT frontend-only
+• Admin is the truth: if admin doesn’t see it, it is not persisted
+
+NON-NEGOTIABLE ACCEPTANCE:
+- Phone must be stored in the SAME canonical column that admin reads (registrations.phone or equivalent)
+- Any phone shown on the public form that is not present in that DB row is a BUG (ghost data)
+
+YOUR TASKS (MANDATORY):
+
+1) TRACE WRITE PATH (PUBLIC REGISTRATION)
+- Identify the exact API endpoint handling registration submit
+- Identify the exact payload property name for phone
+- Identify the exact database table + column receiving phone
+- Confirm whether INSERT and UPDATE both write phone
+- Log the saved registration row immediately after write (id, email, phone)
+
+2) TRACE READ PATH (ADMIN VIEW)
+- Identify the exact query used to fetch attendee details for admin
+- List every selected column
+- Confirm whether phone is:
+  • not selected
+  • selected from the wrong table
+  • mapped to the wrong property name
+
+3) CONFIRM TABLE + COLUMN ALIGNMENT
+- Confirm public write and admin read hit:
+  • the same table
+  • the same row
+  • the same column
+- If not, document the mismatch clearly
+
+4) FIX THE ROOT CAUSE (NO HACKS)
+- Make registrations.phone (or the existing canonical column) the single source of truth
+- If admin query omits phone → fix it
+- If public write skips or misnames phone → fix it
+- If multiple tables or shadow fields exist → DELETE the non-canonical path
+- Do NOT add syncing jobs
+- Do NOT use localStorage/session fallbacks
+
+5) DATA CONTRACT ENFORCEMENT
+- Define a single Registration schema/interface
+- Enforce it across:
+  • public submit
+  • admin fetch
+  • admin update
+- Ensure phone cannot silently drop on UPDATE
+
+6) VERIFICATION STEPS (REQUIRED — DO ALL)
+- Create a new registration
+- Enter a phone number
+- Verify:
+  • DB row contains phone
+  • Admin attendee view shows SAME phone
+  • Admin edits update phone
+  • Re-opening public form shows updated DB value
+
+7) DOCUMENTATION
+- Update Instructions.md with:
+  • Root cause
+  • Exact files changed
+  • Before/after behavior
+  • Why this bug cannot recur
+
+RULES:
+• Do NOT assume
+• Do NOT say “works as expected” without checking admin
+• Do NOT blame Hydra
+• Fix the architecture, not the symptom
+
+If admin and public do not read/write the same column, that IS the bug. Fix it.

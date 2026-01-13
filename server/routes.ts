@@ -1787,6 +1787,13 @@ export async function registerRoutes(
 
   // Public Event Registration (supports both ID and slug)
   app.post("/api/events/:eventIdOrSlug/register", async (req, res) => {
+    // Debug: Log incoming phone value
+    console.log('[DataFlow] POST /register - req.body.phone:', JSON.stringify({
+      phone: req.body.phone,
+      phoneType: typeof req.body.phone,
+      hasPhone: 'phone' in req.body,
+    }));
+    
     try {
       const event = await storage.getEventByIdOrSlug(req.params.eventIdOrSlug);
       if (!event) {
@@ -2023,11 +2030,22 @@ export async function registerRoutes(
         
         const updatedRegistration = await storage.updateRegistration(existingReg.id, updateData);
         
+        console.log('[DataFlow] Registration updated - phone in DB:', JSON.stringify({
+          id: updatedRegistration?.id,
+          phone: updatedRegistration?.phone,
+          email: updatedRegistration?.email,
+        }));
         // Return 200 for updates (not 201) to indicate existing record was updated
         return res.status(200).json({ ...updatedRegistration, wasUpdated: true });
       }
 
       // Create new registration (use normalizedEmail to prevent duplicates)
+      console.log('[DataFlow] Creating registration - phone from request:', JSON.stringify({
+        phone: req.body.phone,
+        phoneType: typeof req.body.phone,
+        email: normalizedEmail,
+        firstName: req.body.firstName,
+      }));
       const registration = await storage.createRegistration({
         eventId: event.id,
         email: normalizedEmail,

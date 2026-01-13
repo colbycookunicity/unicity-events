@@ -1,0 +1,95 @@
+Goal:
+Fix data consistency for open_verified registrations so that phone + distributorId entered on the public registration form are saved to the registrations table and are visible everywhere (admin attendee profile + admin lists + re-opening the public form).
+
+Read:
+- Instructions (10).md
+- server/routes.ts
+- server/storage.ts
+- shared/schema.ts
+- client/src/pages/RegistrationPage.tsx
+- client/src/pages/AttendeesPage.tsx (and any attendee detail drawer/modal component)
+- Any api client used by admin UI (client/src/lib/api.ts or similar)
+
+Context (what’s broken):
+1) Repro A (phone not visible in admin):
+- Event: /register/academia-habilidades (open_verified)
+- Register new user: colbycookux@gmail.com
+- Enter phone on public form: +1 801 856 6299
+- Submit “Actualizar Registro”
+- Result: Public form shows the phone (and continues to show it on revisit)
+- BUT admin attendee profile shows Phone = “-” (null)
+Expected: Admin attendee profile shows +1 801 856 6299 (single source of truth = registrations.phone)
+
+2) Repro B (admin has distributorId but public form shows blank):
+- Login as colby.cook+3@unicity.com
+- Public form shows blank name/phone/distributorId
+- Admin shows distributorId=73737373
+Expected: Public form should load DB registration record after OTP (existing registration) and display distributorId, names, phone.
+
+3) Console noise:
+GET /api/public/qualifier-info/academia-habilidades?email=... returns 404 repeatedly on open_verified events.
+If this call is not needed for open_verified/open_anonymous, remove/guard it to avoid confusion.
+
+What to do:
+1) Trace the FULL data path for phone + distributorId:
+- Public form input fields → form state
+- Submit handler payload → POST endpoint (likely /api/register or /api/register/submit)
+- Server request parsing/validation (Zod or similar)
+- storage create/update call
+- Actual DB columns written (registrations.phone, registrations.unicity_id, registrations.first_name, registrations.last_name)
+- Admin GET endpoints used by attendee profile/list (GET /api/registrations, GET /api/registrations/:id)
+- Admin UI mapping from API response → displayed fields
+
+2) Identify why public form can display a phone that admin can’t:
+Common suspects to confirm with code + logs:
+- The public form is displaying phone from localStorage/session/verifiedProfile instead of DB.
+- The POST payload uses a different field name (e.g., mobilePhone/phoneNumber) that the server ignores.
+- The server writes to a different column (or JSON metadata) while admin reads registrations.phone.
+- The admin API is omitting phone in SELECT/projection (storage layer returns no phone).
+- The admin UI is reading a different property name than the API returns.
+
+3) Make the registrations table the single source of truth (per Instructions (10).md):
+- Ensure POST registration submit ALWAYS upserts phone + unicityId + first/last into registrations.* columns.
+- Ensure GET /api/register/existing returns registrations.* and the public form uses that to populate fields after verification.
+- Ensure admin GET endpoints return phone + unicityId consistently (both list + detail).
+- Remove any fallback that can mask missing DB writes (no “fake success” where UI shows values that aren’t persisted).
+
+4) Add targeted logging (temporary, but keep minimal in prod):
+- On registration submit: log eventId, email, phone, unicityId, and whether it performed INSERT vs UPDATE + the registration.id.
+- On admin read (GET /api/registrations/:id): log the loaded registration.id and phone/unicityId.
+- On /api/register/existing: log loaded registration.id and phone/unicityId.
+Use a consistent prefix like [DataFlow] so we can grep logs.
+
+5) Fix /api/public/qualifier-info spam:
+- In client, only call qualifier-info if event.registrationMode === "qualified_verified" (or whatever the qualified mode is called).
+- Or on server return 200 with a clear payload for open modes (but prefer client guard).
+
+Acceptance tests (must pass):
+A) New registration phone persists:
+- Register colbycookux@gmail.com with +1 801 856 6299
+- Confirm DB row in registrations has phone='+1 801 856 6299'
+- Admin attendee profile shows the same phone
+- Admin list row (if shown) also includes phone or detail does
+
+B) Admin edits reflect everywhere:
+- As admin, edit phone to +1 0000000000
+- Re-open public form after OTP verify → it shows +1 0000000000 (DB)
+- No other “ghost phone” appears
+
+C) Existing registration prefill works for open_verified:
+- For colby.cook+3@unicity.com with distributorId=73737373 in DB
+- After OTP verify, public form loads DB and displays distributorId + any stored fields (not blank)
+
+Deliverables:
+1) Implement the fixes with clean, minimal changes.
+2) Update Instructions.md (or append to Instructions (10).md if that’s the canonical doc) with:
+- Root cause
+- Exact files changed
+- How to reproduce before/after
+- Why registrations.* is the source of truth
+3) Include a short checklist for manual QA for the three acceptance tests above.
+
+Constraints:
+- Do NOT claim Hydra contains these phones; treat Hydra only as OTP verification/auth, not a data source for phone.
+- Do NOT add new tables unless absolutely required (prefer fixing field mapping + persistence).
+- Keep changes backward compatible for existing registrations.

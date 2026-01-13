@@ -1073,6 +1073,13 @@ export default function RegistrationPage() {
 
   const registerMutation = useMutation({
     mutationFn: async (data: RegistrationFormData) => {
+      // Debug: Log phone value before building payload
+      console.log('[DataFlow] Client - Form phone value:', JSON.stringify({
+        phone: data.phone,
+        phoneType: typeof data.phone,
+        phoneLength: data.phone?.length,
+      }));
+      
       // Build primary attendee payload
       const primaryAttendee = {
         ...data,
@@ -1110,6 +1117,12 @@ export default function RegistrationPage() {
           existingRegistrationId,
         };
       }
+      
+      // Debug: Log final payload phone value
+      console.log('[DataFlow] Client - Final payload phone:', JSON.stringify({
+        phone: payload.phone,
+        phoneType: typeof payload.phone,
+      }));
       
       // For PUT updates, include attendee token in Authorization header
       if (existingRegistrationId) {

@@ -462,7 +462,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createRegistration(registration: InsertRegistration): Promise<Registration> {
+    console.log('[DataFlow] storage.createRegistration input phone:', registration.phone);
     const [newReg] = await db.insert(registrations).values(registration).returning();
+    console.log('[DataFlow] storage.createRegistration result phone:', newReg.phone, 'id:', newReg.id);
     return newReg;
   }
 
