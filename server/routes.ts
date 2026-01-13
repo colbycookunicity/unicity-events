@@ -852,6 +852,33 @@ export async function registerRoutes(
         return res.json({ success: true, exists: false });
       }
 
+      // Auto-sync missing phone from Hydra profile if registration has empty phone
+      let registrationPhone = registration.phone;
+      if (!registrationPhone && session.customerId) {
+        try {
+          // Fetch Hydra profile to get phone
+          const hydraUrl = process.env.HYDRA_ENV === "qa" 
+            ? "https://hydraqa.unicity.net/v6-test" 
+            : "https://hydra.unicity.net/v6";
+          const customerRes = await fetch(`${hydraUrl}/customers/${session.customerId}`, {
+            headers: { "Accept": "application/json" }
+          });
+          if (customerRes.ok) {
+            const customerData = await customerRes.json();
+            const hydraPhone = customerData?.phone || customerData?.mobilePhone;
+            if (hydraPhone && hydraPhone.length > 3) { // More than just country code
+              // Auto-update registration with Hydra phone
+              await storage.updateRegistration(registration.id, { phone: hydraPhone });
+              registrationPhone = hydraPhone;
+              console.log(`[Auto-sync] Updated registration ${registration.id} phone from Hydra: ${hydraPhone}`);
+            }
+          }
+        } catch (err) {
+          console.error("Failed to auto-sync phone from Hydra:", err);
+          // Continue with existing registration data if sync fails
+        }
+      }
+
       // Return registration data (exclude sensitive nested details like reimbursements)
       res.json({
         success: true,
@@ -863,7 +890,7 @@ export async function registerRoutes(
           firstName: registration.firstName,
           lastName: registration.lastName,
           unicityId: registration.unicityId,
-          phone: registration.phone,
+          phone: registrationPhone,
           gender: registration.gender,
           dateOfBirth: registration.dateOfBirth,
           passportNumber: registration.passportNumber,
