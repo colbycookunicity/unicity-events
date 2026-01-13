@@ -90,6 +90,38 @@ console.log(`[DataFlow] /api/register/existing - Loading registration ${registra
 });
 ```
 
+#### Fix 4: PUT Update Path - Conditional Field Updates (January 13, 2026)
+
+**Problem:** The PUT `/api/events/:eventIdOrSlug/register/:registrationId` endpoint was unconditionally overwriting all fields with `req.body` values, even when those values were `undefined`. For template-driven forms that don't include certain fields (e.g., phone), submitting the form would clear those values in the database.
+
+**Before Fix:**
+```typescript
+// PUT update path - UNCONDITIONALLY overwrote all fields
+const updatedRegistration = await storage.updateRegistration(req.params.registrationId, {
+  firstName: req.body.firstName,
+  lastName: req.body.lastName,
+  phone: req.body.phone,  // ← undefined if not in form template, clears DB value!
+  // ... other fields
+});
+```
+
+**After Fix:**
+```typescript
+// PUT update path - Only update explicitly provided fields
+const updateData: Record<string, any> = {};
+if (req.body.firstName !== undefined) updateData.firstName = req.body.firstName;
+if (req.body.lastName !== undefined) updateData.lastName = req.body.lastName;
+if (req.body.phone !== undefined) updateData.phone = req.body.phone;  // ← preserves existing value if undefined
+// ... other fields
+const updatedRegistration = await storage.updateRegistration(req.params.registrationId, updateData);
+```
+
+**Why This Matters:**
+- Events use template-driven forms (`event.formFields`) that only render configured fields
+- If `phone` is not in the template, the form never submits a `phone` value
+- Without the conditional check, `undefined` was written to the database, clearing any admin-entered phone values
+- This fix ensures fields not in the form template are preserved in the database
+
 ### Single Source of Truth Map
 
 | Field | Canonical Source | Read By | Written By |
