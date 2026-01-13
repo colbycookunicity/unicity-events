@@ -3156,7 +3156,8 @@ export default function RegistrationPage() {
         )}
         
         {/* Already registered link - for qualified_verified: scroll to verification, for open_verified: open lookup dialog */}
-        {requiresVerification && !openAnonymousMode && (
+        {/* Hide when user is already verified and registered (they see QR in form) */}
+        {requiresVerification && !openAnonymousMode && !(existingRegistrationId && verifiedProfile) && (
           <div className="max-w-2xl mx-auto px-4 text-center">
             <button 
               onClick={() => {
@@ -3330,7 +3331,8 @@ export default function RegistrationPage() {
             </div>
             
             {/* Already registered link for split layout */}
-            {requiresVerification && !openAnonymousMode && (
+            {/* Hide when user is already verified and registered (they see QR in form) */}
+            {requiresVerification && !openAnonymousMode && !(existingRegistrationId && verifiedProfile) && (
               <div className="pt-4 px-6 lg:px-10 text-center bg-background">
                 <button 
                   onClick={() => {
@@ -3435,7 +3437,8 @@ export default function RegistrationPage() {
       </div>
       
       {/* Already registered link for hero-background layout */}
-      {requiresVerification && !openAnonymousMode && (
+      {/* Hide when user is already verified and registered (they see QR in form) */}
+      {requiresVerification && !openAnonymousMode && !(existingRegistrationId && verifiedProfile) && (
         <div className="bg-card pb-4 text-center">
           <button 
             onClick={() => {
