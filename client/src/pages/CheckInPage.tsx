@@ -313,6 +313,12 @@ export default function CheckInPage() {
     setScannerPaused(false);
   }, []);
 
+  // Handler for onRawScan - handles CHECKIN: format QR codes from email
+  const handleRawScan = useCallback((parsed: ParsedQRCode) => {
+    // Pass the raw data to handleQRScan which processes all formats
+    handleQRScan(parsed.raw);
+  }, [handleQRScan]);
+
   // Quick check-in from scan result (check-in + optional print)
   const handleQuickCheckIn = async (reg: Registration, autoPrint: boolean) => {
     try {
@@ -489,6 +495,7 @@ export default function CheckInPage() {
                 {!scanResult ? (
                   <QRScanner
                     onScan={handleQRScan}
+                    onRawScan={handleRawScan}
                     onError={(error) => toast({ title: "Camera error", description: error, variant: "destructive" })}
                     paused={scannerPaused}
                   />
