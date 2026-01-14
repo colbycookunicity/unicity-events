@@ -82,6 +82,13 @@ shared/           # Shared code between client/server
   - Webhook handling for payment confirmation
   - `stripe-replit-sync` package for schema migrations
 
+### Email & Marketing Automation
+- **Iterable**: Email and engagement platform for events
+  - Confirmation emails, check-in notifications, qualification grants
+  - Registration sync on completion (user profile, list subscription, events, purchases)
+  - API key via `ITERABLE_API_KEY` environment variable
+  - Events can specify `iterableListId` to auto-subscribe registrants
+
 ### Cloud Storage
 - **Google Cloud Storage**: File uploads for receipts and event images
   - Accessed via Replit sidecar at `http://127.0.0.1:1106`

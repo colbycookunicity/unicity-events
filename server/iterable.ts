@@ -629,9 +629,9 @@ export class IterableService {
       email: string;
       firstName: string;
       lastName: string;
-      language?: string;
+      language?: string | null;
       registeredAt?: Date | string | null;
-      paymentStatus?: string;
+      paymentStatus?: string | null;
       amountPaidCents?: number | null;
       paymentIntentId?: string | null;
     },
