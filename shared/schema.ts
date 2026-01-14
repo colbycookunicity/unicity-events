@@ -179,6 +179,9 @@ export const events = pgTable("events", {
   // Market-based scoping (Phase 1: nullable, not enforced yet)
   // null = no market assigned (legacy), string = market code (e.g., "US", "CA")
   marketCode: text("market_code"),
+  // Iterable integration: list ID to subscribe registrants to
+  // If set, users are subscribed to this list on registration completion
+  iterableListId: integer("iterable_list_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   lastModified: timestamp("last_modified").defaultNow().notNull(),
 });
