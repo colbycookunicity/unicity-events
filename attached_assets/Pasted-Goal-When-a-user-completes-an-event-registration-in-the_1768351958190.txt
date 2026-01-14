@@ -1,0 +1,107 @@
+Goal:
+When a user completes an event registration in the Events app, sync the registration to Iterable by:
+1) creating or updating the user,
+2) adding them to the event’s Iterable list,
+3) firing a registration event, and
+4) firing a purchase event if the registration includes a paid ticket.
+
+Read Instructions.md and server/iterable.ts fully before making any changes.
+
+Context:
+• This is the Events platform (events.unicity.com) replacing Bizzabo
+• Iterable is the email and engagement platform for events
+• Hydra handles authentication (do NOT modify Hydra logic)
+• Iterable API key is provided via env (ITERABLE_API_KEY)
+• Event registration is completed server-side
+• Some registrations are free; others include a paid ticket
+• Iterable sync must be non-blocking and failure-safe
+
+High-Level Flow:
+1. Registration is successfully completed
+2. Create or update the user in Iterable
+3. If the event has an iterable_list_id, add the user to that list
+4. Fire a custom Iterable registration event
+5. If a paid transaction exists, fire a purchase event
+6. Registration must succeed even if Iterable fails
+
+Requirements:
+
+1. Trigger timing:
+   - Run ONLY on initial registration creation
+   - Must NOT run on registration edits, retries, or admin updates
+
+2. Iterable user profile sync (users/update):
+   - email (required)
+   - firstName
+   - lastName
+   - locale (e.g. en-US, es-US, fr-FR)
+
+3. Iterable list subscription:
+   - Each event may define an iterable_list_id
+   - If iterable_list_id is missing or null, skip list subscription
+   - Subscribe user explicitly via Iterable API
+   - Handle already-subscribed users gracefully
+
+4. Iterable registration event (events_track):
+   Custom event data fields:
+   - eventId
+   - eventSlug
+   - registrationId
+   - marketCode (e.g. US, PR, MX — NOT the same as locale)
+   - registeredAt (ISO 8601 timestamp)
+
+5. Iterable purchase event (ONLY if paid registration):
+   - Fire once per successful transaction
+   - Do NOT fire for free registrations
+   - Must be idempotent (no double tracking)
+
+   Purchase payload fields:
+   - email (required)
+   - orderId / transactionId
+   - eventId
+   - eventSlug
+   - ticketType or productName
+   - quantity
+   - unitPrice (numeric)
+   - totalRevenue (numeric)
+   - currency (e.g. USD)
+   - purchasedAt (ISO 8601 timestamp)
+
+6. API usage rules:
+   - users/update for user profile
+   - lists/subscribe for list membership
+   - events_track for registration events
+   - commerce / purchase tracking for transactions
+   - Do NOT rely on Iterable segmentation for correctness
+
+7. Architecture constraints:
+   - All Iterable logic must live in server/iterable.ts
+   - Add helpers as needed, for example:
+     • createOrUpdateUser()
+     • addUserToList()
+     • trackRegistrationEvent()
+     • trackPurchaseEvent()
+     • syncRegistrationToIterable()
+   - Helpers must be reusable and independently callable
+   - Call syncRegistrationToIterable() from the registration completion path only
+
+8. Safety & reliability:
+   - Wrap all Iterable calls in try/catch
+   - Never block or rollback registration due to Iterable errors
+   - Log failures with structured context:
+     eventId, registrationId, transactionId, email
+
+9. Defaults & assumptions:
+   - locale should come from registration or event
+   - marketCode must come from the event (authoritative)
+   - locale and marketCode are NOT interchangeable
+   - Skip any Iterable call if required data is missing
+
+Deliverables:
+• Updated server/iterable.ts with clear helper methods
+• Registration completion flow wired correctly
+• Inline comments explaining sequencing and safeguards
+• No breaking changes to existing email logic
+• No changes to Hydra or payment processing
+
+If anything blocks implementation, document it clearly before proceeding.
