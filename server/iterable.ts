@@ -378,6 +378,379 @@ export class IterableService {
       },
     });
   }
+
+  // =========================================================================
+  // REGISTRATION SYNC HELPERS
+  // These methods sync registration data to Iterable for marketing automation
+  // =========================================================================
+
+  /**
+   * Create or update a user profile in Iterable.
+   * Uses POST /users/update endpoint.
+   * 
+   * @param email - User's email (required by Iterable)
+   * @param profile - User profile data (firstName, lastName, locale)
+   * @returns Success status and any error details
+   */
+  async createOrUpdateUser(
+    email: string,
+    profile: {
+      firstName?: string;
+      lastName?: string;
+      locale?: string; // e.g. "en-US", "es-US", "fr-FR"
+    }
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!isConfigured()) {
+      log('info', 'Skipping createOrUpdateUser - ITERABLE_API_KEY not configured');
+      return { success: false, error: 'ITERABLE_API_KEY not configured' };
+    }
+
+    if (!email) {
+      log('warn', 'Skipping createOrUpdateUser - email is required');
+      return { success: false, error: 'Email is required' };
+    }
+
+    try {
+      // Build dataFields object, only including non-empty values
+      const dataFields: Record<string, string> = {};
+      if (profile.firstName) dataFields.firstName = profile.firstName;
+      if (profile.lastName) dataFields.lastName = profile.lastName;
+      if (profile.locale) dataFields.locale = profile.locale;
+
+      await this.request('POST', '/users/update', {
+        email,
+        dataFields,
+        // preferUserId false = email is the primary identifier
+        preferUserId: false,
+      });
+
+      log('info', `User profile synced: ${email}`, { dataFields });
+      return { success: true };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      log('error', `Failed to sync user profile: ${email}`, { error: errorMessage });
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  /**
+   * Add a user to an Iterable list.
+   * Uses POST /lists/subscribe endpoint.
+   * Handles already-subscribed users gracefully (Iterable will not duplicate).
+   * 
+   * @param email - User's email
+   * @param listId - Iterable list ID
+   * @returns Success status and any error details
+   */
+  async addUserToList(
+    email: string,
+    listId: number
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!isConfigured()) {
+      log('info', 'Skipping addUserToList - ITERABLE_API_KEY not configured');
+      return { success: false, error: 'ITERABLE_API_KEY not configured' };
+    }
+
+    if (!email) {
+      log('warn', 'Skipping addUserToList - email is required');
+      return { success: false, error: 'Email is required' };
+    }
+
+    if (!listId || listId <= 0) {
+      log('info', 'Skipping addUserToList - no valid listId provided');
+      return { success: false, error: 'No valid list ID provided' };
+    }
+
+    try {
+      await this.request('POST', '/lists/subscribe', {
+        listId,
+        subscribers: [{ email }],
+      });
+
+      log('info', `User added to list: ${email} -> list ${listId}`);
+      return { success: true };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      log('error', `Failed to add user to list: ${email} -> list ${listId}`, { error: errorMessage });
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  /**
+   * Track a custom registration event in Iterable.
+   * Uses POST /events/track endpoint.
+   * 
+   * @param email - User's email
+   * @param eventData - Registration event data
+   * @returns Success status and any error details
+   */
+  async trackRegistrationEvent(
+    email: string,
+    eventData: {
+      eventId: string;
+      eventSlug?: string;
+      registrationId: string;
+      marketCode?: string; // e.g. "US", "PR", "MX"
+      registeredAt: string; // ISO 8601 timestamp
+    }
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!isConfigured()) {
+      log('info', 'Skipping trackRegistrationEvent - ITERABLE_API_KEY not configured');
+      return { success: false, error: 'ITERABLE_API_KEY not configured' };
+    }
+
+    if (!email) {
+      log('warn', 'Skipping trackRegistrationEvent - email is required');
+      return { success: false, error: 'Email is required' };
+    }
+
+    try {
+      await this.request('POST', '/events/track', {
+        email,
+        eventName: 'eventRegistration',
+        dataFields: {
+          eventId: eventData.eventId,
+          eventSlug: eventData.eventSlug || null,
+          registrationId: eventData.registrationId,
+          marketCode: eventData.marketCode || null,
+          registeredAt: eventData.registeredAt,
+        },
+        // Use current time for the event timestamp
+        createdAt: Math.floor(Date.now() / 1000),
+      });
+
+      log('info', `Registration event tracked: ${email}`, { 
+        eventId: eventData.eventId, 
+        registrationId: eventData.registrationId 
+      });
+      return { success: true };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      log('error', `Failed to track registration event: ${email}`, { error: errorMessage });
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  /**
+   * Track a purchase event in Iterable for paid registrations.
+   * Uses POST /commerce/trackPurchase endpoint.
+   * Idempotent via transactionId - Iterable will deduplicate.
+   * 
+   * @param email - User's email
+   * @param purchaseData - Purchase event data
+   * @returns Success status and any error details
+   */
+  async trackPurchaseEvent(
+    email: string,
+    purchaseData: {
+      transactionId: string; // For idempotency - use registrationId or paymentIntentId
+      eventId: string;
+      eventSlug?: string;
+      ticketType?: string;
+      quantity: number;
+      unitPrice: number; // In dollars (not cents)
+      totalRevenue: number; // In dollars (not cents)
+      currency: string; // e.g. "USD"
+      purchasedAt: string; // ISO 8601 timestamp
+    }
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!isConfigured()) {
+      log('info', 'Skipping trackPurchaseEvent - ITERABLE_API_KEY not configured');
+      return { success: false, error: 'ITERABLE_API_KEY not configured' };
+    }
+
+    if (!email) {
+      log('warn', 'Skipping trackPurchaseEvent - email is required');
+      return { success: false, error: 'Email is required' };
+    }
+
+    if (!purchaseData.transactionId) {
+      log('warn', 'Skipping trackPurchaseEvent - transactionId is required for idempotency');
+      return { success: false, error: 'Transaction ID is required' };
+    }
+
+    try {
+      await this.request('POST', '/commerce/trackPurchase', {
+        user: { email },
+        items: [{
+          id: purchaseData.transactionId,
+          name: purchaseData.ticketType || 'Event Registration',
+          price: purchaseData.unitPrice,
+          quantity: purchaseData.quantity,
+          dataFields: {
+            eventId: purchaseData.eventId,
+            eventSlug: purchaseData.eventSlug || null,
+          },
+        }],
+        total: purchaseData.totalRevenue,
+        // Use createdAt as Unix timestamp in seconds
+        createdAt: Math.floor(new Date(purchaseData.purchasedAt).getTime() / 1000),
+        dataFields: {
+          transactionId: purchaseData.transactionId,
+          eventId: purchaseData.eventId,
+          eventSlug: purchaseData.eventSlug || null,
+          currency: purchaseData.currency,
+          purchasedAt: purchaseData.purchasedAt,
+        },
+      });
+
+      log('info', `Purchase event tracked: ${email}`, { 
+        transactionId: purchaseData.transactionId,
+        eventId: purchaseData.eventId,
+        totalRevenue: purchaseData.totalRevenue 
+      });
+      return { success: true };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      log('error', `Failed to track purchase event: ${email}`, { error: errorMessage });
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  /**
+   * Orchestrator function to sync a completed registration to Iterable.
+   * This is the main entry point called from the registration completion flow.
+   * 
+   * Sequence:
+   * 1. Create or update the user profile
+   * 2. If event has iterableListId, add user to the list
+   * 3. Track the registration event
+   * 4. If paid registration, track the purchase event
+   * 
+   * All calls are wrapped in try/catch to ensure registration success
+   * even if Iterable operations fail.
+   * 
+   * @param registration - The completed registration record
+   * @param event - The event record
+   */
+  async syncRegistrationToIterable(
+    registration: {
+      id: string;
+      email: string;
+      firstName: string;
+      lastName: string;
+      language?: string;
+      registeredAt?: Date | string | null;
+      paymentStatus?: string;
+      amountPaidCents?: number | null;
+      paymentIntentId?: string | null;
+    },
+    event: {
+      id: string;
+      slug?: string | null;
+      marketCode?: string | null;
+      iterableListId?: number | null;
+    }
+  ): Promise<void> {
+    // Context for structured logging
+    const context = {
+      eventId: event.id,
+      registrationId: registration.id,
+      email: registration.email,
+    };
+
+    log('info', 'Starting Iterable sync for registration', context);
+
+    // Skip if Iterable is not configured
+    if (!isConfigured()) {
+      log('info', 'Skipping Iterable sync - API key not configured', context);
+      return;
+    }
+
+    const email = registration.email;
+    if (!email) {
+      log('warn', 'Skipping Iterable sync - no email', context);
+      return;
+    }
+
+    // Derive locale from language (e.g. "en" -> "en-US", "es" -> "es-US")
+    const locale = registration.language === 'es' ? 'es-US' : 'en-US';
+
+    // Step 1: Create or update user profile
+    try {
+      await this.createOrUpdateUser(email, {
+        firstName: registration.firstName,
+        lastName: registration.lastName,
+        locale,
+      });
+    } catch (err) {
+      log('error', 'Failed during createOrUpdateUser (non-blocking)', { 
+        ...context, 
+        error: err instanceof Error ? err.message : String(err) 
+      });
+    }
+
+    // Step 2: Add user to event's Iterable list (if configured)
+    if (event.iterableListId && event.iterableListId > 0) {
+      try {
+        await this.addUserToList(email, event.iterableListId);
+      } catch (err) {
+        log('error', 'Failed during addUserToList (non-blocking)', { 
+          ...context, 
+          listId: event.iterableListId,
+          error: err instanceof Error ? err.message : String(err) 
+        });
+      }
+    }
+
+    // Step 3: Track registration event
+    const registeredAt = registration.registeredAt
+      ? (typeof registration.registeredAt === 'string' 
+          ? registration.registeredAt 
+          : registration.registeredAt.toISOString())
+      : new Date().toISOString();
+
+    try {
+      await this.trackRegistrationEvent(email, {
+        eventId: event.id,
+        eventSlug: event.slug || undefined,
+        registrationId: registration.id,
+        marketCode: event.marketCode || undefined,
+        registeredAt,
+      });
+    } catch (err) {
+      log('error', 'Failed during trackRegistrationEvent (non-blocking)', { 
+        ...context, 
+        error: err instanceof Error ? err.message : String(err) 
+      });
+    }
+
+    // Step 4: Track purchase event (only for paid registrations)
+    const isPaid = registration.paymentStatus === 'paid' && 
+                   registration.amountPaidCents && 
+                   registration.amountPaidCents > 0;
+
+    if (isPaid) {
+      // Use paymentIntentId as transactionId for idempotency, fallback to registrationId
+      const transactionId = registration.paymentIntentId || registration.id;
+      const amountDollars = registration.amountPaidCents! / 100;
+
+      try {
+        await this.trackPurchaseEvent(email, {
+          transactionId,
+          eventId: event.id,
+          eventSlug: event.slug || undefined,
+          ticketType: 'Event Registration',
+          quantity: 1,
+          unitPrice: amountDollars,
+          totalRevenue: amountDollars,
+          currency: 'USD',
+          purchasedAt: registeredAt,
+        });
+      } catch (err) {
+        log('error', 'Failed during trackPurchaseEvent (non-blocking)', { 
+          ...context,
+          transactionId,
+          error: err instanceof Error ? err.message : String(err) 
+        });
+      }
+    }
+
+    log('info', 'Completed Iterable sync for registration', { 
+      ...context, 
+      isPaid: !!isPaid 
+    });
+  }
 }
 
 export const iterableService = new IterableService();
