@@ -2158,6 +2158,17 @@ export async function registerRoutes(
         }
       }
 
+      // Sync registration to Iterable (non-blocking, fire-and-forget)
+      // This runs ONLY on initial registration creation, NOT on edits or updates
+      // Sequence: 1) Update user profile, 2) Add to event list, 3) Track registration event, 4) Track purchase (if paid)
+      iterableService.syncRegistrationToIterable(registration, event).catch((err) => {
+        console.error('[Iterable] syncRegistrationToIterable failed (non-blocking):', {
+          eventId: event.id,
+          registrationId: registration.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+
       // Include check-in token in response for client-side wallet URL
       res.status(201).json({
         ...registration,
