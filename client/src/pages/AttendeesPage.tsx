@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { useSearch } from "wouter";
+import { useSearch, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Search, Download, MoreHorizontal, Mail, Edit, Trash2, User, Shirt, Save, Pencil, ChevronUp, ChevronDown, Settings2, ArrowUpDown, Plus, Upload, Edit2, ArrowRightLeft, Copy, ExternalLink, Printer as PrinterIcon, CheckCircle2, XCircle, Clock, Send, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -1339,6 +1339,15 @@ export default function AttendeesPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem asChild data-testid={`action-view-profile-${person.id}`}>
+                  <Link 
+                    href={`/admin/profile?email=${encodeURIComponent(reg.email)}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <User className="h-4 w-4 mr-2" />
+                    View Profile
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuItem 
                   onClick={(e) => { 
                     e.stopPropagation(); 

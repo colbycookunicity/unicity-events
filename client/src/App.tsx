@@ -35,6 +35,7 @@ import AttendeeEventsPage from "@/pages/AttendeeEventsPage";
 import PrintersPage from "@/pages/PrintersPage";
 import GuestRegistrationPage from "@/pages/GuestRegistrationPage";
 import GuestPaymentSuccessPage from "@/pages/GuestPaymentSuccessPage";
+import ProfilePage from "@/pages/ProfilePage";
 
 function AdminLayout({ children }: { children: React.ReactNode }) {
   const { theme } = useTheme();
@@ -87,6 +88,7 @@ function AdminRouter() {
         <Route path="/admin/events/:id/landing" component={LandingEditorPage} />
         <Route path="/admin/events/:id" component={EventFormPage} />
         <Route path="/admin/attendees" component={AttendeesPage} />
+        <Route path="/admin/profile" component={ProfilePage} />
         <Route path="/admin/check-in" component={CheckInPage} />
         <Route path="/admin/swag" component={SwagPage} />
         <Route path="/admin/reports" component={ReportsPage} />

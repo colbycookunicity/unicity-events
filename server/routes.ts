@@ -2963,6 +2963,77 @@ export async function registerRoutes(
     }
   });
 
+  // Person Profile - Get all registrations for a person by email or Unicity ID
+  app.get("/api/person-profile", authenticateToken, requireRole("admin", "event_manager", "marketing", "readonly"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const email = req.query.email as string | undefined;
+      const unicityId = req.query.unicityId as string | undefined;
+
+      if (!email && !unicityId) {
+        return res.status(400).json({ error: "Either email or unicityId is required" });
+      }
+
+      let registrationsData: any[] = [];
+      
+      // Get registrations by email
+      if (email) {
+        registrationsData = await storage.getRegistrationsByUser(email);
+      }
+      
+      // Get registrations by Unicity ID (merge with email results if both provided)
+      if (unicityId) {
+        const byUnicityId = await storage.getRegistrationsByUnicityIdAll(unicityId);
+        // Merge and deduplicate by registration ID
+        const existingIds = new Set(registrationsData.map(r => r.id));
+        byUnicityId.forEach(r => {
+          if (!existingIds.has(r.id)) {
+            registrationsData.push(r);
+          }
+        });
+      }
+
+      // Apply market filtering for admin users
+      const user = req.user!;
+      const fullUser = await storage.getUser(user.id);
+      const filteredRegistrations = fullUser 
+        ? await filterRegistrationsByMarketAccess(registrationsData, fullUser)
+        : registrationsData;
+
+      // Get event details for each registration
+      const events = await storage.getEvents();
+      const eventsById = new Map(events.map(e => [e.id, e]));
+
+      // Compute swag status and add event details
+      const registrationIdsWithSwag = await storage.getRegistrationIdsWithSwagAssigned();
+      const enrichedRegistrations = filteredRegistrations.map(reg => ({
+        ...reg,
+        swagStatus: registrationIdsWithSwag.has(reg.id) ? "assigned" : "pending",
+        event: eventsById.get(reg.eventId) || null,
+      }));
+
+      // Extract profile info from first registration (most recent if we sort)
+      enrichedRegistrations.sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+
+      const profile = enrichedRegistrations.length > 0 ? {
+        firstName: enrichedRegistrations[0].firstName,
+        lastName: enrichedRegistrations[0].lastName,
+        email: enrichedRegistrations[0].email,
+        unicityId: enrichedRegistrations[0].unicityId,
+        phone: enrichedRegistrations[0].phone,
+      } : null;
+
+      res.json({
+        profile,
+        registrations: enrichedRegistrations,
+      });
+    } catch (error) {
+      console.error("Get person profile error:", error);
+      res.status(500).json({ error: "Failed to get person profile" });
+    }
+  });
+
   // Guests Routes
   app.post("/api/registrations/:registrationId/guests", authenticateToken, async (req, res) => {
     try {
