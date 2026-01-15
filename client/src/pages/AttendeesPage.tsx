@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useSearch } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Search, Download, MoreHorizontal, Mail, Edit, Trash2, User, Shirt, Save, Pencil, ChevronUp, ChevronDown, Settings2, ArrowUpDown, Plus, Upload, Edit2, ArrowRightLeft, Copy, ExternalLink, Printer as PrinterIcon, CheckCircle2, XCircle, Clock, Send } from "lucide-react";
+import { Search, Download, MoreHorizontal, Mail, Edit, Trash2, User, Shirt, Save, Pencil, ChevronUp, ChevronDown, Settings2, ArrowUpDown, Plus, Upload, Edit2, ArrowRightLeft, Copy, ExternalLink, Printer as PrinterIcon, CheckCircle2, XCircle, Clock, Send, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PhoneInput from "react-phone-number-input";
@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1673,7 +1674,21 @@ export default function AttendeesPage() {
                     className="px-4 py-3 text-left font-medium text-muted-foreground whitespace-nowrap"
                   >
                     {col.key !== "actions" ? (
-                      <SortableHeader columnKey={col.key}>{col.label}</SortableHeader>
+                      <div className="flex items-center gap-1">
+                        <SortableHeader columnKey={col.key}>{col.label}</SortableHeader>
+                        {col.key === "verifiedByHydra" && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/70 cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-xs text-sm">
+                              <p className="font-medium mb-1">Verification Methods:</p>
+                              <p><span className="text-green-600 font-medium">Hydra</span> - Self-verified through Unicity's official verification system</p>
+                              <p className="mt-1"><span className="text-yellow-600 font-medium">Qualified List</span> - Pre-approved by an admin (CSV upload or manually added)</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                      </div>
                     ) : (
                       ""
                     )}
