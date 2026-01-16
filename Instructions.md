@@ -4579,3 +4579,172 @@ All confirmation emails include:
 - `checkInQrPayload` - QR code data string
 - `checkInQrImageUrl` - URL to QR code image
 - `appleWalletUrl` - Apple Wallet pass download URL
+
+---
+
+# CSV Upload for Event Qualifiers - Implementation Plan
+
+**Last Updated**: January 16, 2026
+
+## Overview
+
+Add enhanced CSV upload support for the Events admin dashboard that allows admins to import qualified registrants with the following fields: `distributor_id`, `email`, `first_name`, `last_name`, and `locale`.
+
+## Current State Analysis
+
+### Existing Implementation
+- **Frontend**: `client/src/pages/AttendeesPage.tsx` contains `handleFileChange()` that parses CSV files client-side (lines 691-742)
+- **Backend**: `POST /api/events/:eventId/qualifiers/import` accepts parsed data and bulk inserts to `qualifiedRegistrants` table (lines 3689-3756)
+- **Storage**: `createQualifiedRegistrantsBulk()` in `server/storage.ts` handles bulk insert (line 1105)
+- **Schema**: `qualifiedRegistrants` table in `shared/schema.ts` (lines 570-586) has: email, firstName, lastName, unicityId (optional), guestAllowanceRuleId, etc.
+
+### Gaps to Address
+1. Current implementation does not support `locale` field (needs schema update)
+2. `unicityId` (distributor_id) is currently optional - new spec requires it
+3. No row-specific error reporting - current implementation fails silently on bad rows
+4. No idempotent upsert logic - current implementation only inserts new records
+5. No validation for locale values
+
+---
+
+## Implementation Plan
+
+### Phase 1: Schema Update
+
+**Task 1.1**: Add `locale` column to `qualifiedRegistrants` table
+
+**Files to modify**:
+- `shared/schema.ts` - Add `locale` column with default 'en'
+- Run `npm run db:push` to apply schema changes
+
+```typescript
+// In qualifiedRegistrants table definition
+locale: text("locale").default("en"),
+```
+
+### Phase 2: Backend Enhancements
+
+**Task 2.1**: Update CSV import validation schema
+- Location: `server/routes.ts` (line ~3690)
+- Update `csvImportSchema` to:
+  - Make `unicityId` (distributor_id) required
+  - Add `locale` field with enum validation ['en', 'es']
+  - Default locale to 'en' if not provided
+
+```typescript
+const csvImportSchema = z.object({
+  registrants: z.array(z.object({
+    firstName: z.string().min(1, "First name is required"),
+    lastName: z.string().min(1, "Last name is required"),
+    email: z.string().email("Invalid email format"),
+    unicityId: z.string().min(1, "Distributor ID is required"),
+    locale: z.enum(["en", "es"]).optional().default("en"),
+  })),
+  clearExisting: z.boolean().optional().default(false),
+});
+```
+
+**Task 2.2**: Implement upsert logic with row-specific error handling
+- Location: `server/routes.ts` - `/api/events/:eventId/qualifiers/import` endpoint
+- For each row:
+  1. Check if email exists in event's qualifiers
+  2. If exists:
+     - If distributor_id matches → update record
+     - If distributor_id differs → log warning, skip update, add to warnings
+  3. If not exists → insert new record
+  4. Collect errors per row (row number + reason)
+- Return response with:
+  - `imported`: count of newly inserted
+  - `updated`: count of updated records
+  - `skipped`: count of skipped records
+  - `errors`: array of { row: number, message: string }
+  - `warnings`: array of { row: number, message: string }
+
+**Task 2.3**: Add storage method for upsert logic
+- Location: `server/storage.ts`
+- Add method: `getQualifiedRegistrantByEventAndEmail(eventId: string, email: string)`
+
+### Phase 3: Frontend Enhancements
+
+**Task 3.1**: Update CSV parsing to match new spec
+- Location: `client/src/pages/AttendeesPage.tsx` - `handleFileChange()` function
+- Update header detection:
+  - `distributor_id` → maps to `unicityId` (required)
+  - `email` → required, lowercase, trim
+  - `first_name` → required
+  - `last_name` → required
+  - `locale` → optional, validate 'en' or 'es'
+- Validate each row client-side before preview
+- Show validation errors with row numbers
+
+**Task 3.2**: Update import dialog UI
+- Show validation errors in a scrollable error list before import
+- Color-code: errors (red), warnings (yellow)
+- Allow proceeding with valid rows only
+- Display summary after import: X imported, Y updated, Z skipped, N errors
+
+**Task 3.3**: Update CSV data state type
+```typescript
+const [csvData, setCsvData] = useState<Array<{
+  firstName: string;
+  lastName: string;
+  email: string;
+  unicityId: string;
+  locale: string;
+  rowNumber: number;
+  error?: string;
+}>>([]);
+```
+
+---
+
+## CSV Specification
+
+### Required Headers (exact match, case-insensitive)
+```
+distributor_id,email,first_name,last_name,locale
+```
+
+### Field Rules
+| Field | Required | Validation | Notes |
+|-------|----------|------------|-------|
+| `distributor_id` | Yes | Non-empty string | Stored as `unicityId` |
+| `email` | Yes | Valid email format | Lowercased, trimmed |
+| `first_name` | Yes | Non-empty string | Trimmed |
+| `last_name` | Yes | Non-empty string | Trimmed |
+| `locale` | No | 'en' or 'es' | Defaults to 'en' |
+
+### Error Handling Rules
+1. **Missing required field** → Reject row with error: "Row X: Missing required field: {field}"
+2. **Invalid email** → Reject row with error: "Row X: Invalid email format"
+3. **Invalid locale** → Reject row with error: "Row X: Invalid locale '{value}'. Must be 'en' or 'es'"
+4. **Duplicate email (same distributor_id)** → Update existing record
+5. **Duplicate email (different distributor_id)** → Skip with warning: "Row X: Email exists with different distributor ID. Skipped."
+
+### Sample CSV
+```csv
+distributor_id,email,first_name,last_name,locale
+12345678,john.doe@example.com,John,Doe,en
+87654321,maria.garcia@example.com,Maria,Garcia,es
+11111111,bob.smith@example.com,Bob,Smith,
+```
+
+---
+
+## Files to Modify
+
+| File | Changes |
+|------|---------|
+| `shared/schema.ts` | Add `locale` column to qualifiedRegistrants |
+| `server/storage.ts` | Add `getQualifiedRegistrantByEventAndEmail()` method |
+| `server/routes.ts` | Update import endpoint with validation and upsert logic |
+| `client/src/pages/AttendeesPage.tsx` | Update CSV parsing and error display |
+
+## Task Checklist
+- [ ] Add locale column to schema (`shared/schema.ts`)
+- [ ] Run `npm run db:push` to apply schema
+- [ ] Add storage method for email lookup (`server/storage.ts`)
+- [ ] Update backend import endpoint with row-level error handling (`server/routes.ts`)
+- [ ] Update frontend CSV parsing for new spec (`AttendeesPage.tsx`)
+- [ ] Update import dialog to show errors/warnings
+- [ ] Test all scenarios
