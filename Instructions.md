@@ -4748,3 +4748,220 @@ distributor_id,email,first_name,last_name,locale
 - [ ] Update frontend CSV parsing for new spec (`AttendeesPage.tsx`)
 - [ ] Update import dialog to show errors/warnings
 - [ ] Test all scenarios
+
+---
+
+# User Profile Locale Support - Implementation Plan
+
+**Last Updated**: January 16, 2026
+
+## Overview
+
+Add locale (language preference) support to user profiles for emails, UI, and future features. This complements the qualifier CSV import enhancements above.
+
+## Current State Analysis
+
+### Existing Schema
+
+**Users table** (`shared/schema.ts` line 47):
+```typescript
+language: text("language").notNull().default("en"),
+```
+✅ **Already exists** with non-null constraint and default 'en'
+
+**Registrations table** (`shared/schema.ts` line 200):
+```typescript
+language: text("language").notNull().default("en"),
+```
+✅ **Already exists** - this is what Iterable uses for email language
+
+**qualifiedRegistrants table** (`shared/schema.ts` line 570):
+❌ **No locale field** - needs to be added
+
+### How Language Currently Flows
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         CURRENT LANGUAGE FLOW                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌──────────────┐     ┌──────────────────┐     ┌─────────────────────┐      │
+│  │ users.language│     │registrations     │     │ Iterable Email      │      │
+│  │ (unused)     │     │.language         │────▶│ (uses reg.language) │      │
+│  └──────────────┘     └──────────────────┘     └─────────────────────┘      │
+│         ↓                     ↑                                              │
+│    NOT USED!           Set from form                                         │
+│                        submission or                                         │
+│                        defaults to 'en'                                      │
+│                                                                              │
+│  ┌──────────────────────┐                                                   │
+│  │qualifiedRegistrants  │     ┌─────────────────────────────────────┐      │
+│  │ (no locale field!)   │────▶│ Qualification emails use            │      │
+│  └──────────────────────┘     │ event.defaultLanguage (fallback)    │      │
+│                               └─────────────────────────────────────┘      │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Gaps Identified
+
+1. **users.language exists but is never read** - Not used for any email logic
+2. **qualifiedRegistrants has no locale** - Uses `event.defaultLanguage` as fallback
+3. **CSV import doesn't accept locale** - Neither for qualifiers nor users
+4. **No validation for locale values** - Should be 'en' or 'es' only
+
+---
+
+## Implementation Plan
+
+### Phase 1: Add Locale to qualifiedRegistrants
+
+**Task 1.1**: Add `locale` column to qualifiedRegistrants table
+
+**File**: `shared/schema.ts` (line ~576)
+
+```typescript
+export const qualifiedRegistrants = pgTable("qualified_registrants", {
+  // ... existing fields ...
+  locale: text("locale").default("en"),  // ADD THIS
+  // ... rest of fields ...
+});
+```
+
+**Task 1.2**: Update insert schema
+
+**File**: `shared/schema.ts` - update `insertQualifiedRegistrantSchema`
+
+```typescript
+export const insertQualifiedRegistrantSchema = createInsertSchema(qualifiedRegistrants)
+  .omit({ id: true, createdAt: true, lastModified: true, importedAt: true })
+  .extend({
+    locale: z.enum(["en", "es"]).optional().default("en"),
+  });
+```
+
+**Task 1.3**: Run database migration
+
+```bash
+npm run db:push
+```
+
+### Phase 2: Update Backend
+
+**Task 2.1**: Update CSV import schema to accept locale
+
+**File**: `server/routes.ts` (line ~3690)
+
+```typescript
+const csvImportSchema = z.object({
+  registrants: z.array(z.object({
+    firstName: z.string().min(1),
+    lastName: z.string().min(1),
+    email: z.string().email(),
+    unicityId: z.string().optional(),
+    locale: z.enum(["en", "es"]).optional().default("en"),  // ADD THIS
+  })),
+  clearExisting: z.boolean().optional().default(false),
+});
+```
+
+**Task 2.2**: Update bulk insert to include locale
+
+**File**: `server/routes.ts` - `/api/events/:eventId/qualifiers/import` endpoint (line ~3711)
+
+```typescript
+const registrantsToInsert = validated.registrants.map(r => ({
+  eventId,
+  firstName: r.firstName.trim(),
+  lastName: r.lastName.trim(),
+  email: r.email.trim().toLowerCase(),
+  unicityId: r.unicityId?.trim() || null,
+  locale: r.locale || 'en',  // ADD THIS
+  importedBy,
+}));
+```
+
+**Task 2.3**: Use qualifier's locale for qualification emails
+
+**File**: `server/routes.ts` - update sendQualificationGranted calls (lines ~3665, ~3729)
+
+```typescript
+// Instead of: event.defaultLanguage || 'en'
+// Use: qualifier.locale || event.defaultLanguage || 'en'
+```
+
+### Phase 3: Update Frontend CSV Parsing
+
+**Task 3.1**: Add locale column detection
+
+**File**: `client/src/pages/AttendeesPage.tsx` - `handleFileChange()` function (line ~705)
+
+```typescript
+const localeIdx = headers.findIndex(h => h === "locale" || h === "language");
+```
+
+**Task 3.2**: Parse locale value with validation
+
+```typescript
+parsedData.push({
+  firstName: values[firstNameIdx] || "",
+  lastName: values[lastNameIdx] || "",
+  email,
+  unicityId: unicityIdIdx >= 0 ? values[unicityIdIdx] || "" : "",
+  locale: localeIdx >= 0 ? (values[localeIdx] === 'es' ? 'es' : 'en') : 'en',
+});
+```
+
+**Task 3.3**: Update CSV data state type
+
+```typescript
+const [csvData, setCsvData] = useState<Array<{
+  firstName: string;
+  lastName: string;
+  email: string;
+  unicityId: string;
+  locale: string;  // ADD THIS
+}>>([]);
+```
+
+### Phase 4: Leverage users.language (Future Enhancement)
+
+**Context**: The users.language field exists but is not being used. Consider these enhancements for future work:
+
+1. **When user registers**: If user has a profile, use `user.language` as default for `registration.language`
+2. **Admin user management**: Allow setting user's preferred language in admin panel
+3. **UI localization**: Use `user.language` to set UI language for logged-in admin users
+
+---
+
+## Summary of Changes
+
+| File | Changes |
+|------|---------|
+| `shared/schema.ts` | Add `locale` column to qualifiedRegistrants |
+| `server/routes.ts` | Update CSV import schema, bulk insert, and email language logic |
+| `client/src/pages/AttendeesPage.tsx` | Add locale parsing to CSV handler |
+
+## Locale Hierarchy for Emails
+
+After implementation, the locale/language hierarchy will be:
+
+| Email Type | Locale Source | Fallback Chain |
+|------------|---------------|----------------|
+| Registration Confirmation | `registration.language` | → 'en' |
+| Check-in Notification | `registration.language` | → 'en' |
+| Qualification Granted | `qualifier.locale` | → `event.defaultLanguage` → 'en' |
+| Registration Canceled | `registration.language` | → 'en' |
+| Registration Transferred | `registration.language` | → 'en' |
+
+## Task Checklist
+
+- [ ] Add `locale` column to qualifiedRegistrants schema
+- [ ] Run `npm run db:push` to apply schema
+- [ ] Update CSV import validation schema with locale
+- [ ] Update bulk insert to include locale
+- [ ] Update qualification email to use qualifier's locale
+- [ ] Update frontend CSV parsing to detect locale column
+- [ ] Update CSV data state type to include locale
+- [ ] Test CSV import with and without locale column
+- [ ] Document updated CSV format in export template
