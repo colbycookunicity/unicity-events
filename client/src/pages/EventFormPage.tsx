@@ -66,6 +66,7 @@ const eventFormSchema = z.object({
   startDate: z.string().min(1, "Start date is required"),
   endDate: z.string().min(1, "End date is required"),
   status: z.enum(["draft", "published", "private", "archived"]),
+  registrationMode: z.enum(["qualified_verified", "open_verified", "open_anonymous"]).default("open_verified"),
   capacity: z.coerce.number().min(0).optional(),
   guestPolicy: z.enum(["not_allowed", "allowed_free", "allowed_paid", "allowed_mixed"]).default("not_allowed"),
   buyInPrice: z.coerce.number().min(0).optional(),
@@ -142,6 +143,7 @@ export default function EventFormPage() {
       startDate: "",
       endDate: "",
       status: "draft",
+      registrationMode: "open_verified",
       capacity: undefined,
       guestPolicy: "not_allowed",
       buyInPrice: undefined,
@@ -177,6 +179,7 @@ export default function EventFormPage() {
         startDate: formatDateForInput(event.startDate),
         endDate: formatDateForInput(event.endDate),
         status: event.status as EventFormData["status"],
+        registrationMode: ((event as any).registrationMode as EventFormData["registrationMode"]) || "open_verified",
         capacity: event.capacity || undefined,
         guestPolicy: (event.guestPolicy as EventFormData["guestPolicy"]) || "not_allowed",
         buyInPrice: event.buyInPrice || undefined,
@@ -750,7 +753,7 @@ export default function EventFormPage() {
               <CardDescription>Event status, capacity, and pricing</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-2">
                 <FormField
                   control={form.control}
                   name="status"
@@ -774,6 +777,36 @@ export default function EventFormPage() {
                     </FormItem>
                   )}
                 />
+                <FormField
+                  control={form.control}
+                  name="registrationMode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Registration Access</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-registration-mode">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="qualified_verified">Qualified Only (OTP Required)</SelectItem>
+                          <SelectItem value="open_verified">Open to All (OTP Required)</SelectItem>
+                          <SelectItem value="open_anonymous">Open to All (No Verification)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        {field.value === "qualified_verified" && "Only people on your qualified list can register. Email/ID verification required."}
+                        {field.value === "open_verified" && "Anyone can register after verifying their email."}
+                        {field.value === "open_anonymous" && "Anyone can register without verification. Multiple registrations allowed."}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-3">
                 <FormField
                   control={form.control}
                   name="capacity"
