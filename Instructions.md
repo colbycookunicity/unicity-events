@@ -4965,3 +4965,235 @@ After implementation, the locale/language hierarchy will be:
 - [ ] Update CSV data state type to include locale
 - [ ] Test CSV import with and without locale column
 - [ ] Document updated CSV format in export template
+
+---
+
+# Qualified-Gated Registration with OTP Authentication - Implementation Plan
+
+**Last Updated**: January 16, 2026
+
+## Overview
+
+Enforce qualified-gated registration access with OTP authentication before showing the registration form. For events with `registrationMode = "qualified_verified"`, users must:
+1. Enter their email or distributor ID
+2. Be verified against the qualified registrants list
+3. Complete OTP verification via Hydra
+4. Only then access the registration form
+
+## Current State Analysis
+
+### Registration Modes
+
+| Mode | OTP Required | Qualification Check | Multiple Registrations |
+|------|--------------|---------------------|------------------------|
+| `qualified_verified` | Yes | Yes (must be on qualified list) | No (email unique) |
+| `open_verified` | Yes | No (anyone can register) | No (email unique) |
+| `open_anonymous` | No | No | Yes (email can be reused) |
+
+### Current Flow Analysis
+
+**Backend Implementation (Already Correct)**
+
+1. **`/api/register/otp/generate`** (line 401):
+   - Checks `event.registrationMode === "qualified_verified"`
+   - If qualified mode: Looks up email in `qualifiedRegistrants` table AND checks for existing registration
+   - Returns 403 with clear error if user is NOT qualified and NOT already registered
+   - Only sends OTP if user passes qualification check
+
+2. **`/api/register/otp/validate`** (line 491):
+   - Validates OTP via Hydra
+   - Returns verified profile with `isQualified` flag
+   - Stores session for form access
+
+3. **`POST /api/events/:eventIdOrSlug/register`** (line 1843):
+   - Re-validates OTP session before allowing registration
+   - Re-checks qualification at submission time (defense in depth)
+
+**Frontend Implementation (RegistrationPage.tsx)**
+
+1. **Registration mode detection** (line 443):
+   ```typescript
+   const registrationMode = event?.registrationMode || "open_verified";
+   const requiresVerification = (registrationMode !== "open_anonymous") && !skipVerification;
+   ```
+
+2. **Verification step flow** (lines 294, 1839-1960):
+   - `verificationStep` state: "email" → "otp" → "form"
+   - `renderVerificationStep()` shows email input or OTP input based on step
+   - `renderMainContent()` decides what to show:
+     - If `requiresVerification && verificationStep !== "form"` → show verification
+     - If `verifiedProfile && !isQualified` → show "Not Qualified" message
+     - Otherwise → show registration form
+
+3. **Session persistence** (lines 620-716):
+   - Stores verified email in `sessionStorage` keyed by eventId
+   - Checks for existing session on page load
+   - Validates attendee tokens from `/my-events` page
+
+### Current Flow Diagram (qualified_verified)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    QUALIFIED_VERIFIED REGISTRATION FLOW                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  User visits /register/:eventSlug                                           │
+│           │                                                                  │
+│           ▼                                                                  │
+│  ┌────────────────────────┐                                                 │
+│  │ Check registrationMode │                                                 │
+│  └────────────────────────┘                                                 │
+│           │                                                                  │
+│           ▼ (qualified_verified)                                             │
+│  ┌────────────────────────┐                                                 │
+│  │ Show Email Input Step  │ ← verificationStep = "email"                    │
+│  │ (renderVerificationStep)│                                                │
+│  └────────────────────────┘                                                 │
+│           │                                                                  │
+│           ▼ User enters email + clicks "Send Code"                          │
+│  ┌────────────────────────┐                                                 │
+│  │ POST /api/register/    │                                                 │
+│  │   otp/generate         │                                                 │
+│  └────────────────────────┘                                                 │
+│           │                                                                  │
+│     ┌─────┴─────┐                                                           │
+│     ▼           ▼                                                           │
+│  ┌──────┐   ┌────────────────────┐                                          │
+│  │ 200  │   │ 403: Not Qualified │                                          │
+│  │ OTP  │   │ Show error toast   │                                          │
+│  │ sent │   │ Stay on email step │                                          │
+│  └──────┘   └────────────────────┘                                          │
+│     │                                                                        │
+│     ▼                                                                        │
+│  ┌────────────────────────┐                                                 │
+│  │ Show OTP Input Step    │ ← verificationStep = "otp"                      │
+│  └────────────────────────┘                                                 │
+│           │                                                                  │
+│           ▼ User enters OTP + clicks "Verify"                               │
+│  ┌────────────────────────┐                                                 │
+│  │ POST /api/register/    │                                                 │
+│  │   otp/validate         │                                                 │
+│  └────────────────────────┘                                                 │
+│           │                                                                  │
+│     ┌─────┴─────┐                                                           │
+│     ▼           ▼                                                           │
+│  ┌──────────┐ ┌────────────────────┐                                        │
+│  │ Valid +  │ │ Invalid OTP        │                                        │
+│  │ Qualified│ │ Show error, retry  │                                        │
+│  └──────────┘ └────────────────────┘                                        │
+│     │                                                                        │
+│     ▼                                                                        │
+│  ┌────────────────────────┐                                                 │
+│  │ Show Registration Form │ ← verificationStep = "form"                     │
+│  │ (renderFormCard)       │                                                 │
+│  │ Pre-filled with profile│                                                 │
+│  └────────────────────────┘                                                 │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Assessment: Current Implementation Status
+
+✅ **Already Working Correctly:**
+1. Backend blocks OTP for non-qualified users (403 error)
+2. Frontend shows verification steps before form for qualified_verified
+3. Session persistence via sessionStorage
+4. Defense-in-depth: Backend re-validates at submission
+
+⚠️ **Potential Gaps Identified:**
+
+1. **No distributor ID lookup option** - User currently can only enter email, not distributor ID
+2. **Error message could be clearer** - Current error is generic, could show more context
+3. **No pre-flight qualification check** - User must click "Send Code" to learn they're not qualified
+
+---
+
+## Implementation Plan (Gap Fixes)
+
+### Phase 1: Add Distributor ID Lookup Option
+
+**Task 1.1**: Add "Lookup by Distributor ID" toggle to verification step
+
+**File**: `client/src/pages/RegistrationPage.tsx`
+
+Add state for lookup mode:
+```typescript
+const [lookupMode, setLookupMode] = useState<"email" | "distributorId">("email");
+const [distributorIdInput, setDistributorIdInput] = useState("");
+```
+
+Update `renderVerificationStep()` to show toggle and appropriate input.
+
+**Task 1.2**: Add backend endpoint for distributor ID lookup
+
+**File**: `server/routes.ts`
+
+```typescript
+// Check qualification by distributor ID (pre-flight check)
+app.post("/api/register/check-qualification", async (req, res) => {
+  const { eventId, email, distributorId } = req.body;
+  // Look up by email or distributorId
+  // Return { isQualified: boolean, email?: string }
+});
+```
+
+### Phase 2: Add Pre-Flight Qualification Check
+
+**Task 2.1**: Check qualification before sending OTP
+
+**File**: `client/src/pages/RegistrationPage.tsx`
+
+Update `handleSendOtp()` to call a pre-flight check endpoint that:
+1. Validates email/distributorId is on qualified list
+2. Returns clear error BEFORE attempting OTP
+3. Only proceeds to send OTP if qualified
+
+### Phase 3: Improve Error Messages
+
+**Task 3.1**: Add contextual error UI
+
+**File**: `client/src/pages/RegistrationPage.tsx`
+
+Instead of just showing a toast on 403, show an inline error card explaining:
+- User is not on the qualified list
+- Contact information for support
+- Option to try a different email
+
+### Phase 4: Session Safety Improvements
+
+**Task 4.1**: Validate session scope
+
+Ensure OTP session is scoped to both email AND eventId to prevent cross-event session reuse:
+- Current: Session stored with `registrationEventId` in customerData ✅
+- Validate: Session lookup uses event-scoped method `getOtpSessionForRegistration()` ✅
+
+---
+
+## Key Files Reference
+
+| File | Purpose | Key Lines |
+|------|---------|-----------|
+| `server/routes.ts` | OTP generate/validate, registration submission | 401-490 (OTP), 1843-1903 (registration) |
+| `client/src/pages/RegistrationPage.tsx` | Registration UI, verification flow | 294-300 (state), 1839-1960 (verification UI) |
+| `server/storage.ts` | Database access for qualifiers | `getQualifiedRegistrantByEmail()`, `getQualifiedRegistrantByUnicityId()` |
+| `shared/schema.ts` | Data models | `qualifiedRegistrants` (line 570) |
+
+## Testing Scenarios
+
+| Scenario | Expected Behavior |
+|----------|-------------------|
+| Qualified user enters email | OTP sent → verify → form shown |
+| Non-qualified user enters email | 403 error, clear message, no OTP sent |
+| Already registered user enters email | OTP sent (existing registration counts as qualified) |
+| Valid OTP entered | Form shown with pre-filled data |
+| Invalid OTP entered | Error shown, can retry |
+| Page refresh after verification | Session restored, form shown |
+| Different event visited | Must re-verify (session is event-scoped) |
+
+## Task Checklist
+
+- [x] Document current implementation (already correct for basic flow)
+- [ ] Add distributor ID lookup option (Phase 1)
+- [ ] Add pre-flight qualification check (Phase 2)
+- [ ] Improve error messages with inline card (Phase 3)
+- [ ] Verify session scoping is correct (Phase 4)
