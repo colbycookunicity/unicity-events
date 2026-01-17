@@ -3696,6 +3696,7 @@ export async function registerRoutes(
       locale: z.enum(["en", "es"]).optional().default("en"),
     })),
     clearExisting: z.boolean().optional().default(false),
+    skipDuplicates: z.boolean().optional().default(false),
   });
 
   app.post("/api/events/:eventId/qualifiers/import", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
@@ -3704,13 +3705,62 @@ export async function registerRoutes(
       const eventId = req.params.eventId;
       const importedBy = req.user!.id;
 
+      // Check for duplicate distributor IDs within the import data itself
+      const importDuplicates: { unicityId: string; emails: string[] }[] = [];
+      const unicityIdToEmails = new Map<string, string[]>();
+      
+      for (const r of validated.registrants) {
+        if (r.unicityId && r.unicityId.trim()) {
+          const normalizedId = r.unicityId.trim().toLowerCase();
+          const existing = unicityIdToEmails.get(normalizedId) || [];
+          existing.push(r.email.trim().toLowerCase());
+          unicityIdToEmails.set(normalizedId, existing);
+        }
+      }
+      
+      // Find IDs that appear with multiple different emails
+      for (const [unicityId, emails] of Array.from(unicityIdToEmails.entries())) {
+        const uniqueEmails = Array.from(new Set(emails));
+        if (uniqueEmails.length > 1) {
+          importDuplicates.push({ unicityId, emails: uniqueEmails });
+        }
+      }
+      
+      // If duplicates found and not skipping, return error with details
+      if (importDuplicates.length > 0 && !validated.skipDuplicates) {
+        return res.status(400).json({
+          error: "Duplicate distributor IDs found",
+          message: `The following distributor IDs appear multiple times with different emails. This can cause verification codes to be sent to the wrong person.`,
+          duplicates: importDuplicates,
+          hint: "Please fix the data to ensure each distributor ID has only one email per event, or set skipDuplicates=true to import anyway (keeping only the first occurrence of each ID)."
+        });
+      }
+
       // Optionally clear existing qualifiers
       if (validated.clearExisting) {
         await storage.deleteQualifiedRegistrantsByEvent(eventId);
       }
 
+      // If skipping duplicates, filter to keep only first occurrence of each distributor ID
+      let registrantsToProcess = validated.registrants;
+      const skippedDuplicates: string[] = [];
+      
+      if (validated.skipDuplicates && importDuplicates.length > 0) {
+        const seenUnicityIds = new Set<string>();
+        registrantsToProcess = validated.registrants.filter(r => {
+          if (!r.unicityId || !r.unicityId.trim()) return true;
+          const normalizedId = r.unicityId.trim().toLowerCase();
+          if (seenUnicityIds.has(normalizedId)) {
+            skippedDuplicates.push(`${r.email} (ID: ${r.unicityId})`);
+            return false;
+          }
+          seenUnicityIds.add(normalizedId);
+          return true;
+        });
+      }
+
       // Prepare registrants for bulk insert
-      const registrantsToInsert = validated.registrants.map(r => ({
+      const registrantsToInsert = registrantsToProcess.map(r => ({
         eventId,
         firstName: r.firstName.trim(),
         lastName: r.lastName.trim(),
@@ -3746,7 +3796,11 @@ export async function registerRoutes(
 
       res.status(201).json({ 
         imported: created.length, 
-        registrants: created 
+        registrants: created,
+        skippedDuplicates: skippedDuplicates.length > 0 ? skippedDuplicates : undefined,
+        warnings: skippedDuplicates.length > 0 
+          ? [`Skipped ${skippedDuplicates.length} duplicate entries`]
+          : undefined,
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
