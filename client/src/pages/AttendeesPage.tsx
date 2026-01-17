@@ -152,7 +152,7 @@ export default function AttendeesPage() {
   const [registrationToMove, setRegistrationToMove] = useState<Registration | null>(null);
   const [targetEventId, setTargetEventId] = useState<string>("");
   const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [csvData, setCsvData] = useState<Array<{ firstName: string; lastName: string; email: string; unicityId: string }>>([]);
+  const [csvData, setCsvData] = useState<Array<{ firstName: string; lastName: string; email: string; unicityId: string; locale: string }>>([]);
   const [replaceExisting, setReplaceExisting] = useState(false);
   const [qualifierFormData, setQualifierFormData] = useState({
     firstName: "",
@@ -709,6 +709,7 @@ export default function AttendeesPage() {
       const lastNameIdx = headers.findIndex(h => h.includes("last") && h.includes("name"));
       const emailIdx = headers.findIndex(h => h.includes("email"));
       const unicityIdIdx = headers.findIndex(h => h.includes("unicity") || h.includes("distributor") || h === "id");
+      const localeIdx = headers.findIndex(h => h.includes("locale") || h.includes("language") || h.includes("lang"));
 
       if (emailIdx === -1) {
         toast({ title: t("error"), description: "CSV must contain an email column", variant: "destructive" });
@@ -721,11 +722,18 @@ export default function AttendeesPage() {
         const email = values[emailIdx] || "";
         if (!email || !email.includes("@")) continue;
         
+        // Parse locale - default to "en" if not specified or invalid
+        let locale = localeIdx >= 0 ? (values[localeIdx] || "").toLowerCase() : "en";
+        if (locale !== "en" && locale !== "es") {
+          locale = "en";
+        }
+        
         parsedData.push({
           firstName: values[firstNameIdx] || "",
           lastName: values[lastNameIdx] || "",
           email,
           unicityId: unicityIdIdx >= 0 ? values[unicityIdIdx] || "" : "",
+          locale,
         });
       }
 
@@ -746,9 +754,9 @@ export default function AttendeesPage() {
     if (!qualifiers?.length) return;
 
     const csvContent = [
-      "First Name,Last Name,Email,Unicity ID,Status",
+      "First Name,Last Name,Email,Unicity ID,Locale,Status",
       ...qualifiers.map(q => 
-        `"${q.firstName}","${q.lastName}","${q.email}","${q.unicityId || ""}","${isQualifierRegistered(q) ? "Registered" : "Not Registered"}"`
+        `"${q.firstName}","${q.lastName}","${q.email}","${q.unicityId || ""}","${(q as any).locale || "en"}","${isQualifierRegistered(q) ? "Registered" : "Not Registered"}"`
       ),
     ].join("\n");
 
@@ -764,9 +772,9 @@ export default function AttendeesPage() {
 
   const handleDownloadTemplate = () => {
     const csvContent = [
-      "First Name,Last Name,Email,Unicity ID",
-      "John,Doe,john.doe@example.com,12345678",
-      "Jane,Smith,jane.smith@example.com,87654321",
+      "First Name,Last Name,Email,Unicity ID,Locale",
+      "John,Doe,john.doe@example.com,12345678,en",
+      "Jane,Smith,jane.smith@example.com,87654321,es",
     ].join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv" });
@@ -2664,6 +2672,7 @@ export default function AttendeesPage() {
                     <th className="text-left p-2 font-medium">Name</th>
                     <th className="text-left p-2 font-medium">Email</th>
                     <th className="text-left p-2 font-medium">ID</th>
+                    <th className="text-left p-2 font-medium">Locale</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2672,11 +2681,12 @@ export default function AttendeesPage() {
                       <td className="p-2">{row.firstName} {row.lastName}</td>
                       <td className="p-2 text-muted-foreground">{row.email}</td>
                       <td className="p-2">{row.unicityId || "-"}</td>
+                      <td className="p-2">{row.locale === "es" ? "ES" : "EN"}</td>
                     </tr>
                   ))}
                   {csvData.length > 50 && (
                     <tr className="border-t">
-                      <td colSpan={3} className="p-2 text-center text-muted-foreground">
+                      <td colSpan={4} className="p-2 text-center text-muted-foreground">
                         ...and {csvData.length - 50} more
                       </td>
                     </tr>
