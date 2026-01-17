@@ -762,6 +762,23 @@ export default function AttendeesPage() {
     toast({ title: t("success"), description: "Qualifiers exported successfully" });
   };
 
+  const handleDownloadTemplate = () => {
+    const csvContent = [
+      "First Name,Last Name,Email,Unicity ID",
+      "John,Doe,john.doe@example.com,12345678",
+      "Jane,Smith,jane.smith@example.com,87654321",
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "qualifiers-template.csv";
+    a.click();
+    window.URL.revokeObjectURL(url);
+    toast({ title: t("success"), description: "Template downloaded" });
+  };
+
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
       return apiRequest("PATCH", `/api/registrations/${id}`, { status });
@@ -1480,6 +1497,14 @@ export default function AttendeesPage() {
                 className="hidden"
                 data-testid="input-csv-upload"
               />
+              <Button 
+                variant="outline" 
+                onClick={handleDownloadTemplate}
+                data-testid="button-download-template"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Template
+              </Button>
               <Button 
                 variant="outline" 
                 onClick={() => fileInputRef.current?.click()}
