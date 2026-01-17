@@ -134,6 +134,20 @@ export type RegistrationSettings = {
   requiresVerification?: boolean;
 };
 
+/**
+ * Per-event Iterable campaign configuration.
+ * Maps email types to campaign IDs by language.
+ * If not set for an event, falls back to environment variable campaigns.
+ */
+export type EventIterableCampaigns = {
+  confirmation?: { en?: number; es?: number };
+  checkedIn?: { en?: number; es?: number };
+  qualificationGranted?: { en?: number; es?: number };
+  registrationCanceled?: { en?: number; es?: number };
+  registrationTransferred?: { en?: number; es?: number };
+  registrationUpdate?: { en?: number; es?: number };
+};
+
 // Events table
 export const events = pgTable("events", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -182,6 +196,9 @@ export const events = pgTable("events", {
   // Iterable integration: list ID to subscribe registrants to
   // If set, users are subscribed to this list on registration completion
   iterableListId: integer("iterable_list_id"),
+  // Iterable campaigns per event: maps email types to campaign IDs by language
+  // If not set, falls back to environment variable campaigns
+  iterableCampaigns: jsonb("iterable_campaigns").$type<EventIterableCampaigns>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   lastModified: timestamp("last_modified").defaultNow().notNull(),
 });
