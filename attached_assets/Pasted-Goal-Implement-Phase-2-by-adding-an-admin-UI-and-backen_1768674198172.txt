@@ -1,0 +1,71 @@
+Goal:
+Implement Phase 2 by adding an admin UI and backend support to configure per-event Iterable email campaigns (EN/ES) directly within the Events platform.
+
+Instructions:
+• Research my codebase
+• Read Instructions.md fully before making changes
+• Review the Phase 1 implementation for per-event campaign routing
+• Find the event admin configuration models, APIs, and UI
+• Write a detailed plan to Instructions.md BEFORE implementing
+• Only implement after the plan is written and validated
+
+Context:
+• Phase 1 introduced per-event, per-language Iterable campaign routing
+• Existing events still rely on environment variable defaults
+• Phase 2 will allow admins to explicitly configure campaigns per event
+• Iterable remains the source of email content
+• Events platform only stores campaign IDs
+• Hydra continues to own OTP and magic-link emails (do not modify)
+
+Requirements:
+
+Backend:
+1. Add an admin-protected API endpoint to fetch available Iterable campaigns
+   - Use Iterable API
+   - Return only API-triggered campaigns
+   - Include campaignId and campaignName
+   - Prefer filtering by name prefix: "event:"
+
+2. Extend event configuration to store email campaign mappings:
+   emailType → language → campaignId
+   (Do NOT remove existing env-based defaults)
+
+3. Update email send logic to:
+   - Prefer event-specific campaign mappings if present
+   - Fall back to environment variables if not configured
+   - Never fall back across events
+
+Admin UI:
+4. Add an "Emails" or "Email Campaigns" section to Event Admin
+5. For each supported email type, allow:
+   - Selecting an English campaign
+   - Selecting a Spanish campaign
+6. Populate dropdowns from the Iterable campaigns API
+7. Display clear validation states:
+   - Missing EN or ES campaign
+   - Using fallback (env-based) configuration
+8. Prevent saving invalid or incomplete configurations
+
+Safety & Guardrails:
+9. Do not allow selecting the same campaign for multiple events without warning
+10. Log campaign selection clearly (eventSlug, emailType, language, campaignId)
+11. Do not send emails if a required campaign is missing for an event
+    - Log a warning instead
+    - Never guess or reuse another event’s campaign
+
+Documentation:
+12. Update Instructions.md to include:
+   - How admins configure campaigns per event
+   - Required email types for an event to be “email-ready”
+   - How fallback behavior works
+   - How to add campaigns for a new event in Iterable
+
+Constraints:
+• No database schema changes unless absolutely necessary
+• No breaking changes to existing events
+• No changes to Hydra or authentication logic
+• Follow existing admin auth and permission patterns
+• Keep logic explicit, readable, and auditable
+
+After writing the plan to Instructions.md:
+STOP and wait for confirmation before implementing.

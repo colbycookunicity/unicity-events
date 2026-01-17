@@ -4,10 +4,366 @@
 
 ---
 
-## Iterable Campaign Configuration - Admin UI Integration Plan
+## Iterable Campaign Configuration - Per-Event Email Campaigns
 
-**Status**: AWAITING APPROVAL  
+**Phase 1 Status**: ✅ COMPLETE (January 17, 2026)  
+**Phase 2 Status**: AWAITING APPROVAL  
 **Created**: January 17, 2026
+
+---
+
+### Phase 1 Summary (COMPLETE)
+
+Phase 1 implemented the backend data model for per-event Iterable campaigns:
+
+1. ✅ Added `EventIterableCampaigns` type to `shared/schema.ts`
+2. ✅ Added `iterableCampaigns` JSONB column to events table
+3. ✅ Implemented `getCampaignIdForEvent()` helper in `server/iterable.ts`
+4. ✅ Updated all 6 email send methods to use event-scoped campaign resolution
+5. ✅ Added `campaignSource` field to structured logs ('event' | 'env_fallback' | 'none')
+6. ✅ Verified backward compatibility - existing events use env var fallback
+
+**Campaign Resolution Priority:**
+1. `event.iterableCampaigns[emailType][language]` → Event-specific
+2. `process.env.ITERABLE_{TYPE}_CAMPAIGN_ID[_ES]` → Env var fallback
+3. `0` → Skip with warning log
+
+---
+
+### Phase 2 Implementation Plan: Admin UI
+
+#### Problem Being Solved
+
+Admins currently cannot configure per-event email campaigns through the UI. They must:
+1. Manually construct JSON and update the database
+2. Know exact Iterable campaign IDs
+3. Have no visibility into which campaigns are available or in use
+
+#### Solution Overview
+
+Add an "Email Campaigns" section to the Event Admin form that:
+1. Fetches available campaigns from Iterable API
+2. Displays dropdowns for each email type (EN/ES)
+3. Shows validation status (configured, using fallback, missing)
+4. Saves campaign mappings to `event.iterableCampaigns`
+
+---
+
+### Phase 2 Implementation Details
+
+#### 1. Backend: Iterable Campaigns API Endpoint
+
+**File**: `server/routes.ts`
+
+**Endpoint**: `GET /api/iterable/campaigns`
+
+```typescript
+app.get("/api/iterable/campaigns", authenticateToken, requireRole("admin", "event_manager"), async (req, res) => {
+  try {
+    const campaigns = await iterableService.getCampaigns();
+    res.json(campaigns);
+  } catch (error) {
+    console.error("Failed to fetch Iterable campaigns:", error);
+    res.status(500).json({ error: "Failed to fetch campaigns from Iterable" });
+  }
+});
+```
+
+**File**: `server/iterable.ts` - Add `getCampaigns()` method
+
+```typescript
+async getCampaigns(): Promise<{ id: number; name: string; campaignState: string }[]> {
+  if (!isConfigured()) {
+    log('warn', 'Cannot fetch campaigns - ITERABLE_API_KEY not configured');
+    return [];
+  }
+
+  const response = await fetch(`${ITERABLE_API_BASE}/campaigns`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'Api-Key': process.env.ITERABLE_API_KEY!,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Iterable API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  
+  // Filter to triggered campaigns, optionally filter by "event:" prefix
+  const campaigns = data.campaigns || [];
+  return campaigns
+    .filter((c: any) => c.campaignState === 'Ready' || c.campaignState === 'Running')
+    .map((c: any) => ({
+      id: c.id,
+      name: c.name,
+      campaignState: c.campaignState,
+    }))
+    .sort((a: any, b: any) => a.name.localeCompare(b.name));
+}
+```
+
+#### 2. Backend: Extend Event PATCH to Handle iterableCampaigns
+
+**File**: `server/routes.ts` - Update `PATCH /api/events/:id`
+
+Add to the updates object handling:
+
+```typescript
+// Handle iterableCampaigns (per-event email campaign configuration)
+if (req.body.iterableCampaigns !== undefined) {
+  updates.iterableCampaigns = req.body.iterableCampaigns;
+}
+```
+
+#### 3. Frontend: EventFormPage Schema Update
+
+**File**: `client/src/pages/EventFormPage.tsx`
+
+Add to `eventFormSchema`:
+
+```typescript
+iterableCampaigns: z.object({
+  confirmation: z.object({ en: z.number().optional(), es: z.number().optional() }).optional(),
+  checkedIn: z.object({ en: z.number().optional(), es: z.number().optional() }).optional(),
+  qualificationGranted: z.object({ en: z.number().optional(), es: z.number().optional() }).optional(),
+  registrationCanceled: z.object({ en: z.number().optional(), es: z.number().optional() }).optional(),
+  registrationTransferred: z.object({ en: z.number().optional(), es: z.number().optional() }).optional(),
+  registrationUpdate: z.object({ en: z.number().optional(), es: z.number().optional() }).optional(),
+}).optional(),
+```
+
+#### 4. Frontend: Email Campaigns UI Section
+
+**File**: `client/src/pages/EventFormPage.tsx`
+
+Add new Card section (after Thank You Page section, only shown when editing):
+
+```tsx
+{/* Email Campaigns (Iterable) - Only shown when editing */}
+{isEditing && (
+  <Card>
+    <CardHeader>
+      <CardTitle className="flex items-center gap-2">
+        <Mail className="h-5 w-5" />
+        Email Campaigns
+      </CardTitle>
+      <CardDescription>
+        Configure Iterable campaigns for each email type. If not configured, system defaults will be used.
+      </CardDescription>
+    </CardHeader>
+    <CardContent>
+      <IterableCampaignSelector
+        value={form.watch("iterableCampaigns")}
+        onChange={(campaigns) => form.setValue("iterableCampaigns", campaigns, { shouldDirty: true })}
+      />
+    </CardContent>
+  </Card>
+)}
+```
+
+#### 5. Frontend: IterableCampaignSelector Component
+
+**File**: `client/src/components/IterableCampaignSelector.tsx` (NEW)
+
+```tsx
+interface Campaign {
+  id: number;
+  name: string;
+  campaignState: string;
+}
+
+interface Props {
+  value: EventIterableCampaigns | undefined;
+  onChange: (campaigns: EventIterableCampaigns) => void;
+}
+
+const EMAIL_TYPES = [
+  { key: 'confirmation', label: 'Registration Confirmation', description: 'Sent after successful registration' },
+  { key: 'checkedIn', label: 'Check-In Notification', description: 'Sent when attendee checks in' },
+  { key: 'qualificationGranted', label: 'Qualification Granted', description: 'Sent when added to qualified list' },
+  { key: 'registrationCanceled', label: 'Registration Canceled', description: 'Sent when registration is canceled' },
+  { key: 'registrationTransferred', label: 'Registration Transferred', description: 'Sent when registration is transferred' },
+  { key: 'registrationUpdate', label: 'Registration Updated', description: 'Sent when registration details change' },
+] as const;
+
+export function IterableCampaignSelector({ value, onChange }: Props) {
+  const { data: campaigns = [], isLoading } = useQuery<Campaign[]>({
+    queryKey: ['/api/iterable/campaigns'],
+  });
+
+  const handleCampaignChange = (emailType: string, language: 'en' | 'es', campaignId: number | undefined) => {
+    const newValue = { ...value };
+    if (!newValue[emailType]) newValue[emailType] = {};
+    if (campaignId === undefined || campaignId === 0) {
+      delete newValue[emailType][language];
+    } else {
+      newValue[emailType][language] = campaignId;
+    }
+    // Clean up empty objects
+    if (Object.keys(newValue[emailType]).length === 0) {
+      delete newValue[emailType];
+    }
+    onChange(newValue);
+  };
+
+  if (isLoading) return <Skeleton className="h-40" />;
+
+  return (
+    <div className="space-y-6">
+      {EMAIL_TYPES.map(({ key, label, description }) => (
+        <div key={key} className="space-y-3">
+          <div>
+            <h4 className="font-medium">{label}</h4>
+            <p className="text-sm text-muted-foreground">{description}</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* English Campaign */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">English Campaign</label>
+              <Select
+                value={value?.[key]?.en?.toString() || "none"}
+                onValueChange={(v) => handleCampaignChange(key, 'en', v === "none" ? undefined : parseInt(v))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select campaign..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">
+                    <span className="text-muted-foreground">Use system default</span>
+                  </SelectItem>
+                  {campaigns.map((c) => (
+                    <SelectItem key={c.id} value={c.id.toString()}>
+                      {c.name} (ID: {c.id})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!value?.[key]?.en && (
+                <Badge variant="outline" className="text-xs">Using fallback</Badge>
+              )}
+            </div>
+            {/* Spanish Campaign */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Spanish Campaign</label>
+              <Select
+                value={value?.[key]?.es?.toString() || "none"}
+                onValueChange={(v) => handleCampaignChange(key, 'es', v === "none" ? undefined : parseInt(v))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select campaign..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">
+                    <span className="text-muted-foreground">Use system default</span>
+                  </SelectItem>
+                  {campaigns.map((c) => (
+                    <SelectItem key={c.id} value={c.id.toString()}>
+                      {c.name} (ID: {c.id})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!value?.[key]?.es && (
+                <Badge variant="outline" className="text-xs">Using fallback</Badge>
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+---
+
+### Phase 2 Task Checklist
+
+- [ ] Add `getCampaigns()` method to `server/iterable.ts`
+- [ ] Add `GET /api/iterable/campaigns` endpoint to `server/routes.ts`
+- [ ] Update `PATCH /api/events/:id` to handle `iterableCampaigns` field
+- [ ] Update `eventFormSchema` in `EventFormPage.tsx` to include `iterableCampaigns`
+- [ ] Update form `useEffect` to load existing `iterableCampaigns` values
+- [ ] Update form default values to include `iterableCampaigns`
+- [ ] Create `IterableCampaignSelector` component
+- [ ] Add Email Campaigns Card section to `EventFormPage.tsx`
+- [ ] Test: Verify campaigns load from Iterable API
+- [ ] Test: Verify campaign selection saves to event
+- [ ] Test: Verify emails use event-specific campaigns when configured
+- [ ] Test: Verify fallback works when not configured
+
+---
+
+### Files to Modify
+
+| File | Changes |
+|------|---------|
+| `server/iterable.ts` | Add `getCampaigns()` method to IterableService class |
+| `server/routes.ts` | Add `GET /api/iterable/campaigns` endpoint, update PATCH to handle iterableCampaigns |
+| `client/src/pages/EventFormPage.tsx` | Add iterableCampaigns to schema, form, and UI |
+| `client/src/components/IterableCampaignSelector.tsx` | NEW - Campaign selection UI component |
+
+---
+
+### Safety Guardrails
+
+1. **No breaking changes**: Existing events with null iterableCampaigns continue working via env var fallback
+2. **No database schema changes**: `iterableCampaigns` column already exists from Phase 1
+3. **No Hydra changes**: This feature only affects Iterable email campaigns
+4. **Admin-only access**: Endpoint requires `admin` or `event_manager` role
+5. **Graceful degradation**: If Iterable API fails, show empty dropdown with error message
+
+---
+
+### Admin Guide: Configuring Email Campaigns
+
+1. Navigate to Events → Edit Event
+2. Scroll to "Email Campaigns" section
+3. For each email type, select English and Spanish campaigns
+4. "Use system default" falls back to environment variable configuration
+5. Click Save to persist changes
+
+**Email Types:**
+- **Registration Confirmation**: Sent when attendee completes registration
+- **Check-In Notification**: Sent when attendee is checked in at the event
+- **Qualification Granted**: Sent when someone is added to the qualified list
+- **Registration Canceled**: Sent when a registration is canceled
+- **Registration Transferred**: Sent when registration is transferred to another person
+- **Registration Updated**: Sent when registration details are modified
+
+---
+
+### How Fallback Behavior Works
+
+When sending an email, the system checks for campaigns in this order:
+
+1. **Event-specific campaign**: `event.iterableCampaigns[emailType][language]`
+2. **Environment variable**: `ITERABLE_{TYPE}_CAMPAIGN_ID[_ES]`
+3. **Skip with warning**: If neither is configured, email is not sent and a warning is logged
+
+The `campaignSource` field in logs indicates which source was used:
+- `"event"` - Used event-specific campaign
+- `"env_fallback"` - Used environment variable
+- `"none"` - No campaign configured (email skipped)
+
+---
+
+### Adding Campaigns for a New Event in Iterable
+
+1. Log into Iterable
+2. Create new triggered campaigns for each email type
+3. Name campaigns with event prefix (e.g., "event:florida-2026:confirmation:en")
+4. Note the campaign IDs from Iterable
+5. Configure in Events admin using the Email Campaigns section
+
+---
+
+**STOP**: Awaiting approval before implementing Phase 2.
+
+---
 
 ### Problem Statement
 
