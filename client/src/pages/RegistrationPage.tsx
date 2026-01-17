@@ -541,12 +541,18 @@ export default function RegistrationPage() {
   // - open_anonymous: form visible immediately, NO verification at all
   // - skipVerification: pre-populated from URL params
   useEffect(() => {
+    // CRITICAL: Wait for event data to load before making any decisions
+    // Without this, the default "open_verified" mode would incorrectly skip to form
+    if (!event) {
+      return;
+    }
+    
     // For qualified_verified mode, NEVER skip to form - must go through email → OTP → form steps
     if (qualifiedVerifiedMode && !skipVerification) {
       // Stay on email step, do not auto-advance to form
       return;
     }
-    if (skipVerification || (event && !requiresVerification) || openVerifiedMode || openAnonymousMode) {
+    if (skipVerification || !requiresVerification || openVerifiedMode || openAnonymousMode) {
       setVerificationStep("form");
     }
   }, [skipVerification, event, requiresVerification, qualifiedVerifiedMode, openVerifiedMode, openAnonymousMode]);
