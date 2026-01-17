@@ -744,22 +744,18 @@ export default function RegistrationPage() {
   }, [verifiedProfile?.email, verificationEmail, prePopulatedEmail, params.eventId, loadedForKey]);
 
   const handleSendOtp = async () => {
-    if (!verificationEmail || !verificationEmail.includes("@")) {
-      toast({
-        title: language === "es" ? "Correo inválido" : "Invalid Email",
-        description: language === "es" ? "Por favor ingrese un correo electrónico válido" : "Please enter a valid email address",
-        variant: "destructive",
-      });
-      return;
-    }
-
     // For qualified_verified mode, check qualification FIRST before sending OTP
+    // User can provide email OR distributorId (at least one)
     if (qualifiedVerifiedMode) {
-      // Require distributor ID for qualified_verified mode
-      if (!verificationDistributorId || !verificationDistributorId.trim()) {
+      const hasEmail = verificationEmail && verificationEmail.includes("@");
+      const hasDistributorId = verificationDistributorId && verificationDistributorId.trim();
+      
+      if (!hasEmail && !hasDistributorId) {
         toast({
-          title: language === "es" ? "ID de Distribuidor requerido" : "Distributor ID Required",
-          description: language === "es" ? "Por favor ingrese su ID de distribuidor" : "Please enter your distributor ID",
+          title: language === "es" ? "Información requerida" : "Information Required",
+          description: language === "es" 
+            ? "Por favor ingrese su correo electrónico o ID de distribuidor" 
+            : "Please enter your email or distributor ID",
           variant: "destructive",
         });
         return;
@@ -767,11 +763,15 @@ export default function RegistrationPage() {
 
       setIsVerifying(true);
       try {
-        // Check qualification before sending OTP - this BLOCKS unqualified users
-        const qualRes = await fetch(`/api/public/qualifier-info/${params.eventId}?email=${encodeURIComponent(verificationEmail)}&distributorId=${encodeURIComponent(verificationDistributorId.trim())}`);
+        // Build query with available info - check qualification BEFORE sending OTP
+        const queryParams = new URLSearchParams();
+        if (hasEmail) queryParams.set("email", verificationEmail);
+        if (hasDistributorId) queryParams.set("distributorId", verificationDistributorId.trim());
+        
+        const qualRes = await fetch(`/api/public/qualifier-info/${params.eventId}?${queryParams.toString()}`);
         
         if (!qualRes.ok) {
-          // User is NOT qualified - block them immediately
+          // User is NOT qualified - block them immediately, NO OTP sent
           setIsQualified(false);
           setQualificationChecked(true);
           const errorData = await qualRes.json().catch(() => ({}));
@@ -788,13 +788,34 @@ export default function RegistrationPage() {
           return; // STOP - do NOT call Hydra
         }
 
-        // User IS qualified - now we can proceed with OTP
+        // User IS qualified - get their info (including email if they only provided distributorId)
+        const qualifierData = await qualRes.json();
         setIsQualified(true);
         setQualificationChecked(true);
         
+        // Use email from qualifier data if user only provided distributorId
+        const emailForOtp = hasEmail ? verificationEmail : qualifierData.email;
+        
+        if (!emailForOtp) {
+          toast({
+            title: language === "es" ? "Correo no encontrado" : "Email Not Found",
+            description: language === "es" 
+              ? "No tenemos un correo registrado para este ID. Por favor ingrese su correo." 
+              : "We don't have an email on file for this ID. Please enter your email.",
+            variant: "destructive",
+          });
+          setIsVerifying(false);
+          return;
+        }
+        
+        // Update verificationEmail if it came from qualifier data
+        if (!hasEmail && emailForOtp) {
+          setVerificationEmail(emailForOtp);
+        }
+        
         // Continue to send OTP via Hydra
         const res = await apiRequest("POST", "/api/register/otp/generate", { 
-          email: verificationEmail,
+          email: emailForOtp,
           eventId: params.eventId,
         });
         const data = await res.json();
@@ -802,7 +823,7 @@ export default function RegistrationPage() {
         setVerificationStep("otp");
         toast({
           title: language === "es" ? "Código enviado" : "Code Sent",
-          description: language === "es" ? `Código enviado a ${verificationEmail}` : `Verification code sent to ${verificationEmail}`,
+          description: language === "es" ? `Código enviado a ${emailForOtp}` : `Verification code sent to ${emailForOtp}`,
         });
         
         // Show dev code in development
@@ -836,6 +857,16 @@ export default function RegistrationPage() {
       } finally {
         setIsVerifying(false);
       }
+      return;
+    }
+    
+    // For non-qualified_verified modes, email is required
+    if (!verificationEmail || !verificationEmail.includes("@")) {
+      toast({
+        title: language === "es" ? "Correo inválido" : "Invalid Email",
+        description: language === "es" ? "Por favor ingrese un correo electrónico válido" : "Please enter a valid email address",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -1961,33 +1992,40 @@ export default function RegistrationPage() {
             <CardDescription className="text-muted-foreground">
               {qualifiedVerifiedMode 
                 ? (language === "es" 
-                    ? "Ingrese su correo electrónico e ID de distribuidor para verificar su elegibilidad"
-                    : "Enter your email and distributor ID to verify your eligibility")
+                    ? "Ingrese su ID de distribuidor o correo electrónico para verificar su elegibilidad"
+                    : "Enter your distributor ID or email to verify your eligibility")
                 : (language === "es" 
                     ? (loginHeroContent?.subheadlineEs || "Ingrese su correo electronico para recibir un codigo de verificacion")
                     : (loginHeroContent?.subheadline || "Enter your email to receive a verification code"))}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Distributor ID - required for qualified_verified mode */}
+            {/* For qualified_verified mode: Email OR Distributor ID (at least one required) */}
             {qualifiedVerifiedMode && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">
-                  {language === "es" ? "ID de Distribuidor" : "Distributor ID"} *
-                </label>
-                <Input
-                  type="text"
-                  placeholder={language === "es" ? "Su ID de distribuidor" : "Your distributor ID"}
-                  value={verificationDistributorId}
-                  onChange={(e) => setVerificationDistributorId(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
-                  data-testid="input-verification-distributor-id"
-                />
-              </div>
+              <>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">
+                    {language === "es" ? "ID de Distribuidor" : "Distributor ID"}
+                  </label>
+                  <Input
+                    type="text"
+                    placeholder={language === "es" ? "Su ID de distribuidor" : "Your distributor ID"}
+                    value={verificationDistributorId}
+                    onChange={(e) => setVerificationDistributorId(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
+                    data-testid="input-verification-distributor-id"
+                  />
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                  <div className="flex-1 h-px bg-border" />
+                  <span>{language === "es" ? "o" : "or"}</span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+              </>
             )}
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
-                {language === "es" ? "Correo Electrónico" : "Email"} *
+                {language === "es" ? "Correo Electrónico" : "Email"}{!qualifiedVerifiedMode && " *"}
               </label>
               <Input
                 type="email"
@@ -1998,9 +2036,16 @@ export default function RegistrationPage() {
                 data-testid="input-verification-email"
               />
             </div>
+            {qualifiedVerifiedMode && (
+              <p className="text-xs text-muted-foreground text-center">
+                {language === "es" 
+                  ? "Ingrese su ID de distribuidor O correo electrónico (solo uno es necesario)"
+                  : "Enter your Distributor ID OR Email (only one is needed)"}
+              </p>
+            )}
             <Button 
               onClick={handleSendOtp} 
-              disabled={isVerifying || !verificationEmail || (qualifiedVerifiedMode && !verificationDistributorId)}
+              disabled={isVerifying || (qualifiedVerifiedMode ? (!verificationEmail && !verificationDistributorId) : !verificationEmail)}
               className="w-full"
               data-testid="button-send-code"
             >

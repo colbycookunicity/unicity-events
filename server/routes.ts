@@ -3940,13 +3940,15 @@ export async function registerRoutes(
   // ========================================
 
   // Get qualifier info (public - for pre-populating registration form)
+  // Accepts EITHER email OR distributorId (at least one required)
   app.get("/api/public/qualifier-info/:eventId", async (req, res) => {
     try {
       const email = req.query.email as string;
       const distributorId = req.query.distributorId as string;
       
-      if (!email) {
-        return res.status(400).json({ error: "Email is required" });
+      // Require at least one of email or distributorId
+      if (!email && !distributorId) {
+        return res.status(400).json({ error: "Email or Distributor ID is required" });
       }
       
       const event = await storage.getEventByIdOrSlug(req.params.eventId);
@@ -3954,10 +3956,14 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Event not found" });
       }
       
-      // Try to find qualifier by email first
-      let qualifier = await storage.getQualifiedRegistrantByEmail(event.id, email);
+      let qualifier = null;
       
-      // If not found by email and distributorId provided, try by distributorId
+      // Try to find qualifier by email first if provided
+      if (email) {
+        qualifier = await storage.getQualifiedRegistrantByEmail(event.id, email);
+      }
+      
+      // If not found by email (or email not provided), try by distributorId
       if (!qualifier && distributorId) {
         qualifier = await storage.getQualifiedRegistrantByUnicityId(event.id, distributorId);
       }
@@ -3969,22 +3975,24 @@ export async function registerRoutes(
       }
       
       // If both email and distributorId provided, verify they match the qualifier record
-      if (distributorId && qualifier.unicityId && qualifier.unicityId !== distributorId) {
+      if (email && distributorId && qualifier.unicityId && qualifier.unicityId !== distributorId) {
         return res.status(403).json({ 
           error: "The distributor ID does not match our records. Please check your information." 
         });
       }
       
-      if (email && qualifier.email && qualifier.email.toLowerCase() !== email.toLowerCase()) {
+      if (email && distributorId && qualifier.email && qualifier.email.toLowerCase() !== email.toLowerCase()) {
         return res.status(403).json({ 
           error: "The email does not match our records for this distributor ID. Please check your information." 
         });
       }
       
+      // Return qualifier info including email (needed for OTP when only distributorId provided)
       res.json({
         firstName: qualifier.firstName || "",
         lastName: qualifier.lastName || "",
         unicityId: qualifier.unicityId || "",
+        email: qualifier.email || "",
       });
     } catch (error) {
       console.error("Error fetching qualifier info:", error);
