@@ -2093,29 +2093,53 @@ export default function RegistrationPage() {
     return null;
   };
 
-  // Not qualified message
-  const renderNotQualifiedMessage = () => (
-    <Card className="border-destructive">
-      <CardHeader className="text-center">
-        <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
-          <AlertCircle className="w-6 h-6 text-destructive" />
-        </div>
-        <CardTitle className="text-destructive">
-          {language === "es" ? "No califica" : "Not Qualified"}
-        </CardTitle>
-        <CardDescription>
-          {qualificationMessage || (language === "es" 
-            ? "Lo sentimos, no califica para este evento en este momento."
-            : "Sorry, you do not qualify for this event at this time.")}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="text-center text-muted-foreground text-sm">
-        {language === "es" 
-          ? <>Si cree que esto es un error, <a href="mailto:americasevent@unicity.com" className="text-primary underline hover:no-underline">contacte al soporte</a>.</>
-          : <>If you believe this is an error, please <a href="mailto:americasevent@unicity.com" className="text-primary underline hover:no-underline">contact support</a>.</>}
-      </CardContent>
-    </Card>
-  );
+  // Not qualified message with helpful guidance
+  const renderNotQualifiedMessage = () => {
+    const contactEmail = event?.contactEmail || "americasevent@unicity.com";
+    return (
+      <Card className="border-destructive">
+        <CardHeader className="text-center">
+          <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+            <AlertCircle className="w-6 h-6 text-destructive" />
+          </div>
+          <CardTitle className="text-destructive">
+            {language === "es" ? "No califica" : "Not Qualified"}
+          </CardTitle>
+          <CardDescription>
+            {qualificationMessage || (language === "es" 
+              ? "Lo sentimos, no califica para este evento en este momento."
+              : "Sorry, you do not qualify for this event at this time.")}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 text-center">
+          <p className="text-muted-foreground text-sm">
+            {language === "es" 
+              ? "Por favor verifique que su ID de Distribuidor y correo electrónico (usado para iniciar sesión en Unicity) sean correctos."
+              : "Please double-check that your Distributor ID and Email (used to login to Unicity) are correct."}
+          </p>
+          <p className="text-muted-foreground text-sm">
+            {language === "es" 
+              ? <>Si tiene problemas, <a href={`mailto:${contactEmail}`} className="text-primary underline hover:no-underline">contáctenos</a>.</>
+              : <>If you're having issues, <a href={`mailto:${contactEmail}`} className="text-primary underline hover:no-underline">contact us</a>.</>}
+          </p>
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              setQualificationChecked(false);
+              setIsQualified(true);
+              setQualificationMessage("");
+              setVerificationDistributorId("");
+              setVerificationEmail("");
+            }}
+            className="mt-2"
+            data-testid="button-try-again"
+          >
+            {language === "es" ? "Intentar de nuevo" : "Try Again"}
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  };
 
   // Main content renderer - decides what to show based on verification state
   const renderMainContent = () => {
