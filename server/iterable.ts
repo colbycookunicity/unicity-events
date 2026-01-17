@@ -1,3 +1,5 @@
+import type { EventIterableCampaigns } from "@shared/schema";
+
 const ITERABLE_API_KEY = process.env.ITERABLE_API_KEY;
 const ITERABLE_API_BASE = 'https://api.iterable.com/api';
 
@@ -8,6 +10,19 @@ const REQUIRED_CAMPAIGN_ENV_VARS = [
   'ITERABLE_CHECKED_IN_CAMPAIGN_ID',
   'ITERABLE_CHECKED_IN_CAMPAIGN_ID_ES',
 ] as const;
+
+// Email type keys matching EventIterableCampaigns
+export type IterableEmailType = keyof EventIterableCampaigns;
+
+// Mapping from email type to environment variable name pattern
+const EMAIL_TYPE_TO_ENV_VAR: Record<IterableEmailType, string> = {
+  confirmation: 'ITERABLE_EVENT_CONFIRMATION_CAMPAIGN_ID',
+  checkedIn: 'ITERABLE_CHECKED_IN_CAMPAIGN_ID',
+  qualificationGranted: 'ITERABLE_QUALIFICATION_GRANTED_CAMPAIGN_ID',
+  registrationCanceled: 'ITERABLE_REGISTRATION_CANCELED_CAMPAIGN_ID',
+  registrationTransferred: 'ITERABLE_REGISTRATION_TRANSFERRED_CAMPAIGN_ID',
+  registrationUpdate: 'ITERABLE_REGISTRATION_UPDATE_CAMPAIGN_ID',
+};
 
 // Validate Iterable configuration on startup
 export function validateIterableConfig(): { valid: boolean; errors: string[] } {
@@ -75,6 +90,7 @@ export interface EmailResult {
 
 interface SendEmailParams {
   campaignId: number;
+  campaignSource?: 'event' | 'env_fallback' | 'none';
   recipientEmail: string;
   dataFields: Record<string, any>;
   context: string;
@@ -108,6 +124,59 @@ function getCampaignId(envVarName: string): number {
     return 0;
   }
   return parsed;
+}
+
+/**
+ * Get campaign ID for an event with fallback to environment variables.
+ * 
+ * Resolution priority:
+ * 1. event.iterableCampaigns[emailType][language] - Event-specific campaign
+ * 2. Environment variable (e.g., ITERABLE_EVENT_CONFIRMATION_CAMPAIGN_ID_ES) - Fallback
+ * 3. 0 (skip sending with warning log) - No campaign configured
+ * 
+ * @param event - Event object with optional iterableCampaigns
+ * @param emailType - Type of email (confirmation, checkedIn, etc.)
+ * @param language - Language code (en, es)
+ * @returns Campaign ID or 0 if not configured
+ */
+function getCampaignIdForEvent(
+  event: { id?: string; name?: string; iterableCampaigns?: EventIterableCampaigns | null },
+  emailType: IterableEmailType,
+  language: string
+): { campaignId: number; source: 'event' | 'env_fallback' | 'none' } {
+  const lang = language === 'es' ? 'es' : 'en';
+  
+  // 1. Check event-specific campaign
+  const eventCampaign = event.iterableCampaigns?.[emailType]?.[lang];
+  if (eventCampaign && typeof eventCampaign === 'number' && eventCampaign > 0) {
+    log('info', `Using event campaign for ${emailType}/${lang}: ${eventCampaign}`, { 
+      eventId: event.id, 
+      eventName: event.name 
+    });
+    return { campaignId: eventCampaign, source: 'event' };
+  }
+  
+  // 2. Fallback to environment variable
+  const baseEnvVar = EMAIL_TYPE_TO_ENV_VAR[emailType];
+  if (baseEnvVar) {
+    const envVarName = lang === 'es' ? `${baseEnvVar}_ES` : baseEnvVar;
+    const envCampaign = getCampaignId(envVarName);
+    if (envCampaign > 0) {
+      log('info', `Falling back to env campaign for ${emailType}/${lang}: ${envCampaign}`, { 
+        eventId: event.id, 
+        eventName: event.name,
+        envVar: envVarName 
+      });
+      return { campaignId: envCampaign, source: 'env_fallback' };
+    }
+  }
+  
+  // 3. No campaign configured
+  log('warn', `No campaign configured for ${emailType}/${lang}`, { 
+    eventId: event.id, 
+    eventName: event.name 
+  });
+  return { campaignId: 0, source: 'none' };
 }
 
 export class IterableService {
@@ -150,7 +219,7 @@ export class IterableService {
   }
 
   private async sendEmailInternal(params: SendEmailParams): Promise<EmailResult> {
-    const { campaignId, recipientEmail, dataFields, context } = params;
+    const { campaignId, campaignSource, recipientEmail, dataFields, context } = params;
 
     if (!isConfigured()) {
       log('info', `Skipping ${context} - ITERABLE_API_KEY not configured`);
@@ -162,7 +231,7 @@ export class IterableService {
       return { success: false, error: 'Campaign ID not configured' };
     }
 
-    log('info', `Sending ${context} to ${recipientEmail} (campaign: ${campaignId})`);
+    log('info', `Sending ${context} to ${recipientEmail} (campaign: ${campaignId}, source: ${campaignSource || 'unknown'})`);
 
     try {
       const result = await this.request('POST', '/email/target', {
@@ -179,8 +248,10 @@ export class IterableService {
         type: context.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase(),
         email: recipientEmail,
         campaignId,
+        campaignSource: campaignSource || 'unknown',
         eventId: dataFields.eventId || null,
         eventName: dataFields.eventName || null,
+        language: dataFields.language || null,
         registrationId: dataFields.registrationId || null,
         messageId: messageId || null,
         timestamp: new Date().toISOString(),
@@ -202,15 +273,13 @@ export class IterableService {
     checkInQrPayload?: string | null,
     checkInToken?: string | null
   ): Promise<EmailResult> {
-    const campaignEnvVar = language === 'es' 
-      ? 'ITERABLE_EVENT_CONFIRMATION_CAMPAIGN_ID_ES' 
-      : 'ITERABLE_EVENT_CONFIRMATION_CAMPAIGN_ID';
-    const campaignId = getCampaignId(campaignEnvVar);
+    const { campaignId, source } = getCampaignIdForEvent(event, 'confirmation', language);
     const eventName = (language === 'es' && event.nameEs) ? event.nameEs : event.name;
     const baseUrl = getBaseUrl();
 
     return this.sendEmailInternal({
       campaignId,
+      campaignSource: source,
       recipientEmail: email,
       context: 'RegistrationConfirmation',
       dataFields: {
@@ -242,11 +311,12 @@ export class IterableService {
     event: any,
     language: string = 'en'
   ): Promise<EmailResult> {
-    const campaignId = getCampaignId('ITERABLE_REGISTRATION_UPDATE_CAMPAIGN_ID');
+    const { campaignId, source } = getCampaignIdForEvent(event, 'registrationUpdate', language);
     const eventName = (language === 'es' && event.nameEs) ? event.nameEs : event.name;
 
     return this.sendEmailInternal({
       campaignId,
+      campaignSource: source,
       recipientEmail: email,
       context: 'RegistrationUpdate',
       dataFields: {
@@ -266,11 +336,12 @@ export class IterableService {
     event: any,
     language: string = 'en'
   ): Promise<EmailResult> {
-    const campaignId = getCampaignId('ITERABLE_REGISTRATION_CANCELED_CAMPAIGN_ID');
+    const { campaignId, source } = getCampaignIdForEvent(event, 'registrationCanceled', language);
     const eventName = (language === 'es' && event.nameEs) ? event.nameEs : event.name;
 
     return this.sendEmailInternal({
       campaignId,
+      campaignSource: source,
       recipientEmail: email,
       context: 'RegistrationCanceled',
       dataFields: {
@@ -293,11 +364,12 @@ export class IterableService {
     event: any,
     language: string = 'en'
   ): Promise<EmailResult> {
-    const campaignId = getCampaignId('ITERABLE_REGISTRATION_TRANSFERRED_CAMPAIGN_ID');
+    const { campaignId, source } = getCampaignIdForEvent(event, 'registrationTransferred', language);
     const eventName = (language === 'es' && event.nameEs) ? event.nameEs : event.name;
 
     return this.sendEmailInternal({
       campaignId,
+      campaignSource: source,
       recipientEmail: email,
       context: 'RegistrationTransferred',
       dataFields: {
@@ -322,15 +394,13 @@ export class IterableService {
     checkInQrPayload?: string | null,
     checkInToken?: string | null
   ): Promise<EmailResult> {
-    const campaignEnvVar = language === 'es' 
-      ? 'ITERABLE_CHECKED_IN_CAMPAIGN_ID_ES' 
-      : 'ITERABLE_CHECKED_IN_CAMPAIGN_ID';
-    const campaignId = getCampaignId(campaignEnvVar);
+    const { campaignId, source } = getCampaignIdForEvent(event, 'checkedIn', language);
     const eventName = (language === 'es' && event.nameEs) ? event.nameEs : event.name;
     const baseUrl = getBaseUrl();
 
     return this.sendEmailInternal({
       campaignId,
+      campaignSource: source,
       recipientEmail: email,
       context: 'CheckedInConfirmation',
       dataFields: {
@@ -358,11 +428,12 @@ export class IterableService {
     event: any,
     language: string = 'en'
   ): Promise<EmailResult> {
-    const campaignId = getCampaignId('ITERABLE_QUALIFICATION_GRANTED_CAMPAIGN_ID');
+    const { campaignId, source } = getCampaignIdForEvent(event, 'qualificationGranted', language);
     const eventName = (language === 'es' && event.nameEs) ? event.nameEs : event.name;
 
     return this.sendEmailInternal({
       campaignId,
+      campaignSource: source,
       recipientEmail: email,
       context: 'QualificationGranted',
       dataFields: {
