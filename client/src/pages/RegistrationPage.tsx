@@ -633,6 +633,12 @@ export default function RegistrationPage() {
         return;
       }
       
+      // CRITICAL: For qualified_verified mode, NEVER auto-skip to form from stored sessions
+      // User MUST go through the full email → qualification check → OTP → form flow
+      if (qualifiedVerifiedMode) {
+        return;
+      }
+      
       // First check for attendee token from /my-events page (localStorage)
       const attendeeToken = localStorage.getItem("attendeeAuthToken");
       const attendeeEmail = localStorage.getItem("attendeeEmail");
@@ -723,7 +729,7 @@ export default function RegistrationPage() {
     };
 
     checkExistingSession();
-  }, [params.eventId, verificationStep, isConsumingToken, tokenConsumed, skipVerification, otpJustVerified]);
+  }, [params.eventId, verificationStep, isConsumingToken, tokenConsumed, skipVerification, otpJustVerified, qualifiedVerifiedMode]);
 
   // Reset existing registration state when verification email or event changes (security: prevents cross-user/cross-event data leakage)
   useEffect(() => {
@@ -1085,7 +1091,8 @@ export default function RegistrationPage() {
             setLoadedForKey(currentKey);
             
             // If we're on email step but have valid token, skip to form
-            if (verificationStep === "email") {
+            // CRITICAL: Do NOT skip for qualified_verified mode - require full verification flow
+            if (verificationStep === "email" && !qualifiedVerifiedMode) {
               setVerificationEmail(attendeeEmail);
               setVerificationStep("form");
             }
