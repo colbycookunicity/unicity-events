@@ -2227,7 +2227,30 @@ export default function RegistrationPage() {
     return renderFormCard();
   };
 
-  const renderFormCard = () => (
+  const renderFormCard = () => {
+    // Guard: ensure event form fields are loaded before rendering full form
+    // This prevents rendering an incomplete form during state transitions
+    const formFieldsLoaded = event?.formFields && Array.isArray(event.formFields);
+    if (!formFieldsLoaded) {
+      console.log("[RegistrationPage] Waiting for formFields to load...", { eventExists: !!event, formFields: event?.formFields });
+      return (
+        <Card>
+          <CardHeader>
+            <CardTitle>{getCtaLabel()}</CardTitle>
+            <CardDescription>
+              {language === "es"
+                ? "Cargando formulario de registro..."
+                : "Loading registration form..."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex items-center justify-center py-8">
+            <Loader2 className="w-6 h-6 animate-spin" />
+          </CardContent>
+        </Card>
+      );
+    }
+    
+    return (
     <Card>
       <CardHeader>
         <CardTitle>{getCtaLabel()}</CardTitle>
@@ -3103,7 +3126,8 @@ export default function RegistrationPage() {
         </Form>
       </CardContent>
     </Card>
-  );
+    );
+  };
 
   // OTP Verification Dialog for open_verified mode
   // Use pendingSubmissionData.email as primary source (set before dialog opens)
