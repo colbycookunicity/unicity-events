@@ -1,0 +1,58 @@
+Goal:
+Fix incorrect cross-event email sends by refactoring server/iterable.ts to use per-event, per-language Iterable campaigns, and add guardrails to prevent Florida emails from being sent to Vegas (or any other event).
+
+Instructions:
+• Research my codebase
+• Read Instructions.md fully before making changes
+• Find server/iterable.ts and all email send helpers
+• Identify where Iterable campaign IDs are currently selected
+• Write a clear refactor plan to Instructions.md BEFORE implementing
+• Only implement after the plan is written and validated
+
+Context:
+• Iterable is used only for event lifecycle emails (registration, cancellation, check-in, qualification, transfer)
+• Hydra owns OTP and magic-link emails — do not modify Hydra logic
+• Current bug: Florida Spanish campaigns are being sent to Vegas event users
+• This happens because campaigns are not scoped by event
+• All Iterable emails are API-triggered campaigns
+
+Required Architecture:
+1. Introduce a centralized mapping file (e.g. server/iterableCampaigns.ts) structured as:
+   eventSlug → emailType → language → campaignId
+
+2. Refactor email sending so application code calls:
+   sendEventEmail({ event, registration, emailType })
+
+3. Resolve language using this priority:
+   registration.language → event.default_language → "en"
+
+4. Campaign selection must require BOTH:
+   - event slug
+   - email type
+   - resolved language
+
+5. Payloads must remain language-neutral
+   (all copy stays in Iterable templates)
+
+6. Fail safely:
+   - If campaign mapping is missing, log a loud warning
+   - Do not crash request handlers
+   - Do not fall back to another event’s campaign
+
+Deliverables:
+• Updated server/iterable.ts with event-aware + language-aware campaign routing
+• New centralized campaign mapping file
+• Clear logging showing eventSlug, emailType, language, campaignId
+• Documentation added to Instructions.md explaining:
+  - How to add campaigns for a new event
+  - How to add a new language
+  - Why shared campaigns must not be reused across events
+
+Constraints:
+• No database schema changes
+• No breaking API changes
+• Keep logic explicit and readable
+• Follow existing project logging patterns
+
+After writing the plan to Instructions.md:
+STOP and wait for confirmation before implementing.
