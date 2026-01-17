@@ -4,6 +4,241 @@
 
 ---
 
+## Iterable Campaign Configuration - Admin UI Integration Plan
+
+**Status**: AWAITING APPROVAL  
+**Created**: January 17, 2026
+
+### Problem Statement
+
+Currently, Iterable campaign IDs are stored in environment variables (e.g., `ITERABLE_EVENT_CONFIRMATION_CAMPAIGN_ID`), which means:
+1. **All events share the same campaigns** - Florida registrants can receive Vegas email content
+2. **No per-event campaign selection** - Cannot customize email templates per event
+3. **Language support is incomplete** - Only confirmation and check-in emails have `_ES` variants
+4. **No validation** - Easy to misconfigure campaigns, leading to cross-event email sends
+
+### Solution Architecture
+
+#### 1. Database Schema Changes
+
+Add a new `iterableCampaigns` JSONB column to the `events` table:
+
+**File**: `shared/schema.ts`
+
+```typescript
+// Add to events table definition
+iterableCampaigns: jsonb("iterable_campaigns").$type<EventIterableCampaigns>(),
+
+// Type definition (add before events table)
+export type EventIterableCampaigns = {
+  confirmation?: { en?: number; es?: number };
+  checkedIn?: { en?: number; es?: number };
+  qualificationGranted?: { en?: number; es?: number };
+  registrationCanceled?: { en?: number; es?: number };
+  registrationTransferred?: { en?: number; es?: number };
+  registrationUpdate?: { en?: number; es?: number };
+};
+```
+
+#### 2. Backend Endpoints
+
+**2.1 Fetch Iterable Campaigns** (`GET /api/iterable/campaigns`)
+
+**File**: `server/routes.ts`
+
+```typescript
+app.get("/api/iterable/campaigns", authenticateToken, requireRole("admin"), async (req, res) => {
+  // Fetch from Iterable API: GET /campaigns
+  // Filter to API-triggered campaigns only (type === "Triggered")
+  // Return: [{ id: number, name: string, state: string }]
+});
+```
+
+**Purpose**: Returns list of available Iterable campaigns for dropdown selection.
+
+**2.2 Update Event Campaigns** (existing `PATCH /api/events/:id`)
+
+No new endpoint needed - extend existing event update to accept `iterableCampaigns` field.
+
+#### 3. Server-Side Campaign Resolution
+
+**File**: `server/iterable.ts` - Update email sending methods
+
+```typescript
+// Resolution priority:
+// 1. event.iterableCampaigns[emailType][language]  ← Event-specific
+// 2. process.env.ITERABLE_{EMAIL_TYPE}_CAMPAIGN_ID_{LANG}  ← Fallback (env var)
+// 3. 0 (skip sending with warning log)
+
+function getCampaignIdForEvent(
+  event: { iterableCampaigns?: EventIterableCampaigns },
+  emailType: keyof EventIterableCampaigns,
+  language: 'en' | 'es'
+): number {
+  // 1. Check event-specific campaign
+  const eventCampaign = event.iterableCampaigns?.[emailType]?.[language];
+  if (eventCampaign && eventCampaign > 0) {
+    log('info', `Using event campaign for ${emailType}/${language}: ${eventCampaign}`);
+    return eventCampaign;
+  }
+  
+  // 2. Fallback to environment variable
+  const envVarName = `ITERABLE_${emailType.toUpperCase()}_CAMPAIGN_ID${language === 'es' ? '_ES' : ''}`;
+  const envCampaign = getCampaignId(envVarName);
+  if (envCampaign > 0) {
+    log('warn', `Falling back to env campaign for ${emailType}/${language}: ${envCampaign}`);
+    return envCampaign;
+  }
+  
+  // 3. No campaign configured
+  log('warn', `No campaign configured for ${emailType}/${language} on event ${event.id}`);
+  return 0;
+}
+```
+
+#### 4. Admin UI Components
+
+**4.1 Campaign Selector Component**
+
+**File**: `client/src/components/IterableCampaignSelector.tsx` (new file)
+
+```tsx
+interface Props {
+  eventId: string;
+  campaigns: EventIterableCampaigns;
+  onChange: (campaigns: EventIterableCampaigns) => void;
+}
+
+// Features:
+// - Dropdown for each email type (confirmation, checkedIn, etc.)
+// - Language tabs (EN/ES) within each type
+// - "Not configured" option with warning badge
+// - Fetches available campaigns from /api/iterable/campaigns
+// - Shows campaign name + ID for clarity
+```
+
+**4.2 Integration into EventFormPage**
+
+**File**: `client/src/pages/EventFormPage.tsx`
+
+Add a collapsible section "Email Campaigns" below existing event settings:
+
+```tsx
+<Collapsible>
+  <CollapsibleTrigger>
+    <Card className="hover-elevate">
+      <CardHeader>Email Campaigns (Iterable)</CardHeader>
+    </Card>
+  </CollapsibleTrigger>
+  <CollapsibleContent>
+    <IterableCampaignSelector
+      eventId={event.id}
+      campaigns={form.watch("iterableCampaigns")}
+      onChange={(c) => form.setValue("iterableCampaigns", c)}
+    />
+  </CollapsibleContent>
+</Collapsible>
+```
+
+#### 5. Email Types to Support
+
+| Email Type | Current Env Var | Notes |
+|------------|-----------------|-------|
+| `confirmation` | `ITERABLE_EVENT_CONFIRMATION_CAMPAIGN_ID[_ES]` | Registration confirmation with QR |
+| `checkedIn` | `ITERABLE_CHECKED_IN_CAMPAIGN_ID[_ES]` | Check-in notification |
+| `qualificationGranted` | `ITERABLE_QUALIFICATION_GRANTED_CAMPAIGN_ID` | When qualifier is added |
+| `registrationCanceled` | `ITERABLE_REGISTRATION_CANCELED_CAMPAIGN_ID` | Cancellation notice |
+| `registrationTransferred` | `ITERABLE_REGISTRATION_TRANSFERRED_CAMPAIGN_ID` | Transfer complete |
+| `registrationUpdate` | `ITERABLE_REGISTRATION_UPDATE_CAMPAIGN_ID` | Profile update |
+
+#### 6. Validation & Guardrails
+
+**6.1 Duplicate Campaign Detection**
+
+When saving event campaigns, warn (but don't block) if the same campaign ID is used by another event for the same email type + language:
+
+```typescript
+// Server-side: Check for duplicate usage
+const conflictingEvents = await storage.findEventsWithCampaign(campaignId, emailType, language);
+if (conflictingEvents.length > 0 && !conflictingEvents.every(e => e.id === eventId)) {
+  return res.status(200).json({
+    success: true,
+    warnings: [{
+      type: 'duplicate_campaign',
+      message: `Campaign ${campaignId} is also used by: ${conflictingEvents.map(e => e.name).join(', ')}`,
+    }],
+  });
+}
+```
+
+**6.2 Missing Campaign Warnings**
+
+UI displays warning badges for email types without configured campaigns:
+- Yellow badge: "Using fallback" (env var campaign)
+- Red badge: "Not configured" (no campaign, emails won't send)
+
+#### 7. Logging Requirements
+
+Every email send must log:
+
+```json
+{
+  "event": "EMAIL_SENT",
+  "type": "REGISTRATION_CONFIRMATION",
+  "email": "user@example.com",
+  "campaignId": 123456,
+  "campaignSource": "event",  // or "env_fallback"
+  "eventId": "abc-123",
+  "eventName": "THE METHOD Florida 2026",
+  "language": "en",
+  "timestamp": "2026-01-17T12:00:00Z"
+}
+```
+
+#### 8. Migration Strategy
+
+**Phase 1: Schema + Backend** (no UI changes)
+1. Add `iterableCampaigns` column to events schema
+2. Run `npm run db:push`
+3. Update `server/iterable.ts` to check event campaigns first
+4. **Existing events continue working** via env var fallback
+
+**Phase 2: Admin UI**
+1. Add `/api/iterable/campaigns` endpoint
+2. Create `IterableCampaignSelector` component
+3. Integrate into `EventFormPage.tsx`
+
+**Phase 3: Production Rollout**
+1. Configure campaigns for production events
+2. Monitor logs for `campaignSource` distribution
+3. Optionally deprecate env var fallback after all events configured
+
+#### 9. Files to Modify
+
+| File | Changes |
+|------|---------|
+| `shared/schema.ts` | Add `EventIterableCampaigns` type, `iterableCampaigns` column |
+| `server/routes.ts` | Add `GET /api/iterable/campaigns` endpoint |
+| `server/iterable.ts` | Add `getCampaignIdForEvent()`, update all send methods |
+| `client/src/pages/EventFormPage.tsx` | Add campaign configuration section |
+| `client/src/components/IterableCampaignSelector.tsx` | New component (campaign dropdown) |
+
+#### 10. Task Checklist
+
+- [ ] Add `EventIterableCampaigns` type to `shared/schema.ts`
+- [ ] Add `iterableCampaigns` column to events table
+- [ ] Run `npm run db:push` to apply schema
+- [ ] Create `getCampaignIdForEvent()` helper in `server/iterable.ts`
+- [ ] Update all email send methods to use event-scoped campaign resolution
+- [ ] Add `GET /api/iterable/campaigns` endpoint
+- [ ] Create `IterableCampaignSelector` component
+- [ ] Add campaign configuration to `EventFormPage.tsx`
+- [ ] Add validation warnings for missing/duplicate campaigns
+- [ ] Test backward compatibility (env var fallback)
+- [ ] Document campaign configuration in admin UI
+
+---
+
 ## Qualified-Only Registration Flow (qualified_verified mode)
 
 **Implemented**: January 17, 2026
