@@ -24,7 +24,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { useTranslation, useLanguage } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { getMapUrl } from "@/lib/utils";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { format, parseISO } from "date-fns";
 import type { Event, EventPage, EventPageSection, IntroSectionContent, ThankYouSectionContent, HeroSectionContent, FormSectionContent } from "@shared/schema";
 import EventListPage from "./EventListPage";
@@ -960,6 +960,9 @@ export default function RegistrationPage() {
         if (data.profile.phone) {
           form.setValue("phone", data.profile.phone);
         }
+        
+        // Force refresh event data to ensure formFields are loaded before showing form
+        await queryClient.invalidateQueries({ queryKey: ["/api/events", params.eventId, "public"] });
         
         setVerificationStep("form");
         
@@ -2794,7 +2797,14 @@ export default function RegistrationPage() {
 
             {/* Custom Form Fields Section - only show fields not handled by hardcoded sections */}
             {(() => {
+              console.log("[RegistrationPage] Custom fields section render:", {
+                eventExists: !!event,
+                formFieldsType: typeof event?.formFields,
+                formFieldsLength: Array.isArray(event?.formFields) ? event.formFields.length : 'not-array',
+                formFieldsRaw: event?.formFields,
+              });
               const customFields = getCustomOnlyFields(event?.formFields as any[]);
+              console.log("[RegistrationPage] Custom fields filtered:", customFields.length, customFields.map(f => f.name));
               if (customFields.length === 0) return null;
               
               return (
@@ -3280,6 +3290,9 @@ export default function RegistrationPage() {
         if (params.eventId) {
           sessionStorage.setItem(`reg_verified_email_${params.eventId}`, lookupEmail);
         }
+        
+        // Force refresh event data to ensure formFields are loaded before showing form
+        await queryClient.invalidateQueries({ queryKey: ["/api/events", params.eventId, "public"] });
         
         // Now navigate to form step - the existing registration will be loaded automatically
         setVerificationStep("form");
