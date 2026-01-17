@@ -2140,7 +2140,7 @@ export default function RegistrationPage() {
 
   // Not qualified message with helpful guidance
   const renderNotQualifiedMessage = () => {
-    const contactEmail = event?.contactEmail || "americasevent@unicity.com";
+    const contactEmail = "americasevent@unicity.com";
     return (
       <Card className="border-destructive">
         <CardHeader className="text-center">
