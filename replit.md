@@ -88,6 +88,7 @@ shared/           # Shared code between client/server
   - Registration sync on completion (user profile, list subscription, events, purchases)
   - API key via `ITERABLE_API_KEY` environment variable
   - Events can specify `iterableListId` to auto-subscribe registrants
+  - **Per-Event Campaign Configuration**: Events can specify event-specific Iterable campaign IDs via `iterableCampaigns` JSONB column to prevent cross-event email sends. Campaign resolution: event-specific → environment variable fallback. Supports 6 email types (confirmation, checkedIn, qualificationGranted, registrationCanceled, registrationTransferred, registrationUpdate) with en/es language variants.
 
 ### Cloud Storage
 - **Google Cloud Storage**: File uploads for receipts and event images
