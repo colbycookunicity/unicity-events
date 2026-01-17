@@ -577,13 +577,13 @@ export default function AttendeesPage() {
       await apiRequest("DELETE", `/api/registrations/${id}`);
     },
     onSuccess: () => {
-      // Invalidate all registration-related queries
-      queryClient.invalidateQueries({ queryKey: ["/api/registrations"] });
-      // Invalidate event-specific registrations query
-      if (eventFilter !== "all") {
-        queryClient.invalidateQueries({ queryKey: ["/api/registrations", { eventId: eventFilter }] });
-        queryClient.invalidateQueries({ queryKey: [`/api/events/${eventFilter}/qualifiers`] });
-      }
+      // Invalidate all registration-related queries using predicate to match URL-based keys
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = String(query.queryKey[0]);
+          return key.startsWith("/api/registrations") || key.includes("/qualifiers");
+        }
+      });
       // Close the drawer if we deleted the currently selected attendee
       if (selectedAttendee?.id === registrationToDelete?.id) {
         setDrawerOpen(false);
