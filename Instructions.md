@@ -5310,3 +5310,371 @@ Ensure OTP session is scoped to both email AND eventId to prevent cross-event se
 - [ ] Add pre-flight qualification check (Phase 2)
 - [ ] Improve error messages with inline card (Phase 3)
 - [ ] Verify session scoping is correct (Phase 4)
+
+---
+
+# Iterable Campaign Refactor Plan
+
+**Created**: January 17, 2026  
+**Status**: PENDING APPROVAL
+
+---
+
+## Problem Statement
+
+Florida Spanish campaigns are being sent to Vegas event users because campaign selection is not scoped by event. The current implementation uses global environment variables (`ITERABLE_EVENT_CONFIRMATION_CAMPAIGN_ID`, etc.) that are shared across all events.
+
+### Current Architecture (Problematic)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    CURRENT CAMPAIGN SELECTION                    │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  sendRegistrationConfirmation(email, registration, event, lang) │
+│                          ↓                                       │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │  getCampaignId(envVarName)                                │   │
+│  │  • lang="es" → ITERABLE_EVENT_CONFIRMATION_CAMPAIGN_ID_ES │   │
+│  │  • lang="en" → ITERABLE_EVENT_CONFIRMATION_CAMPAIGN_ID    │   │
+│  │                                                            │   │
+│  │  ⚠️ NO EVENT SCOPING - ALL EVENTS USE SAME CAMPAIGNS!    │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Affected Email Types:**
+- `registration_confirmation` (confirmation emails)
+- `checked_in` (check-in notification)
+- `registration_canceled` (cancellation notice)
+- `registration_transferred` (transfer notice)
+- `qualification_granted` (qualification email)
+
+---
+
+## Proposed Architecture
+
+### Target Campaign Selection Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    NEW CAMPAIGN SELECTION                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  sendEventEmail({ event, registration, emailType })             │
+│                          ↓                                       │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │  1. Resolve language:                                     │   │
+│  │     registration.language → event.defaultLanguage → "en"  │   │
+│  │                                                            │   │
+│  │  2. Get event slug (required for lookup)                   │   │
+│  │     event.slug || error("Event missing slug")              │   │
+│  │                                                            │   │
+│  │  3. Lookup campaign from centralized mapping:              │   │
+│  │     EVENT_CAMPAIGNS[eventSlug][emailType][language]        │   │
+│  │                                                            │   │
+│  │  4. Validate campaign exists:                              │   │
+│  │     If missing → log loud warning, skip email (safe fail)  │   │
+│  │     If found → send via Iterable API                       │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Implementation Plan
+
+### Phase 1: Create Centralized Campaign Mapping File
+
+**File**: `server/iterableCampaigns.ts`
+
+```typescript
+// server/iterableCampaigns.ts
+
+export type EmailType = 
+  | 'registration_confirmation'
+  | 'checked_in'
+  | 'registration_canceled'
+  | 'registration_transferred'
+  | 'qualification_granted'
+  | 'registration_update';
+
+export type SupportedLanguage = 'en' | 'es';
+
+// Campaign ID mapping: eventSlug → emailType → language → campaignId
+export const EVENT_CAMPAIGNS: Record<
+  string, // eventSlug
+  Partial<Record<EmailType, Partial<Record<SupportedLanguage, number>>>>
+> = {
+  // THE METHOD Fort Lauderdale 2026
+  'method-fort-lauderdale-2026': {
+    registration_confirmation: {
+      en: 12345678, // Replace with actual Iterable campaign ID
+      es: 12345679,
+    },
+    checked_in: {
+      en: 12345680,
+      es: 12345681,
+    },
+    registration_canceled: {
+      en: 12345682,
+      es: 12345683,
+    },
+    // ... other email types
+  },
+  
+  // THE METHOD Las Vegas 2026
+  'method-las-vegas-2026': {
+    registration_confirmation: {
+      en: 22345678, // Different campaigns for Vegas
+      es: 22345679,
+    },
+    checked_in: {
+      en: 22345680,
+      es: 22345681,
+    },
+    // ... other email types
+  },
+  
+  // Add more events as needed
+};
+
+/**
+ * Get campaign ID for a specific event, email type, and language.
+ * Returns undefined if no campaign is configured (fail safe).
+ */
+export function getCampaignForEvent(
+  eventSlug: string,
+  emailType: EmailType,
+  language: SupportedLanguage
+): number | undefined {
+  const eventCampaigns = EVENT_CAMPAIGNS[eventSlug];
+  if (!eventCampaigns) {
+    console.warn(`[Iterable] No campaigns configured for event: ${eventSlug}`);
+    return undefined;
+  }
+  
+  const typeCampaigns = eventCampaigns[emailType];
+  if (!typeCampaigns) {
+    console.warn(`[Iterable] No ${emailType} campaign for event: ${eventSlug}`);
+    return undefined;
+  }
+  
+  const campaignId = typeCampaigns[language];
+  if (!campaignId) {
+    console.warn(`[Iterable] No ${emailType}/${language} campaign for event: ${eventSlug}`);
+    return undefined;
+  }
+  
+  return campaignId;
+}
+```
+
+---
+
+### Phase 2: Refactor server/iterable.ts
+
+**Changes to make:**
+
+1. **Import the campaign mapping:**
+```typescript
+import { getCampaignForEvent, EmailType, SupportedLanguage } from './iterableCampaigns';
+```
+
+2. **Add language resolution helper:**
+```typescript
+function resolveLanguage(
+  registrationLanguage: string | null | undefined,
+  eventDefaultLanguage: string | null | undefined
+): SupportedLanguage {
+  const lang = registrationLanguage || eventDefaultLanguage || 'en';
+  return lang === 'es' ? 'es' : 'en';
+}
+```
+
+3. **Add event slug validation:**
+```typescript
+function validateEventSlug(event: { slug?: string | null; id: string }): string {
+  if (!event.slug) {
+    console.error(`[Iterable] CRITICAL: Event ${event.id} has no slug - cannot send event-scoped email`);
+    throw new Error(`Event ${event.id} missing slug for email routing`);
+  }
+  return event.slug;
+}
+```
+
+4. **Refactor each send method to use event-scoped campaigns:**
+
+**Before (sendRegistrationConfirmation):**
+```typescript
+const campaignEnvVar = language === 'es' 
+  ? 'ITERABLE_EVENT_CONFIRMATION_CAMPAIGN_ID_ES' 
+  : 'ITERABLE_EVENT_CONFIRMATION_CAMPAIGN_ID';
+const campaignId = getCampaignId(campaignEnvVar);
+```
+
+**After:**
+```typescript
+const eventSlug = validateEventSlug(event);
+const resolvedLang = resolveLanguage(language, event.defaultLanguage);
+const campaignId = getCampaignForEvent(eventSlug, 'registration_confirmation', resolvedLang);
+
+if (!campaignId) {
+  log('warn', `Skipping registration confirmation - no campaign for ${eventSlug}/${resolvedLang}`);
+  return { success: false, error: `No campaign configured for event ${eventSlug}` };
+}
+```
+
+5. **Add structured logging for debugging:**
+```typescript
+log('info', `Campaign resolved`, {
+  eventSlug,
+  emailType: 'registration_confirmation',
+  language: resolvedLang,
+  campaignId,
+});
+```
+
+---
+
+### Phase 3: Update All Email Method Signatures
+
+Each email method will be updated to:
+1. Extract event slug (with validation)
+2. Resolve language from registration → event → default
+3. Look up campaign from centralized mapping
+4. Log full context (eventSlug, emailType, language, campaignId)
+5. Fail safely if campaign not found
+
+**Methods to update:**
+- `sendRegistrationConfirmation()`
+- `sendRegistrationUpdate()`
+- `sendRegistrationCanceled()`
+- `sendRegistrationTransferred()`
+- `sendCheckedInConfirmation()`
+- `sendQualificationGranted()`
+
+---
+
+### Phase 4: Remove Legacy Environment Variables
+
+After migration is complete and tested, remove:
+- `ITERABLE_EVENT_CONFIRMATION_CAMPAIGN_ID`
+- `ITERABLE_EVENT_CONFIRMATION_CAMPAIGN_ID_ES`
+- `ITERABLE_CHECKED_IN_CAMPAIGN_ID`
+- `ITERABLE_CHECKED_IN_CAMPAIGN_ID_ES`
+
+Update `REQUIRED_CAMPAIGN_ENV_VARS` to only include API key validation.
+
+---
+
+## Guardrails
+
+### 1. Campaign Never Falls Back Across Events
+```typescript
+// WRONG: Falling back to another event's campaign
+if (!campaignId) {
+  campaignId = getDefaultCampaign(emailType, language); // ❌ NEVER DO THIS
+}
+
+// RIGHT: Fail safely with warning
+if (!campaignId) {
+  log('warn', `No campaign - email NOT sent`, { eventSlug, emailType, language });
+  return { success: false, error: 'Campaign not configured' };
+}
+```
+
+### 2. Event Slug Required
+Events MUST have a slug for email routing. If slug is missing:
+- Log a CRITICAL error
+- Do not send the email
+- Do not crash the request handler
+
+### 3. Language Resolution Priority
+Always resolve in this order:
+1. `registration.language` (user's explicit choice)
+2. `event.defaultLanguage` (event-level setting)
+3. `"en"` (fallback default)
+
+---
+
+## How to Add a New Event
+
+1. **Assign a unique slug** to the event (e.g., `"method-chicago-2026"`)
+
+2. **Create campaigns in Iterable** for each email type and language:
+   - registration_confirmation (en, es)
+   - checked_in (en, es)
+   - registration_canceled (en, es)
+   - registration_transferred (en, es)
+   - qualification_granted (en, es)
+
+3. **Add mapping to `server/iterableCampaigns.ts`:**
+```typescript
+'method-chicago-2026': {
+  registration_confirmation: { en: 99990001, es: 99990002 },
+  checked_in: { en: 99990003, es: 99990004 },
+  // ... etc
+},
+```
+
+4. **Deploy** - no code changes needed beyond the mapping
+
+---
+
+## How to Add a New Language
+
+1. **Update the `SupportedLanguage` type:**
+```typescript
+export type SupportedLanguage = 'en' | 'es' | 'fr';
+```
+
+2. **Add campaigns for each event** that supports the language
+
+3. **Update the language resolution helper** if needed
+
+---
+
+## Why Shared Campaigns Must Not Be Reused
+
+Each event has:
+- Different branding/imagery
+- Different dates and locations
+- Different registration links
+- Potentially different copy/messaging
+
+Even if templates look similar, using the same campaign ID across events risks:
+- Wrong event name in emails
+- Wrong dates/locations
+- Wrong registration links
+- Confusing analytics (can't distinguish Florida vs Vegas open rates)
+
+**Rule: Every event gets its own set of campaign IDs.**
+
+---
+
+## Rollout Plan
+
+1. **Phase 1**: Create `iterableCampaigns.ts` with current events
+2. **Phase 2**: Refactor `iterable.ts` to use new system
+3. **Phase 3**: Test all email flows in staging
+4. **Phase 4**: Deploy to production
+5. **Phase 5**: Monitor logs for any missing campaigns
+6. **Phase 6**: Remove legacy env vars
+
+---
+
+## Success Criteria
+
+- [ ] Florida confirmation emails go to Florida campaigns only
+- [ ] Vegas confirmation emails go to Vegas campaigns only
+- [ ] Spanish emails use Spanish campaigns
+- [ ] English emails use English campaigns
+- [ ] Missing campaign = warning log + no email sent (not crash)
+- [ ] All email logs include: eventSlug, emailType, language, campaignId
+
+---
+
+**STOP**: Awaiting approval before implementation.
