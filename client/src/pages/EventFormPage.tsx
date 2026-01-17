@@ -23,8 +23,10 @@ import { useTranslation } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
-import type { Event, GuestAllowanceRule, User, EventManagerAssignment } from "@shared/schema";
+import type { Event, GuestAllowanceRule, User, EventManagerAssignment, EventIterableCampaigns } from "@shared/schema";
 import { FormBuilder, FormFieldDefinition } from "@/components/FormBuilder";
+import { IterableCampaignSelector } from "@/components/IterableCampaignSelector";
+import { Mail } from "lucide-react";
 
 // Format date to local datetime string for datetime-local input (avoids UTC conversion issues)
 function formatDateForInput(dateValue: string | Date | null | undefined): string {
@@ -200,6 +202,10 @@ export default function EventFormPage() {
       if ((event as any).formFields) {
         setCustomFields((event as any).formFields as FormFieldDefinition[]);
       }
+      // Load Iterable campaigns if present
+      if ((event as any).iterableCampaigns) {
+        setIterableCampaigns((event as any).iterableCampaigns as EventIterableCampaigns);
+      }
     }
   }, [event, form]);
 
@@ -236,11 +242,13 @@ export default function EventFormPage() {
   const onSubmit = (data: EventFormData) => {
     // Normalize slug: auto-format and convert empty string to undefined so backend stores null
     const normalizedSlug = data.slug ? normalizeSlug(data.slug) : undefined;
-    const normalizedData: EventFormData = {
+    const normalizedData: EventFormData & { iterableCampaigns?: EventIterableCampaigns } = {
       ...data,
       slug: normalizedSlug || undefined,
       // Include custom form fields only when no template is selected
       formFields: !data.formTemplateId ? customFields : undefined,
+      // Include Iterable campaigns if configured
+      iterableCampaigns: iterableCampaigns && Object.keys(iterableCampaigns).length > 0 ? iterableCampaigns : undefined,
     };
     
     if (isEditing) {
@@ -254,6 +262,7 @@ export default function EventFormPage() {
 
   // Custom form fields state (used when no template selected)
   const [customFields, setCustomFields] = useState<FormFieldDefinition[]>([]);
+  const [iterableCampaigns, setIterableCampaigns] = useState<EventIterableCampaigns | undefined>(undefined);
 
   // Guest Allowance Rules state and queries
   const [isRulesOpen, setIsRulesOpen] = useState(false);
@@ -1365,6 +1374,27 @@ export default function EventFormPage() {
                     )}
                   />
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Email Campaigns (Iterable) - Only shown when editing */}
+          {isEditing && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Mail className="h-5 w-5" />
+                  Email Campaigns
+                </CardTitle>
+                <CardDescription>
+                  Configure Iterable campaigns for each email type. If not configured, system defaults will be used.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <IterableCampaignSelector
+                  value={iterableCampaigns}
+                  onChange={setIterableCampaigns}
+                />
               </CardContent>
             </Card>
           )}

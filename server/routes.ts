@@ -1718,6 +1718,11 @@ export async function registerRoutes(
       if (req.body.thankYouQrInstructions !== undefined) updates.thankYouQrInstructions = req.body.thankYouQrInstructions || null;
       if (req.body.thankYouQrInstructionsEs !== undefined) updates.thankYouQrInstructionsEs = req.body.thankYouQrInstructionsEs || null;
       
+      // Iterable campaigns (per-event email campaign configuration)
+      if (req.body.iterableCampaigns !== undefined) {
+        updates.iterableCampaigns = req.body.iterableCampaigns;
+      }
+      
       // Handle dates
       if (req.body.startDate) updates.startDate = new Date(req.body.startDate);
       if (req.body.endDate) updates.endDate = new Date(req.body.endDate);
@@ -1756,6 +1761,17 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Delete event error:", error);
       res.status(500).json({ error: "Failed to delete event" });
+    }
+  });
+
+  // Iterable Campaigns API (for admin UI campaign selection)
+  app.get("/api/iterable/campaigns", authenticateToken, requireRole("admin", "event_manager"), async (req, res) => {
+    try {
+      const campaigns = await iterableService.getCampaigns();
+      res.json(campaigns);
+    } catch (error) {
+      console.error("Failed to fetch Iterable campaigns:", error);
+      res.status(500).json({ error: "Failed to fetch campaigns from Iterable" });
     }
   });
 

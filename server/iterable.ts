@@ -218,6 +218,32 @@ export class IterableService {
     return responseData;
   }
 
+  async getCampaigns(): Promise<{ id: number; name: string; campaignState: string }[]> {
+    if (!isConfigured()) {
+      log('warn', 'Cannot fetch campaigns - ITERABLE_API_KEY not configured');
+      return [];
+    }
+
+    try {
+      const data = await this.request('GET', '/campaigns');
+      const campaigns = data.campaigns || [];
+      
+      return campaigns
+        .filter((c: any) => c.campaignState === 'Ready' || c.campaignState === 'Running')
+        .map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          campaignState: c.campaignState,
+        }))
+        .sort((a: any, b: any) => a.name.localeCompare(b.name));
+    } catch (error) {
+      log('error', 'Failed to fetch campaigns from Iterable', { 
+        error: error instanceof Error ? error.message : String(error) 
+      });
+      throw error;
+    }
+  }
+
   private async sendEmailInternal(params: SendEmailParams): Promise<EmailResult> {
     const { campaignId, campaignSource, recipientEmail, dataFields, context } = params;
 
