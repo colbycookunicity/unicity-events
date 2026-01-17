@@ -3941,6 +3941,8 @@ export async function registerRoutes(
   app.get("/api/public/qualifier-info/:eventId", async (req, res) => {
     try {
       const email = req.query.email as string;
+      const distributorId = req.query.distributorId as string;
+      
       if (!email) {
         return res.status(400).json({ error: "Email is required" });
       }
@@ -3950,9 +3952,31 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Event not found" });
       }
       
-      const qualifier = await storage.getQualifiedRegistrantByEmail(event.id, email);
+      // Try to find qualifier by email first
+      let qualifier = await storage.getQualifiedRegistrantByEmail(event.id, email);
+      
+      // If not found by email and distributorId provided, try by distributorId
+      if (!qualifier && distributorId) {
+        qualifier = await storage.getQualifiedRegistrantByUnicityId(event.id, distributorId);
+      }
+      
       if (!qualifier) {
-        return res.status(404).json({ error: "Qualifier not found" });
+        return res.status(404).json({ 
+          error: "You are not on the qualified list for this event. Please contact support if you believe this is an error." 
+        });
+      }
+      
+      // If both email and distributorId provided, verify they match the qualifier record
+      if (distributorId && qualifier.unicityId && qualifier.unicityId !== distributorId) {
+        return res.status(403).json({ 
+          error: "The distributor ID does not match our records. Please check your information." 
+        });
+      }
+      
+      if (email && qualifier.email && qualifier.email.toLowerCase() !== email.toLowerCase()) {
+        return res.status(403).json({ 
+          error: "The email does not match our records for this distributor ID. Please check your information." 
+        });
       }
       
       res.json({

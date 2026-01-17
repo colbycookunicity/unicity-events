@@ -1,6 +1,119 @@
 # Data Consistency - Source of Truth Documentation
 
-**Last Updated**: January 13, 2026
+**Last Updated**: January 17, 2026
+
+---
+
+## Qualified-Only Registration Flow (qualified_verified mode)
+
+**Implemented**: January 17, 2026
+
+### Overview
+
+For events with `registrationMode = "qualified_verified"`, registration is restricted to users on the qualified registrants list. Both qualification AND OTP verification are required BEFORE the registration form is shown.
+
+### Registration Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    QUALIFIED_VERIFIED FLOW                           │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  Step 1: QUALIFICATION GATE                                          │
+│  ┌────────────────────────────────────────────────────────────────┐ │
+│  │  User enters:                                                   │ │
+│  │  • Distributor ID (required)                                    │ │
+│  │  • Email (required)                                             │ │
+│  │                                                                  │ │
+│  │  System checks:                                                  │ │
+│  │  • /api/public/qualifier-info/:eventId?email=X&distributorId=Y  │ │
+│  │                                                                  │ │
+│  │  If NOT qualified → BLOCK with error message, NO Hydra call     │ │
+│  │  If qualified → Proceed to Step 2                               │ │
+│  └────────────────────────────────────────────────────────────────┘ │
+│                                  ↓                                   │
+│  Step 2: OTP VERIFICATION                                            │
+│  ┌────────────────────────────────────────────────────────────────┐ │
+│  │  System calls Hydra to send OTP                                 │ │
+│  │  User enters 6-digit code                                       │ │
+│  │  /api/register/otp/validate validates code                      │ │
+│  │                                                                  │ │
+│  │  If invalid → Show error, allow retry                           │ │
+│  │  If valid → Set verifiedProfile, proceed to Step 3              │ │
+│  └────────────────────────────────────────────────────────────────┘ │
+│                                  ↓                                   │
+│  Step 3: REGISTRATION FORM                                           │
+│  ┌────────────────────────────────────────────────────────────────┐ │
+│  │  Form renders with pre-populated data from OTP profile         │ │
+│  │  User completes registration                                    │ │
+│  └────────────────────────────────────────────────────────────────┘ │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Critical Guards
+
+1. **Frontend Guard (RegistrationPage.tsx)**:
+   ```typescript
+   // For qualified_verified mode, NEVER skip to form
+   if (qualifiedVerifiedMode && !skipVerification) {
+     // Stay on email step, do not auto-advance to form
+     return;
+   }
+   ```
+
+2. **Main Content Guard**:
+   ```typescript
+   if (qualifiedVerifiedMode && !skipVerification) {
+     // If qualification failed, show not qualified message
+     if (qualificationChecked && !isQualified) {
+       return renderNotQualifiedMessage();
+     }
+     // If not yet at form step, show verification step
+     if (verificationStep !== "form") {
+       return renderVerificationStep();
+     }
+     // If no verified profile, show email step
+     if (!verifiedProfile) {
+       return renderVerificationStep();
+     }
+   }
+   ```
+
+3. **Qualification Check Before OTP**:
+   ```typescript
+   // Check qualification FIRST before sending OTP
+   const qualRes = await fetch(`/api/public/qualifier-info/${eventId}?email=...&distributorId=...`);
+   if (!qualRes.ok) {
+     setIsQualified(false);
+     return; // STOP - do NOT call Hydra
+   }
+   // Only proceed to OTP if qualified
+   ```
+
+### Backend Endpoint Enhancement
+
+The `/api/public/qualifier-info/:eventId` endpoint was enhanced to:
+- Accept both `email` and `distributorId` query parameters
+- Validate that email/distributorId match the qualifier record
+- Return clear error messages for unqualified users
+
+### Key Files
+
+| File | Changes |
+|------|---------|
+| `client/src/pages/RegistrationPage.tsx` | Added qualifiedVerifiedMode, verificationDistributorId state, qualification check before OTP |
+| `server/routes.ts` | Enhanced qualifier-info endpoint to validate distributorId |
+
+### Admin Configuration
+
+Events with "Qualified Only (OTP Required)" registration access will:
+1. Save `registrationMode = "qualified_verified"` to database
+2. Require users to be on qualified registrants list
+3. Require OTP verification via Hydra
+4. Block form access until both checks pass
+
+---
 
 ## Critical Bug Fixes Applied
 

@@ -293,12 +293,14 @@ export default function RegistrationPage() {
   // Verification flow state
   const [verificationStep, setVerificationStep] = useState<VerificationStep>("email");
   const [verificationEmail, setVerificationEmail] = useState("");
+  const [verificationDistributorId, setVerificationDistributorId] = useState(""); // For qualified_verified mode
   const [otpCode, setOtpCode] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
   const [verifiedProfile, setVerifiedProfile] = useState<VerifiedProfile | null>(null);
   const [verifiedByHydra, setVerifiedByHydra] = useState(false);
   const [isQualified, setIsQualified] = useState(true);
   const [qualificationMessage, setQualificationMessage] = useState("");
+  const [qualificationChecked, setQualificationChecked] = useState(false); // Track if qualification was checked
   
   // Open verified mode: form visible immediately, OTP required before submission
   const [pendingSubmissionData, setPendingSubmissionData] = useState<RegistrationFormData | null>(null);
@@ -442,6 +444,7 @@ export default function RegistrationPage() {
   // - open_anonymous: no OTP, email may be reused, multiple registrations allowed
   const registrationMode = event?.registrationMode || "open_verified";
   const requiresVerification = (registrationMode !== "open_anonymous") && !skipVerification;
+  const qualifiedVerifiedMode = registrationMode === "qualified_verified";
   const openVerifiedMode = registrationMode === "open_verified";
   const openAnonymousMode = registrationMode === "open_anonymous";
   
@@ -532,14 +535,21 @@ export default function RegistrationPage() {
     consumeToken();
   }, [prePopulatedToken, prePopulatedEmail, params.eventId, tokenConsumed, isConsumingToken]);
 
-  // Skip to form if pre-populated, verification not required, open_verified, or open_anonymous mode
-  // For open_verified: form is visible immediately, OTP verification gates submission
-  // For open_anonymous: form is visible immediately, NO verification at all
+  // Skip to form based on registration mode:
+  // - qualified_verified: NEVER skip - must verify email + OTP first
+  // - open_verified: form visible immediately, OTP verification gates submission
+  // - open_anonymous: form visible immediately, NO verification at all
+  // - skipVerification: pre-populated from URL params
   useEffect(() => {
+    // For qualified_verified mode, NEVER skip to form - must go through email → OTP → form steps
+    if (qualifiedVerifiedMode && !skipVerification) {
+      // Stay on email step, do not auto-advance to form
+      return;
+    }
     if (skipVerification || (event && !requiresVerification) || openVerifiedMode || openAnonymousMode) {
       setVerificationStep("form");
     }
-  }, [skipVerification, event, requiresVerification, openVerifiedMode, openAnonymousMode]);
+  }, [skipVerification, event, requiresVerification, qualifiedVerifiedMode, openVerifiedMode, openAnonymousMode]);
 
   // For open_verified mode: check if user already has a valid attendee token from homepage
   // This prevents double verification when user verified on homepage then navigates to registration
@@ -730,13 +740,100 @@ export default function RegistrationPage() {
   const handleSendOtp = async () => {
     if (!verificationEmail || !verificationEmail.includes("@")) {
       toast({
-        title: language === "es" ? "Correo inv\u00e1lido" : "Invalid Email",
-        description: language === "es" ? "Por favor ingrese un correo electr\u00f3nico v\u00e1lido" : "Please enter a valid email address",
+        title: language === "es" ? "Correo inválido" : "Invalid Email",
+        description: language === "es" ? "Por favor ingrese un correo electrónico válido" : "Please enter a valid email address",
         variant: "destructive",
       });
       return;
     }
 
+    // For qualified_verified mode, check qualification FIRST before sending OTP
+    if (qualifiedVerifiedMode) {
+      // Require distributor ID for qualified_verified mode
+      if (!verificationDistributorId || !verificationDistributorId.trim()) {
+        toast({
+          title: language === "es" ? "ID de Distribuidor requerido" : "Distributor ID Required",
+          description: language === "es" ? "Por favor ingrese su ID de distribuidor" : "Please enter your distributor ID",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setIsVerifying(true);
+      try {
+        // Check qualification before sending OTP - this BLOCKS unqualified users
+        const qualRes = await fetch(`/api/public/qualifier-info/${params.eventId}?email=${encodeURIComponent(verificationEmail)}&distributorId=${encodeURIComponent(verificationDistributorId.trim())}`);
+        
+        if (!qualRes.ok) {
+          // User is NOT qualified - block them immediately
+          setIsQualified(false);
+          setQualificationChecked(true);
+          const errorData = await qualRes.json().catch(() => ({}));
+          const errorMsg = errorData.error || (language === "es" 
+            ? "No está calificado para registrarse en este evento."
+            : "You are not qualified to register for this event.");
+          setQualificationMessage(errorMsg);
+          toast({
+            title: language === "es" ? "No califica" : "Not Qualified",
+            description: errorMsg,
+            variant: "destructive",
+          });
+          setIsVerifying(false);
+          return; // STOP - do NOT call Hydra
+        }
+
+        // User IS qualified - now we can proceed with OTP
+        setIsQualified(true);
+        setQualificationChecked(true);
+        
+        // Continue to send OTP via Hydra
+        const res = await apiRequest("POST", "/api/register/otp/generate", { 
+          email: verificationEmail,
+          eventId: params.eventId,
+        });
+        const data = await res.json();
+        
+        setVerificationStep("otp");
+        toast({
+          title: language === "es" ? "Código enviado" : "Code Sent",
+          description: language === "es" ? `Código enviado a ${verificationEmail}` : `Verification code sent to ${verificationEmail}`,
+        });
+        
+        // Show dev code in development
+        if (data.devCode) {
+          console.log("DEV MODE: Use code", data.devCode);
+        }
+      } catch (error: any) {
+        // Parse error message
+        let errorMessage = language === "es" 
+          ? "No se pudo enviar el código de verificación"
+          : "Unable to send verification code";
+        if (error.message) {
+          let msg = error.message.replace(/^\d{3}:\s*/, "");
+          const jsonMatch = msg.match(/\{.*\}/);
+          if (jsonMatch) {
+            try {
+              const parsed = JSON.parse(jsonMatch[0]);
+              errorMessage = parsed.error || errorMessage;
+            } catch {
+              // Keep default message
+            }
+          } else if (!msg.includes("fetch") && !msg.includes("{")) {
+            errorMessage = msg;
+          }
+        }
+        toast({
+          title: t("error"),
+          description: errorMessage,
+          variant: "destructive",
+        });
+      } finally {
+        setIsVerifying(false);
+      }
+      return;
+    }
+
+    // For open_verified mode (or other modes), just send OTP without qualification check
     setIsVerifying(true);
     try {
       const res = await apiRequest("POST", "/api/register/otp/generate", { 
@@ -747,8 +844,8 @@ export default function RegistrationPage() {
       
       setVerificationStep("otp");
       toast({
-        title: language === "es" ? "C\u00f3digo enviado" : "Code Sent",
-        description: language === "es" ? `C\u00f3digo enviado a ${verificationEmail}` : `Verification code sent to ${verificationEmail}`,
+        title: language === "es" ? "Código enviado" : "Code Sent",
+        description: language === "es" ? `Código enviado a ${verificationEmail}` : `Verification code sent to ${verificationEmail}`,
       });
       
       // Show dev code in development
@@ -1837,6 +1934,11 @@ export default function RegistrationPage() {
 
   // Verification step UI
   const renderVerificationStep = () => {
+    // For qualified_verified mode, if user failed qualification, show the not qualified message
+    if (qualifiedVerifiedMode && qualificationChecked && !isQualified) {
+      return renderNotQualifiedMessage();
+    }
+
     if (verificationStep === "email") {
       return (
         <Card id="verification-section">
@@ -1850,13 +1952,36 @@ export default function RegistrationPage() {
                 : (loginHeroContent?.headline || "Verify Your Identity")}
             </CardTitle>
             <CardDescription className="text-muted-foreground">
-              {language === "es" 
-                ? (loginHeroContent?.subheadlineEs || "Ingrese su correo electronico para recibir un codigo de verificacion")
-                : (loginHeroContent?.subheadline || "Enter your email to receive a verification code")}
+              {qualifiedVerifiedMode 
+                ? (language === "es" 
+                    ? "Ingrese su correo electrónico e ID de distribuidor para verificar su elegibilidad"
+                    : "Enter your email and distributor ID to verify your eligibility")
+                : (language === "es" 
+                    ? (loginHeroContent?.subheadlineEs || "Ingrese su correo electronico para recibir un codigo de verificacion")
+                    : (loginHeroContent?.subheadline || "Enter your email to receive a verification code"))}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Distributor ID - required for qualified_verified mode */}
+            {qualifiedVerifiedMode && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">
+                  {language === "es" ? "ID de Distribuidor" : "Distributor ID"} *
+                </label>
+                <Input
+                  type="text"
+                  placeholder={language === "es" ? "Su ID de distribuidor" : "Your distributor ID"}
+                  value={verificationDistributorId}
+                  onChange={(e) => setVerificationDistributorId(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
+                  data-testid="input-verification-distributor-id"
+                />
+              </div>
+            )}
             <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                {language === "es" ? "Correo Electrónico" : "Email"} *
+              </label>
               <Input
                 type="email"
                 placeholder={language === "es" ? "correo@ejemplo.com" : "email@example.com"}
@@ -1868,12 +1993,14 @@ export default function RegistrationPage() {
             </div>
             <Button 
               onClick={handleSendOtp} 
-              disabled={isVerifying || !verificationEmail}
+              disabled={isVerifying || !verificationEmail || (qualifiedVerifiedMode && !verificationDistributorId)}
               className="w-full"
               data-testid="button-send-code"
             >
               {isVerifying && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              {language === "es" ? "Enviar codigo" : "Send Code"}
+              {qualifiedVerifiedMode 
+                ? (language === "es" ? "Verificar elegibilidad" : "Verify Eligibility")
+                : (language === "es" ? "Enviar codigo" : "Send Code")}
             </Button>
           </CardContent>
         </Card>
@@ -1985,6 +2112,25 @@ export default function RegistrationPage() {
 
   // Main content renderer - decides what to show based on verification state
   const renderMainContent = () => {
+    // CRITICAL GUARD for qualified_verified mode:
+    // Form MUST NOT render until BOTH qualification AND OTP are verified
+    if (qualifiedVerifiedMode && !skipVerification) {
+      // If qualification check failed, show not qualified message
+      if (qualificationChecked && !isQualified) {
+        return renderNotQualifiedMessage();
+      }
+      
+      // If not yet at form step (still on email or otp), show verification step
+      if (verificationStep !== "form") {
+        return renderVerificationStep();
+      }
+      
+      // If at form step but no verified profile, something went wrong - show email step
+      if (!verifiedProfile) {
+        return renderVerificationStep();
+      }
+    }
+    
     // If verification required and not yet completed, show verification step
     if (requiresVerification && verificationStep !== "form") {
       return renderVerificationStep();
