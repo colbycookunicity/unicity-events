@@ -25,7 +25,6 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import type { Event, GuestAllowanceRule, User, EventManagerAssignment } from "@shared/schema";
 import { FormBuilder, FormFieldDefinition } from "@/components/FormBuilder";
-import { Mail } from "lucide-react";
 
 // Eastern Time offset helper: returns offset in minutes for a given date
 // EST = UTC-5 (standard), EDT = UTC-4 (daylight saving)
@@ -1413,29 +1412,6 @@ export default function EventFormPage() {
                     )}
                   />
                 </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Email Campaigns - Link to dedicated page (only shown when editing) */}
-          {isEditing && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Mail className="h-5 w-5" />
-                  Email Campaigns
-                </CardTitle>
-                <CardDescription>
-                  Configure Iterable campaigns for each email type.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Link href={`/admin/events/${params.id}/email-campaigns`}>
-                  <Button variant="outline" className="w-full" data-testid="button-configure-email-campaigns">
-                    <Mail className="h-4 w-4 mr-2" />
-                    Configure Email Campaigns
-                  </Button>
-                </Link>
               </CardContent>
             </Card>
           )}

@@ -19,7 +19,8 @@ import {
   Pencil,
   LogIn,
   FileText,
-  CheckCircle
+  CheckCircle,
+  Mail
 } from "lucide-react";
 import { Link } from "wouter";
 import type { Event, EventPage, EventPageSection } from "@shared/schema";
@@ -57,9 +58,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { SectionEditor } from "@/components/landing-sections/SectionEditor";
-import type { PageSectionContent } from "@shared/schema";
+import type { PageSectionContent, EventIterableCampaigns } from "@shared/schema";
+import { IterableCampaignSelector } from "@/components/IterableCampaignSelector";
 
 interface PageData {
   page: EventPage;
@@ -149,6 +151,7 @@ const PAGE_TYPE_LABELS: Record<string, string> = {
   login: "Login / Verification Page",
   registration: "Registration Form Page", 
   thank_you: "Thank You / Confirmation Page",
+  email_campaigns: "Email Campaigns",
 };
 
 export default function LandingEditorPage() {
@@ -159,6 +162,8 @@ export default function LandingEditorPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [sectionToDelete, setSectionToDelete] = useState<string | null>(null);
   const [editingSection, setEditingSection] = useState<EventPageSection | null>(null);
+  const [emailCampaigns, setEmailCampaigns] = useState<EventIterableCampaigns | undefined>(undefined);
+  const [hasEmailChanges, setHasEmailChanges] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -230,6 +235,43 @@ export default function LandingEditorPage() {
       toast({ title: "Page unpublished", description: "Your page is now in draft mode." });
     },
   });
+
+  const saveEmailCampaignsMutation = useMutation({
+    mutationFn: async (data: { iterableCampaigns: EventIterableCampaigns | undefined }) => {
+      const response = await apiRequest("PATCH", `/api/events/${eventId}`, data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/events', eventId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/events'] });
+      setHasEmailChanges(false);
+      toast({ title: "Saved", description: "Email campaign settings updated successfully." });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to save email campaign settings.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  useEffect(() => {
+    if (event && (event as any).iterableCampaigns) {
+      setEmailCampaigns((event as any).iterableCampaigns as EventIterableCampaigns);
+    }
+  }, [event]);
+
+  const handleEmailCampaignsChange = (newCampaigns: EventIterableCampaigns) => {
+    setEmailCampaigns(newCampaigns);
+    setHasEmailChanges(true);
+  };
+
+  const handleSaveEmailCampaigns = () => {
+    saveEmailCampaignsMutation.mutate({ 
+      iterableCampaigns: emailCampaigns && Object.keys(emailCampaigns).length > 0 ? emailCampaigns : undefined 
+    });
+  };
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -344,7 +386,7 @@ export default function LandingEditorPage() {
       </div>
 
       <Tabs value={pageType} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 max-w-lg">
+        <TabsList className="grid w-full grid-cols-4 max-w-2xl">
           <TabsTrigger 
             value="login" 
             onClick={() => setLocation(`/admin/events/${eventId}/pages/login`)}
@@ -372,21 +414,60 @@ export default function LandingEditorPage() {
             <CheckCircle className="h-4 w-4" />
             <span className="hidden sm:inline">Thank You</span>
           </TabsTrigger>
+          <TabsTrigger 
+            value="email_campaigns" 
+            onClick={() => setLocation(`/admin/events/${eventId}/pages/email_campaigns`)}
+            className="gap-2"
+            data-testid="tab-email-campaigns"
+          >
+            <Mail className="h-4 w-4" />
+            <span className="hidden sm:inline">Emails</span>
+          </TabsTrigger>
         </TabsList>
       </Tabs>
 
-      <div className="flex items-center gap-2">
-        {page && (
-          <Badge variant={isPublished ? "default" : "secondary"}>
-            {isPublished ? 'Published' : 'Draft'}
-          </Badge>
-        )}
-        <span className="text-sm text-muted-foreground">
-          {PAGE_TYPE_LABELS[pageType]}
-        </span>
-      </div>
+      {pageType !== "email_campaigns" && (
+        <div className="flex items-center gap-2">
+          {page && (
+            <Badge variant={isPublished ? "default" : "secondary"}>
+              {isPublished ? 'Published' : 'Draft'}
+            </Badge>
+          )}
+          <span className="text-sm text-muted-foreground">
+            {PAGE_TYPE_LABELS[pageType]}
+          </span>
+        </div>
+      )}
 
-      {!page ? (
+      {pageType === "email_campaigns" ? (
+        <div className="max-w-2xl space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              Configure which Iterable campaigns are used for different email types for this event.
+            </p>
+            <Button 
+              onClick={handleSaveEmailCampaigns}
+              disabled={!hasEmailChanges || saveEmailCampaignsMutation.isPending}
+              data-testid="button-save-email-campaigns"
+            >
+              {saveEmailCampaignsMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4 mr-2" />
+              )}
+              Save Changes
+            </Button>
+          </div>
+          <Card>
+            <CardContent className="pt-6">
+              <IterableCampaignSelector
+                value={emailCampaigns}
+                onChange={handleEmailCampaignsChange}
+              />
+            </CardContent>
+          </Card>
+        </div>
+      ) : !page ? (
         <Card>
           <CardContent className="py-12 text-center">
             <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-muted-foreground" />
