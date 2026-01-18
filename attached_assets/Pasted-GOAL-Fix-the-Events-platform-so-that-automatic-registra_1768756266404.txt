@@ -1,0 +1,51 @@
+GOAL
+Fix the Events platform so that automatic registration emails are ONLY sent when a user self-registers, and NEVER when an admin manually adds attendees OR uploads qualifiers via admin tools.
+
+INSTRUCTIONS FOR THE AGENT
+I want you to:
+• Research my codebase
+• Find all places where registrations or qualified attendees are created
+• Identify how registration confirmation emails are triggered
+• Assess why admin-created registrations and uploaded qualifiers are currently sending emails
+• Develop a fix plan
+• Write the plan to Instructions.md
+
+CONTEXT / REQUIREMENTS
+Current incorrect behavior:
+- When an admin manually adds a person to an event, the system sends an automatic “Registration Confirmation” email.
+- When admins upload qualifiers (CSV or bulk upload) to an event, emails may also be triggered.
+- These emails are intended ONLY for self-registration and are causing confusion.
+
+Correct behavior:
+- The Registration Confirmation email should ONLY be sent when a user registers themselves through the public registration flow.
+- Admin-created registrations must NOT trigger any automatic emails.
+- Admin-uploaded qualifiers must NOT trigger any automatic emails.
+- Admins retain full control over if/when any emails are sent manually.
+
+IMPLEMENTATION REQUIREMENTS
+- Introduce or enforce a field such as `registration_source` with values:
+  - 'self'
+  - 'admin'
+  - 'qualifier_upload'
+- Ensure:
+  - Public/self registration → registration_source = 'self'
+  - Admin dashboard add → registration_source = 'admin'
+  - Admin qualifier CSV upload → registration_source = 'qualifier_upload'
+- Gate all automatic email triggers so that:
+  - Registration Confirmation emails only send when registration_source === 'self'
+  - NO automatic emails are sent for 'admin' or 'qualifier_upload'
+
+SCOPE NOTES
+- Do NOT change public registration behavior.
+- Do NOT send emails on qualifier import, even if the user is eligible or already qualified.
+- Do NOT add new email types unless required for correctness.
+- Keep the fix minimal, explicit, and defensive.
+- Update Instructions.md with:
+  - Root cause
+  - Fix summary
+  - All registration sources and their email behavior
+  - Any data migration or backward-compatibility handling
+
+DELIVERABLE
+- Working fix in code
+- Clear documentation in Instructions.md

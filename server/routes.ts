@@ -3675,22 +3675,9 @@ export async function registerRoutes(
       const validatedData = insertQualifiedRegistrantSchema.parse(data);
       const qualifier = await storage.createQualifiedRegistrant(validatedData);
 
-      // Send qualification granted email (non-blocking)
-      const event = await storage.getEvent(req.params.eventId);
-      if (event && qualifier.email) {
-        iterableService.sendQualificationGranted(
-          qualifier.email,
-          {
-            id: qualifier.id,
-            firstName: qualifier.firstName,
-            lastName: qualifier.lastName,
-          },
-          event,
-          event.defaultLanguage || 'en'
-        ).catch(err => {
-          console.error('[Iterable] Failed to send qualification granted email:', err);
-        });
-      }
+      // NOTE: No automatic email is sent when admins add qualifiers.
+      // Admins retain full control over if/when emails are sent manually.
+      // This prevents confusion from automatic emails for admin-initiated actions.
 
       res.status(201).json(qualifier);
     } catch (error) {
@@ -3788,27 +3775,9 @@ export async function registerRoutes(
 
       const created = await storage.createQualifiedRegistrantsBulk(registrantsToInsert);
 
-      // Send qualification granted emails for all imported registrants (non-blocking)
-      const event = await storage.getEvent(eventId);
-      if (event && created.length > 0) {
-        const emailLanguage = event.defaultLanguage || 'en';
-        for (const qualifier of created) {
-          if (qualifier.email) {
-            iterableService.sendQualificationGranted(
-              qualifier.email,
-              {
-                id: qualifier.id,
-                firstName: qualifier.firstName,
-                lastName: qualifier.lastName,
-              },
-              event,
-              emailLanguage
-            ).catch(err => {
-              console.error(`[Iterable] Failed to send qualification granted email to ${qualifier.email}:`, err);
-            });
-          }
-        }
-      }
+      // NOTE: No automatic emails are sent when admins import qualifiers via CSV.
+      // Admins retain full control over if/when emails are sent manually.
+      // This prevents confusion from automatic emails for admin-initiated bulk imports.
 
       res.status(201).json({ 
         imported: created.length, 

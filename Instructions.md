@@ -1,6 +1,76 @@
 # Data Consistency - Source of Truth Documentation
 
-**Last Updated**: January 17, 2026
+**Last Updated**: January 18, 2026
+
+---
+
+## Automatic Email Behavior Rules
+
+**Status**: ✅ IMPLEMENTED (January 18, 2026)
+
+### Overview
+
+This section documents when automatic emails are sent and the rules governing email triggers based on registration source.
+
+### Email Trigger Rules
+
+| Action | Automatic Email | Notes |
+|--------|-----------------|-------|
+| Self-registration (public form) | ✅ Confirmation sent | Only route that creates registrations |
+| Admin adds qualifier | ❌ No email | Previously sent qualificationGranted - now removed |
+| Admin imports qualifiers (CSV) | ❌ No email | Previously sent qualificationGranted - now removed |
+| Admin updates registration | ✅ Update/Cancel emails | These are intentional notification emails |
+| Admin clicks "Resend Confirmation" | ✅ Confirmation sent | Manual action, working as designed |
+
+### Architecture Note
+
+There is **no admin route that directly creates registrations** in this codebase. Registrations are only created through the public registration flow (`POST /api/events/:eventIdOrSlug/register`). Admins manage the **qualified registrants list** (pre-approved people who CAN register), not registrations themselves.
+
+This means:
+- `registrationSource` field is not required - all registrations are self-registrations by definition
+- The confirmation email is inherently gated to self-registration since that's the only creation path
+
+### Root Cause of Previous Issue
+
+Previously, the admin qualifier creation and CSV import routes were calling `sendQualificationGranted()` which sent automatic emails whenever an admin added someone to the qualified list. This caused confusion because:
+
+1. The "Qualification Granted" email could look similar to registration confirmation
+2. Admins expected full control over email communications
+3. Users received unexpected emails when admins were managing attendee lists
+
+### Fix Summary
+
+Removed automatic email sending from:
+
+1. **`POST /api/events/:eventId/qualifiers`** - Admin adds single qualifier
+2. **`POST /api/events/:eventId/qualifiers/import`** - Admin bulk imports qualifiers
+
+Now, NO automatic emails are sent for admin-initiated qualifier/registration management. Admins retain full control over if/when emails are sent manually via:
+- Resend Confirmation button
+- Bulk email tools
+
+### Email Types and When They're Sent
+
+| Email Type | Automatic Trigger | Manual Trigger |
+|------------|-------------------|----------------|
+| Registration Confirmation | Self-registration only | Resend Confirmation button |
+| Check-In Notification | Check-in scan | N/A |
+| Qualification Granted | ❌ DISABLED | N/A (removed) |
+| Registration Canceled | Status change to canceled | N/A |
+| Registration Transferred | Transfer complete | N/A |
+| Registration Updated | Profile field changes | N/A |
+
+### Implementation Files
+
+| File | Changes |
+|------|---------|
+| `server/routes.ts` | Removed `sendQualificationGranted()` calls from qualifier creation routes |
+
+### Backward Compatibility
+
+- Existing registrations continue working
+- No database schema changes required
+- Emails for self-registration unaffected
 
 ---
 
