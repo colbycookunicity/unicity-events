@@ -28,20 +28,62 @@ import { FormBuilder, FormFieldDefinition } from "@/components/FormBuilder";
 import { IterableCampaignSelector } from "@/components/IterableCampaignSelector";
 import { Mail } from "lucide-react";
 
-// Format date to local datetime string for datetime-local input (avoids UTC conversion issues)
+// Eastern Time offset helper: returns offset in minutes for a given date
+// EST = UTC-5 (standard), EDT = UTC-4 (daylight saving)
+function getEasternOffset(date: Date): number {
+  // Create a date formatter for Eastern Time to detect DST
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    timeZoneName: 'short'
+  });
+  const parts = formatter.formatToParts(date);
+  const tzName = parts.find(p => p.type === 'timeZoneName')?.value;
+  // EDT (daylight) = -240 minutes, EST (standard) = -300 minutes
+  return tzName === 'EDT' ? -240 : -300;
+}
+
+// Convert UTC date to Eastern Time for display
 function formatDateForInput(dateValue: string | Date | null | undefined): string {
   if (!dateValue) return "";
   const date = new Date(dateValue);
   if (isNaN(date.getTime())) return "";
   
-  // Format as local time YYYY-MM-DDTHH:mm
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
+  // Convert to Eastern Time by applying the offset
+  const etOffset = getEasternOffset(date);
+  const etDate = new Date(date.getTime() + etOffset * 60 * 1000);
+  
+  // Format as YYYY-MM-DDTHH:mm in Eastern Time
+  const year = etDate.getUTCFullYear();
+  const month = String(etDate.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(etDate.getUTCDate()).padStart(2, '0');
+  const hours = String(etDate.getUTCHours()).padStart(2, '0');
+  const minutes = String(etDate.getUTCMinutes()).padStart(2, '0');
   
   return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+// Convert Eastern Time input to UTC ISO string for saving
+function convertEasternToUTC(dateTimeString: string): string {
+  if (!dateTimeString) return "";
+  
+  // Parse the datetime-local string (YYYY-MM-DDTHH:mm)
+  const [datePart, timePart] = dateTimeString.split('T');
+  if (!datePart || !timePart) return dateTimeString;
+  
+  const [year, month, day] = datePart.split('-').map(Number);
+  const [hours, minutes] = timePart.split(':').map(Number);
+  
+  // Create a date in UTC that represents this Eastern Time
+  // First, create the date as if it were UTC
+  const utcDate = new Date(Date.UTC(year, month - 1, day, hours, minutes));
+  
+  // Get the Eastern offset for this date
+  const etOffset = getEasternOffset(utcDate);
+  
+  // Subtract the offset to convert ET to UTC (ET is behind UTC, so we add the absolute offset)
+  const correctedDate = new Date(utcDate.getTime() - etOffset * 60 * 1000);
+  
+  return correctedDate.toISOString();
 }
 
 const formFieldSchema = z.object({
@@ -245,6 +287,11 @@ export default function EventFormPage() {
     const normalizedData: EventFormData & { iterableCampaigns?: EventIterableCampaigns } = {
       ...data,
       slug: normalizedSlug || undefined,
+      // Convert Eastern Time dates to UTC for storage
+      startDate: convertEasternToUTC(data.startDate),
+      endDate: convertEasternToUTC(data.endDate),
+      qualificationStartDate: data.qualificationStartDate ? convertEasternToUTC(data.qualificationStartDate) : undefined,
+      qualificationEndDate: data.qualificationEndDate ? convertEasternToUTC(data.qualificationEndDate) : undefined,
       // Include custom form fields only when no template is selected
       formFields: !data.formTemplateId ? customFields : undefined,
       // Include Iterable campaigns if configured
