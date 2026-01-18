@@ -23,9 +23,8 @@ import { useTranslation } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
-import type { Event, GuestAllowanceRule, User, EventManagerAssignment, EventIterableCampaigns } from "@shared/schema";
+import type { Event, GuestAllowanceRule, User, EventManagerAssignment } from "@shared/schema";
 import { FormBuilder, FormFieldDefinition } from "@/components/FormBuilder";
-import { IterableCampaignSelector } from "@/components/IterableCampaignSelector";
 import { Mail } from "lucide-react";
 
 // Eastern Time offset helper: returns offset in minutes for a given date
@@ -244,10 +243,6 @@ export default function EventFormPage() {
       if ((event as any).formFields) {
         setCustomFields((event as any).formFields as FormFieldDefinition[]);
       }
-      // Load Iterable campaigns if present
-      if ((event as any).iterableCampaigns) {
-        setIterableCampaigns((event as any).iterableCampaigns as EventIterableCampaigns);
-      }
     }
   }, [event, form]);
 
@@ -284,7 +279,7 @@ export default function EventFormPage() {
   const onSubmit = (data: EventFormData) => {
     // Normalize slug: auto-format and convert empty string to undefined so backend stores null
     const normalizedSlug = data.slug ? normalizeSlug(data.slug) : undefined;
-    const normalizedData: EventFormData & { iterableCampaigns?: EventIterableCampaigns } = {
+    const normalizedData: EventFormData = {
       ...data,
       slug: normalizedSlug || undefined,
       // Convert Eastern Time dates to UTC for storage
@@ -294,8 +289,6 @@ export default function EventFormPage() {
       qualificationEndDate: data.qualificationEndDate ? convertEasternToUTC(data.qualificationEndDate) : undefined,
       // Include custom form fields only when no template is selected
       formFields: !data.formTemplateId ? customFields : undefined,
-      // Include Iterable campaigns if configured
-      iterableCampaigns: iterableCampaigns && Object.keys(iterableCampaigns).length > 0 ? iterableCampaigns : undefined,
     };
     
     if (isEditing) {
@@ -309,7 +302,6 @@ export default function EventFormPage() {
 
   // Custom form fields state (used when no template selected)
   const [customFields, setCustomFields] = useState<FormFieldDefinition[]>([]);
-  const [iterableCampaigns, setIterableCampaigns] = useState<EventIterableCampaigns | undefined>(undefined);
 
   // Guest Allowance Rules state and queries
   const [isRulesOpen, setIsRulesOpen] = useState(false);
@@ -1425,7 +1417,7 @@ export default function EventFormPage() {
             </Card>
           )}
 
-          {/* Email Campaigns (Iterable) - Only shown when editing */}
+          {/* Email Campaigns - Link to dedicated page (only shown when editing) */}
           {isEditing && (
             <Card>
               <CardHeader>
@@ -1434,14 +1426,16 @@ export default function EventFormPage() {
                   Email Campaigns
                 </CardTitle>
                 <CardDescription>
-                  Configure Iterable campaigns for each email type. If not configured, system defaults will be used.
+                  Configure Iterable campaigns for each email type.
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <IterableCampaignSelector
-                  value={iterableCampaigns}
-                  onChange={setIterableCampaigns}
-                />
+                <Link href={`/admin/events/${params.id}/email-campaigns`}>
+                  <Button variant="outline" className="w-full" data-testid="button-configure-email-campaigns">
+                    <Mail className="h-4 w-4 mr-2" />
+                    Configure Email Campaigns
+                  </Button>
+                </Link>
               </CardContent>
             </Card>
           )}
