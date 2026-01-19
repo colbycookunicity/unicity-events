@@ -147,7 +147,9 @@ export default function AttendeesPage() {
   const [qualifierToDelete, setQualifierToDelete] = useState<QualifiedRegistrant | null>(null);
   const [registrationDeleteDialogOpen, setRegistrationDeleteDialogOpen] = useState(false);
   const [registrationToDelete, setRegistrationToDelete] = useState<Registration | null>(null);
+  const [sendCancellationEmail, setSendCancellationEmail] = useState(true);
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
+  const [bulkSendCancellationEmail, setBulkSendCancellationEmail] = useState(true);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [registrationToMove, setRegistrationToMove] = useState<Registration | null>(null);
   const [targetEventId, setTargetEventId] = useState<string>("");
@@ -573,8 +575,8 @@ export default function AttendeesPage() {
   });
 
   const deleteRegistrationMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await apiRequest("DELETE", `/api/registrations/${id}`);
+    mutationFn: async ({ id, sendEmail }: { id: string; sendEmail: boolean }) => {
+      await apiRequest("DELETE", `/api/registrations/${id}?sendEmail=${sendEmail}`);
     },
     onSuccess: () => {
       // Invalidate all registration-related queries using predicate to match URL-based keys
@@ -591,6 +593,7 @@ export default function AttendeesPage() {
       }
       setRegistrationDeleteDialogOpen(false);
       setRegistrationToDelete(null);
+      setSendCancellationEmail(true); // Reset to default
       toast({ title: t("success"), description: "Registration deleted successfully" });
     },
     onError: () => {
@@ -599,10 +602,10 @@ export default function AttendeesPage() {
   });
 
   const bulkDeleteMutation = useMutation({
-    mutationFn: async ({ registrationIds, qualifierIds }: { registrationIds: string[]; qualifierIds: string[] }) => {
+    mutationFn: async ({ registrationIds, qualifierIds, sendEmail }: { registrationIds: string[]; qualifierIds: string[]; sendEmail: boolean }) => {
       // Delete registrations and qualifiers one by one
       const registrationResults = await Promise.allSettled(
-        registrationIds.map(id => apiRequest("DELETE", `/api/registrations/${id}`))
+        registrationIds.map(id => apiRequest("DELETE", `/api/registrations/${id}?sendEmail=${sendEmail}`))
       );
       const qualifierResults = await Promise.allSettled(
         qualifierIds.map(id => apiRequest("DELETE", `/api/qualifiers/${id}`))
@@ -633,6 +636,7 @@ export default function AttendeesPage() {
       // Clear selection
       setSelectedPeople(new Set());
       setBulkDeleteDialogOpen(false);
+      setBulkSendCancellationEmail(true); // Reset to default
       
       const total = data.registrations.total + data.qualifiers.total;
       if (data.totalFailed === 0) {
@@ -2489,7 +2493,10 @@ export default function AttendeesPage() {
       </AlertDialog>
 
       {/* Delete Registration Confirmation Dialog */}
-      <AlertDialog open={registrationDeleteDialogOpen} onOpenChange={setRegistrationDeleteDialogOpen}>
+      <AlertDialog open={registrationDeleteDialogOpen} onOpenChange={(open) => {
+        setRegistrationDeleteDialogOpen(open);
+        if (!open) setSendCancellationEmail(true); // Reset when closing
+      }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Registration</AlertDialogTitle>
@@ -2498,10 +2505,21 @@ export default function AttendeesPage() {
               This will permanently remove their registration and all associated data. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="flex items-center space-x-2 py-4">
+            <Checkbox 
+              id="send-cancel-email" 
+              checked={sendCancellationEmail}
+              onCheckedChange={(checked) => setSendCancellationEmail(checked === true)}
+              data-testid="checkbox-send-cancellation-email"
+            />
+            <Label htmlFor="send-cancel-email" className="text-sm font-normal cursor-pointer">
+              Send cancellation email to attendee
+            </Label>
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction 
-              onClick={() => registrationToDelete && deleteRegistrationMutation.mutate(registrationToDelete.id)}
+              onClick={() => registrationToDelete && deleteRegistrationMutation.mutate({ id: registrationToDelete.id, sendEmail: sendCancellationEmail })}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               disabled={deleteRegistrationMutation.isPending}
             >
@@ -2512,7 +2530,10 @@ export default function AttendeesPage() {
       </AlertDialog>
 
       {/* Bulk Delete Confirmation Dialog */}
-      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={(open) => {
+        setBulkDeleteDialogOpen(open);
+        if (!open) setBulkSendCancellationEmail(true); // Reset when closing
+      }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete {selectedPeople.size} Attendee(s)</AlertDialogTitle>
@@ -2521,6 +2542,17 @@ export default function AttendeesPage() {
               This will permanently remove their data. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="flex items-center space-x-2 py-4">
+            <Checkbox 
+              id="bulk-send-cancel-email" 
+              checked={bulkSendCancellationEmail}
+              onCheckedChange={(checked) => setBulkSendCancellationEmail(checked === true)}
+              data-testid="checkbox-bulk-send-cancellation-email"
+            />
+            <Label htmlFor="bulk-send-cancel-email" className="text-sm font-normal cursor-pointer">
+              Send cancellation emails to registered attendees
+            </Label>
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction 
@@ -2534,7 +2566,7 @@ export default function AttendeesPage() {
                   .map(p => p.qualifier!.id);
                 
                 if (registrationIds.length > 0 || qualifierIds.length > 0) {
-                  bulkDeleteMutation.mutate({ registrationIds, qualifierIds });
+                  bulkDeleteMutation.mutate({ registrationIds, qualifierIds, sendEmail: bulkSendCancellationEmail });
                 } else {
                   toast({ title: "Nothing to delete", description: "No attendees could be deleted.", variant: "destructive" });
                   setBulkDeleteDialogOpen(false);

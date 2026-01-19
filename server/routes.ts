@@ -2861,14 +2861,17 @@ export async function registerRoutes(
 
   app.delete("/api/registrations/:id", authenticateToken, requireRole("admin"), async (req, res) => {
     try {
+      // Check if we should send cancellation email (default: true)
+      const sendEmail = req.query.sendEmail !== "false";
+      
       // Fetch registration and event BEFORE deletion to send cancellation email
       const registration = await storage.getRegistration(req.params.id);
       const event = registration ? await storage.getEvent(registration.eventId) : null;
 
       await storage.deleteRegistration(req.params.id);
 
-      // Send cancellation email after successful deletion (non-blocking)
-      if (registration && event) {
+      // Send cancellation email after successful deletion (non-blocking) - only if sendEmail is true
+      if (sendEmail && registration && event) {
         iterableService.sendRegistrationCanceled(
           registration.email,
           registration,
