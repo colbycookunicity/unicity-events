@@ -6339,3 +6339,214 @@ Even if templates look similar, using the same campaign ID across events risks:
 ---
 
 **STOP**: Awaiting approval before implementation.
+
+---
+
+# CSV Upload Qualification Analysis
+
+**Status**: 📋 ANALYSIS COMPLETE (January 19, 2026)
+
+---
+
+## Overview
+
+This analysis investigates how CSV-uploaded attendees are handled for Qualified-Only events (registrationMode = "qualified_verified").
+
+---
+
+## Key Finding: SYSTEM IS WORKING CORRECTLY
+
+After thorough codebase analysis, the current implementation is **correct by design**. Here's the full explanation:
+
+---
+
+## Data Model Architecture
+
+### Two Separate Tables
+
+| Table | Purpose | Contains |
+|-------|---------|----------|
+| `qualified_registrants` | Pre-approved list | People who ARE ALLOWED to register |
+| `registrations` | Actual attendees | People who HAVE REGISTERED |
+
+### The Flow
+
+1. **Admin uploads CSV** → Creates entries in `qualified_registrants`
+2. **User visits registration page** → System checks if they're in `qualified_registrants`
+3. **If qualified** → User can complete registration → Creates entry in `registrations`
+4. **If not qualified** → Registration denied with "You are not qualified" message
+
+### Qualification is IMPLICIT, Not Explicit
+
+There is no `qualified = true` field on the `registrations` table because:
+- Being in the `qualified_registrants` table **IS** the qualification
+- Once someone registers, they're in `registrations` as a confirmed attendee
+- The `qualified_registrants` table is the **source of truth** for who CAN register
+
+---
+
+## CSV Upload Flow (Verified Correct)
+
+**File**: `server/routes.ts` lines 3695-3790
+
+```typescript
+app.post("/api/events/:eventId/qualifiers/import", ...)
+```
+
+1. Parses CSV data with firstName, lastName, email, unicityId, locale
+2. Creates entries in `qualified_registrants` table
+3. **NO automatic emails sent** (comment at line 3781-3783)
+4. Returns count of imported/skipped/failed records
+
+**Key Code Comment (lines 3781-3783)**:
+```typescript
+// NOTE: No automatic emails are sent when admins import qualifiers via CSV.
+// Admins retain full control over if/when emails are sent manually.
+// This prevents confusion from automatic emails for admin-initiated bulk imports.
+```
+
+---
+
+## UI Status Display (AttendeesPage.tsx)
+
+The admin Attendees page uses a **unified view** that shows:
+
+### Status Column Logic (lines 1313-1318)
+
+```typescript
+case "status":
+  return person.isRegistered && reg ? (
+    <StatusBadge status={reg.status} />
+  ) : (
+    <span className="text-muted-foreground">Not Registered</span>
+  );
+```
+
+### What This Means
+
+| Person State | What Shows in UI |
+|--------------|------------------|
+| In `qualified_registrants` only | "Not Registered" (gray text) |
+| In `registrations` (completed registration) | StatusBadge with "qualified", "checked_in", etc. |
+
+### The UI Shows "Not Registered" - THIS IS CORRECT
+
+For CSV-uploaded people who haven't registered yet:
+- They ARE in the qualified list (allowed to register)
+- They are NOT in registrations (haven't completed registration)
+- The status correctly shows "Not Registered"
+
+---
+
+## Email Trigger Analysis (Verified Correct)
+
+### When Emails ARE Sent
+
+| Action | Email Sent? | Why |
+|--------|-------------|-----|
+| User completes public registration | ✅ Confirmation | Self-registration through public flow |
+| Admin manually clicks "Resend Confirmation" | ✅ Confirmation | Explicit admin action |
+| User gets checked in | ✅ Check-in | Scan-triggered notification |
+
+### When Emails are NOT Sent
+
+| Action | Email Sent? | Why |
+|--------|-------------|-----|
+| Admin uploads CSV | ❌ None | Admin-initiated, no automatic emails |
+| Admin clicks "Add Person" | ❌ None | Adding to qualified list, not registering |
+| Admin imports qualifiers | ❌ None | Same as CSV upload |
+
+**This is correct behavior** - CSV-uploaded users don't receive emails until they complete registration.
+
+---
+
+## Why No "Qualified" Badge Shows
+
+### Current Design Decision
+
+The "Qualified" concept is **not exposed visually** because:
+
+1. **All people on the Attendees page for a qualified-only event are implicitly qualified** - they wouldn't be on the list otherwise
+2. The page filter allows: "All / Registered / Not Registered"
+3. "Not Registered" = Qualified but hasn't registered yet
+
+### Page Header Shows Counts
+
+Line 1497-1498:
+```typescript
+{eventFilter !== "all" && qualifiers && ` (${registrations?.length ?? 0} registered, ${qualifiers.filter(q => !isQualifierRegistered(q)).length} pending)`}
+```
+
+Shows: `"63 people (0 registered, 63 pending)"`
+
+---
+
+## Potential Improvements (Optional)
+
+While the current system is correct, here are optional enhancements:
+
+### Option A: Add "Pending" Badge (Recommended)
+
+**Pros**: More visually clear that person is qualified but awaiting registration
+**Cons**: Minor UI change
+
+```typescript
+case "status":
+  return person.isRegistered && reg ? (
+    <StatusBadge status={reg.status} />
+  ) : (
+    <Badge variant="outline">Pending</Badge> // Instead of "Not Registered"
+  );
+```
+
+### Option B: Add Explicit "Qualified" Column
+
+**Pros**: Shows qualification status explicitly
+**Cons**: Redundant - presence in list already indicates qualification
+
+### Option C: Keep Current Design (Simplest)
+
+**Pros**: No changes needed, system works correctly
+**Cons**: User confusion about what "Not Registered" means
+
+---
+
+## Answer to User's Original Questions
+
+1. **Are CSV-uploaded attendees correctly marked as qualified?**
+   ✅ YES - They're in the `qualified_registrants` table, which IS the qualification
+
+2. **Is qualification implicit vs explicit?**
+   IMPLICIT - Presence in `qualified_registrants` table = qualified
+
+3. **Why does UI show no qualification state?**
+   BY DESIGN - "Not Registered" means qualified but hasn't registered yet. The count shows "X pending" which indicates unregistered qualifiers.
+
+4. **Are emails triggered for uploaded attendees?**
+   ❌ NO - Correct behavior. No emails until they self-register.
+
+---
+
+## Conclusion
+
+**No bugs found.** The system is working as designed:
+- CSV upload → Creates qualifiers (no emails)
+- Qualifiers can register → Creates registration (confirmation email sent)
+- UI shows "Not Registered" for qualifiers who haven't completed registration
+- Page header shows count of pending vs registered
+
+---
+
+## Recommended Fix: Clarify UI Status for Non-Registered Qualifiers
+
+If the user wants clearer visual indication, we can:
+
+1. Change "Not Registered" text to "Pending" or "Qualified - Not Registered"
+2. Use a light badge instead of gray text
+3. Add tooltip explaining the status
+
+**Implementation effort**: ~10 minutes for UI-only change
+
+---
+
+**STOP**: Awaiting user feedback on whether they want the UI clarification or if the current design is acceptable now that the behavior is understood.

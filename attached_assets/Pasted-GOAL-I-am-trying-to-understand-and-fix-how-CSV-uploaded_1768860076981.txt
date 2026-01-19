@@ -1,0 +1,54 @@
+GOAL
+I am trying to understand and fix how CSV-uploaded attendees are handled for Qualified-Only events (OTP required) in our Events platform.
+
+CURRENT PROBLEM
+I uploaded ~60 users via CSV into a Qualified-Only event in production.
+These users ARE intended to be qualified and allowed to register.
+However, when viewing the Attendees list, they show no visible "Qualified" status or indicator.
+Additionally, emails must NOT be sent to these users until they have actually registered or are explicitly marked as registered.
+
+I want to confirm:
+1) Whether CSV-uploaded attendees are being correctly marked as qualified
+2) Whether qualification is implicit vs explicit in the data model
+3) Why the UI shows no qualification state
+4) That no emails are triggered for uploaded attendees unless they register
+
+WHAT I WANT YOU TO DO
+• Research my codebase
+• Find the relevant files, database tables, and logic related to:
+  - CSV attendee uploads
+  - Qualified-only events
+  - OTP verification
+  - Attendee qualification state
+  - Email triggering logic
+• Determine whether uploaded attendees SHOULD be explicitly marked as `qualified = true`
+  or whether qualification is inferred another way
+• Identify why the Admin Attendees UI shows no qualification indicator
+• Verify that NO emails are sent on:
+  - CSV upload
+  - Admin “Add Person”
+  - Qualification import
+• Identify any bugs, missing flags, or incorrect assumptions
+• Develop a clear fix plan
+• Write the plan to Instructions.md
+
+SPECIFIC AREAS TO INVESTIGATE
+• server/routes/admin (CSV upload endpoints)
+• qualification / qualifiedRegistrants logic
+• registration vs qualification vs pending states
+• attendee table fields (qualified, registered, status, etc.)
+• email triggers (Iterable / event hooks)
+• UI logic that determines what status is shown in the Attendees list
+
+IMPORTANT CONSTRAINTS
+• Qualified-only events must allow ONLY these users to register
+• Uploaded users should NOT receive emails until they complete registration
+• “Qualified” should either be:
+  - Clearly visible in the admin UI, OR
+  - Clearly documented as implicit behavior (if intentional)
+
+DELIVERABLE
+Write a clear diagnosis and step-by-step fix plan to Instructions.md.
+If there are multiple valid approaches, document the tradeoffs and recommend one.
+
+Do NOT make changes yet — only analyze and write the plan.
