@@ -1929,28 +1929,29 @@ export default function RegistrationPage() {
           <div className="w-full max-w-4xl p-4 md:p-8 space-y-8">
             {renderHeader()}
             <ThankYouSection content={content} />
-          <div className="max-w-md mx-auto p-6 text-center space-y-6">
-            {completedRegistrationId && (
-              <div className="flex flex-col items-center gap-3">
-                <h3 className="text-sm font-medium text-foreground">
-                  {language === "es" ? "Tu Código QR de Registro" : "Your Check-In QR Code"}
-                </h3>
-                <RegistrationQRCode 
-                  registrationId={completedRegistrationId}
-                  eventName={eventName}
-                  size={180}
-                  showDownload={true}
-                />
-                <p className="text-xs text-muted-foreground">
-                  {customQrInstructions}
-                </p>
-              </div>
-            )}
-            <div className="text-sm text-muted-foreground">
-              <p className="font-medium">{eventName}</p>
-              {formattedDate && (
-                <p>{format(formattedDate, "MMMM d, yyyy")}</p>
+            <div className="max-w-md mx-auto p-6 text-center space-y-6">
+              {completedRegistrationId && (
+                <div className="flex flex-col items-center gap-3">
+                  <h3 className="text-sm font-medium text-foreground">
+                    {language === "es" ? "Tu Código QR de Registro" : "Your Check-In QR Code"}
+                  </h3>
+                  <RegistrationQRCode 
+                    registrationId={completedRegistrationId}
+                    eventName={eventName}
+                    size={180}
+                    showDownload={true}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {customQrInstructions}
+                  </p>
+                </div>
               )}
+              <div className="text-sm text-muted-foreground">
+                <p className="font-medium">{eventName}</p>
+                {formattedDate && (
+                  <p>{format(formattedDate, "MMMM d, yyyy")}</p>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -2058,173 +2059,185 @@ export default function RegistrationPage() {
       return renderNotQualifiedMessage();
     }
 
+    // Add event header to verification pages
+    const verificationHeader = event?.headerImageUrl ? (
+      <div className="w-full h-48 md:h-64 overflow-hidden relative mb-8">
+        <img 
+          src={event.headerImageUrl} 
+          alt={event.name} 
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-black/20" />
+      </div>
+    ) : null;
+
     if (verificationStep === "email") {
       return (
-        <Card id="verification-section">
-          <CardHeader className="text-center">
-            <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-              <Mail className="w-6 h-6 text-muted-foreground" />
-            </div>
-            <CardTitle className="text-foreground">
-              {language === "es" 
-                ? (loginHeroContent?.headlineEs || "Verifique su identidad")
-                : (loginHeroContent?.headline || "Verify Your Identity")}
-            </CardTitle>
-            <CardDescription className="text-muted-foreground">
-              {qualifiedVerifiedMode 
-                ? (language === "es" 
-                    ? "Ingrese su ID de distribuidor o correo electrónico para verificar su elegibilidad"
-                    : "Enter your distributor ID or email to verify your eligibility")
-                : (language === "es" 
-                    ? (loginHeroContent?.subheadlineEs || "Ingrese su correo electronico para recibir un codigo de verificacion")
-                    : (loginHeroContent?.subheadline || "Enter your email to receive a verification code"))}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* For qualified_verified mode: Email OR Distributor ID (at least one required) */}
-            {qualifiedVerifiedMode && (
-              <>
+        <div className="flex flex-col items-center w-full">
+          {verificationHeader}
+          <div className="w-full max-w-md px-4">
+            <Card id="verification-section">
+              <CardHeader className="text-center">
+                <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                  <Mail className="w-6 h-6 text-muted-foreground" />
+                </div>
+                <CardTitle className="text-foreground">
+                  {language === "es" 
+                    ? (loginHeroContent?.headlineEs || "Verifique su identidad")
+                    : (loginHeroContent?.headline || "Verify Your Identity")}
+                </CardTitle>
+                <CardDescription className="text-muted-foreground">
+                  {qualifiedVerifiedMode 
+                    ? (language === "es" 
+                        ? "Ingrese su ID de distribuidor o correo electrónico para verificar su elegibilidad"
+                        : "Enter your distributor ID or email to verify your eligibility")
+                    : (language === "es" 
+                        ? (loginHeroContent?.subheadlineEs || "Ingrese su correo electronico para recibir un codigo de verificacion")
+                        : (loginHeroContent?.subheadline || "Enter your email to receive a verification code"))}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* For qualified_verified mode: Email OR Distributor ID (at least one required) */}
+                {qualifiedVerifiedMode && (
+                  <>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">
+                        {language === "es" ? "ID de Distribuidor" : "Distributor ID"}
+                      </label>
+                      <Input
+                        type="text"
+                        placeholder={language === "es" ? "Su ID de distribuidor" : "Your distributor ID"}
+                        value={verificationDistributorId}
+                        onChange={(e) => setVerificationDistributorId(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
+                        data-testid="input-verification-distributor-id"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                      <div className="flex-1 h-px bg-border" />
+                      <span>{language === "es" ? "o" : "or"}</span>
+                      <div className="flex-1 h-px bg-border" />
+                    </div>
+                  </>
+                )}
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">
-                    {language === "es" ? "ID de Distribuidor" : "Distributor ID"}
+                    {language === "es" ? "Correo Electrónico" : "Email"}{!qualifiedVerifiedMode && " *"}
                   </label>
                   <Input
-                    type="text"
-                    placeholder={language === "es" ? "Su ID de distribuidor" : "Your distributor ID"}
-                    value={verificationDistributorId}
-                    onChange={(e) => setVerificationDistributorId(e.target.value)}
+                    type="email"
+                    placeholder={language === "es" ? "correo@ejemplo.com" : "email@example.com"}
+                    value={verificationEmail}
+                    onChange={(e) => setVerificationEmail(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
-                    data-testid="input-verification-distributor-id"
+                    data-testid="input-verification-email"
                   />
                 </div>
-                <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                  <div className="flex-1 h-px bg-border" />
-                  <span>{language === "es" ? "o" : "or"}</span>
-                  <div className="flex-1 h-px bg-border" />
-                </div>
-              </>
-            )}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
-                {language === "es" ? "Correo Electrónico" : "Email"}{!qualifiedVerifiedMode && " *"}
-              </label>
-              <Input
-                type="email"
-                placeholder={language === "es" ? "correo@ejemplo.com" : "email@example.com"}
-                value={verificationEmail}
-                onChange={(e) => setVerificationEmail(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
-                data-testid="input-verification-email"
-              />
-            </div>
-            {qualifiedVerifiedMode && (
-              <p className="text-xs text-muted-foreground text-center">
-                {language === "es" 
-                  ? "Ingrese su ID de distribuidor O correo electrónico (solo uno es necesario)"
-                  : "Enter your Distributor ID OR Email (only one is needed)"}
-              </p>
-            )}
-            <Button 
-              onClick={handleSendOtp} 
-              disabled={isVerifying || (qualifiedVerifiedMode ? (!verificationEmail && !verificationDistributorId) : !verificationEmail)}
-              className="w-full"
-              data-testid="button-send-code"
-            >
-              {isVerifying && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              {qualifiedVerifiedMode 
-                ? (language === "es" ? "Verificar elegibilidad" : "Verify Eligibility")
-                : (language === "es" ? "Enviar codigo" : "Send Code")}
-            </Button>
-          </CardContent>
-        </Card>
+                {qualifiedVerifiedMode && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    {language === "es" 
+                      ? "Ingrese su ID de distribuidor O correo electrónico (solo uno es necesario)"
+                      : "Enter your Distributor ID OR Email (only one is needed)"}
+                  </p>
+                )}
+                <Button 
+                  onClick={handleSendOtp} 
+                  disabled={isVerifying || (qualifiedVerifiedMode ? (!verificationEmail && !verificationDistributorId) : !verificationEmail)}
+                  className="w-full"
+                  data-testid="button-send-code"
+                >
+                  {isVerifying && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  {qualifiedVerifiedMode 
+                    ? (language === "es" ? "Verificar elegibilidad" : "Verify Eligibility")
+                    : (language === "es" ? "Enviar codigo" : "Send Code")}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       );
     }
 
     if (verificationStep === "otp") {
       return (
-        <Card>
-          <CardHeader className="text-center">
-            <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-              <ShieldCheck className="w-6 h-6 text-muted-foreground" />
-            </div>
-            <CardTitle className="text-foreground">
-              {language === "es" ? "Ingrese el codigo" : "Enter Verification Code"}
-            </CardTitle>
-            <CardDescription className="text-muted-foreground">
-              {language === "es" 
-                ? `Enviamos un codigo de 6 digitos a ${verificationEmail}`
-                : `We sent a 6-digit code to ${verificationEmail}`}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex justify-center">
-              <InputOTP
-                maxLength={6}
-                value={otpCode}
-                onChange={(value) => setOtpCode(value)}
-                onComplete={handleVerifyOtp}
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                autoFocus
-                data-testid="input-otp-code"
-              >
-                <InputOTPGroup>
-                  <InputOTPSlot index={0} />
-                  <InputOTPSlot index={1} />
-                  <InputOTPSlot index={2} />
-                  <InputOTPSlot index={3} />
-                  <InputOTPSlot index={4} />
-                  <InputOTPSlot index={5} />
-                </InputOTPGroup>
-              </InputOTP>
-            </div>
-            <Button 
-              onClick={handleVerifyOtp} 
-              disabled={isVerifying || otpCode.length !== 6}
-              className="w-full"
-              data-testid="button-verify-code"
-            >
-              {isVerifying && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              {language === "es" ? "Verificar" : "Verify"}
-            </Button>
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                setOtpCode("");
-                handleSendOtp();
-              }}
-              disabled={isVerifying}
-              className="w-full"
-              data-testid="button-resend-code"
-            >
-              {isVerifying && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              {language === "es" ? "Reenviar código" : "Resend Code"}
-            </Button>
-            <Button 
-              variant="ghost" 
-              onClick={() => {
-                setVerificationStep("email");
-                setOtpCode("");
-                setVerificationSessionToken(null); // Clear session token for security
-              }}
-              className="w-full"
-              data-testid="button-back-to-email"
-            >
-              {language === "es" ? "Usar otro correo" : "Use a different email"}
-            </Button>
-          </CardContent>
-        </Card>
+        <div className="flex flex-col items-center w-full">
+          {verificationHeader}
+          <div className="w-full max-w-md px-4">
+            <Card>
+              <CardHeader className="text-center">
+                <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                  <ShieldCheck className="w-6 h-6 text-muted-foreground" />
+                </div>
+                <CardTitle className="text-foreground">
+                  {language === "es" ? "Ingrese el codigo" : "Enter Verification Code"}
+                </CardTitle>
+                <CardDescription className="text-muted-foreground">
+                  {language === "es" 
+                    ? `Enviamos un codigo de 6 digitos a ${verificationEmail}`
+                    : `We sent a 6-digit code to ${verificationEmail}`}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex justify-center">
+                  <InputOTP
+                    maxLength={6}
+                    value={otpCode}
+                    onChange={(value) => setOtpCode(value)}
+                    onComplete={handleVerifyOtp}
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    autoFocus
+                    data-testid="input-otp-code"
+                  >
+                    <InputOTPGroup>
+                      <InputOTPSlot index={0} />
+                      <InputOTPSlot index={1} />
+                      <InputOTPSlot index={2} />
+                      <InputOTPSlot index={3} />
+                      <InputOTPSlot index={4} />
+                      <InputOTPSlot index={5} />
+                    </InputOTPGroup>
+                  </InputOTP>
+                </div>
+                <Button 
+                  onClick={handleVerifyOtp} 
+                  disabled={isVerifying || otpCode.length !== 6}
+                  className="w-full"
+                  data-testid="button-verify-code"
+                >
+                  {isVerifying && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  {language === "es" ? "Verificar" : "Verify"}
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setOtpCode("");
+                    handleSendOtp();
+                  }}
+                  disabled={isVerifying}
+                  className="w-full"
+                  data-testid="button-resend-code"
+                >
+                  {isVerifying && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  {language === "es" ? "Reenviar código" : "Resend Code"}
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  onClick={() => {
+                    setVerificationStep("email");
+                    setOtpCode("");
+                    setVerificationSessionToken(null); // Clear session token for security
+                  }}
+                  className="w-full"
+                  data-testid="button-back-to-email"
+                >
+                  {language === "es" ? "Usar otro correo" : "Use a different email"}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       );
-    }
-
-    return null;
-  };
-
-  // Not qualified message with helpful guidance
-  const renderNotQualifiedMessage = () => {
-    const contactEmail = "americasevent@unicity.com";
-    return (
-      <Card className="border-destructive">
         <CardHeader className="text-center">
           <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
             <AlertCircle className="w-6 h-6 text-destructive" />
