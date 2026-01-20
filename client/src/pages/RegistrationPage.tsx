@@ -288,6 +288,18 @@ export default function RegistrationPage() {
   const { toast } = useToast();
   const { theme } = useTheme();
   const params = useParams<{ eventId: string }>();
+
+  // Language parameter detection
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const langParam = urlParams.get("lang") || urlParams.get("language");
+    if (langParam === "es" || langParam === "en") {
+      if (langParam !== language) {
+        setLanguage(langParam);
+      }
+    }
+  }, []);
+
   const [isSuccess, setIsSuccess] = useState(false);
   
   // Verification flow state
