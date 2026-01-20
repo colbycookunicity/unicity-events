@@ -210,9 +210,14 @@ export default function EventFormPage() {
     queryKey: ["/api/form-templates"],
   });
 
+  // Track if form has been initialized to avoid unnecessary resets
+  const [formInitialized, setFormInitialized] = useState(false);
+  
   useEffect(() => {
-    if (event) {
-      console.log("[DEBUG] Loading event data - formTemplateId from API:", (event as any).formTemplateId);
+    // Only reset form when event is loaded AND (formTemplates are loaded OR we don't need them)
+    // This prevents the race condition where event loads before templates
+    if (event && formTemplates.length > 0) {
+      console.log("[DEBUG] Loading event data - formTemplateId from API:", (event as any).formTemplateId, "formTemplates count:", formTemplates.length);
       form.reset({
         name: event.name,
         nameEs: event.nameEs || "",
@@ -243,8 +248,9 @@ export default function EventFormPage() {
       if ((event as any).formFields) {
         setCustomFields((event as any).formFields as FormFieldDefinition[]);
       }
+      setFormInitialized(true);
     }
-  }, [event, form]);
+  }, [event, form, formTemplates.length]);
 
   const createMutation = useMutation({
     mutationFn: async (data: EventFormData) => {
