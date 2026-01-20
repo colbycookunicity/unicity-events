@@ -1,0 +1,54 @@
+GOAL
+Update the Events platform email system so that each email type per event uses a single Iterable campaign, and language selection is handled entirely by locale (e.g., en-US, es-US) sent to Iterable — not by separate English/Spanish campaign mappings.
+
+BACKGROUND
+Currently, the Events platform allows admins to select separate English and Spanish Iterable campaigns per email type (Registration Confirmation, Check-In, Qualification Granted, etc.).
+
+This is no longer the desired architecture.
+
+Iterable already supports locale-based rendering within a single campaign, and we can configure localized templates (en-US, es-US, etc.) directly inside Iterable.
+
+Therefore:
+- The Events platform should only reference ONE Iterable campaign per email type per event.
+- The platform must send the attendee’s locale (e.g., en-US, es-US) to Iterable so Iterable selects the correct localized template.
+- Language logic should NOT be controlled in the Events admin UI.
+
+WHAT I WANT YOU TO DO
+1. Research the current codebase:
+   - Identify where email campaign mappings are stored (event config, DB schema, admin UI).
+   - Identify where Iterable events are triggered and payloads are constructed.
+   - Locate how language or Spanish/English selection is currently determined.
+
+2. Update the data model and admin UI:
+   - Remove or deprecate separate English Campaign and Spanish Campaign fields.
+   - Replace them with a single campaign selector per email type (e.g., registration_confirmation_campaign_id).
+   - Ensure existing events migrate cleanly (pick English as default if both exist).
+
+3. Update Iterable payload logic:
+   - Confirm that a `locale` field is sent with every Iterable event (examples: "en-US", "es-US").
+   - Locale should be derived from the registrant’s language/market (existing logic if present).
+   - Ensure locale is included consistently for:
+     - Registration Confirmation
+     - Check-In Notification
+     - Qualification Granted
+     - Registration Canceled
+     - Any other email-triggering events
+
+4. Ensure correct behavior:
+   - Iterable receives ONE campaign ID per email type.
+   - Iterable selects the correct localized template based on `locale`.
+   - No language branching logic remains in the Events platform.
+
+5. Clean up:
+   - Remove unused Spanish/English campaign fields from UI and backend.
+   - Update any types, validations, or admin forms accordingly.
+
+DELIVERABLE
+- A clear implementation plan written to Instructions.md
+- Code changes that:
+  - Simplify email campaign configuration to one campaign per email type
+  - Reliably send `locale` to Iterable
+- Confirmation notes in Instructions.md explaining:
+  - How locale is determined
+  - What Iterable expects
+  - How admins should now configure email campaigns going forward

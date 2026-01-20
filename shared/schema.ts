@@ -136,16 +136,20 @@ export type RegistrationSettings = {
 
 /**
  * Per-event Iterable campaign configuration.
- * Maps email types to campaign IDs by language.
+ * Maps email types to a single campaign ID (Iterable handles locale-based template selection).
  * If not set for an event, falls back to environment variable campaigns.
+ * 
+ * MIGRATION (Jan 2026): Changed from { en?: number; es?: number } per type to just number.
+ * The platform now sends `locale` (e.g., "en-US", "es-US") to Iterable, which handles
+ * language-specific template rendering within a single campaign.
  */
 export type EventIterableCampaigns = {
-  confirmation?: { en?: number; es?: number };
-  checkedIn?: { en?: number; es?: number };
-  qualificationGranted?: { en?: number; es?: number };
-  registrationCanceled?: { en?: number; es?: number };
-  registrationTransferred?: { en?: number; es?: number };
-  registrationUpdate?: { en?: number; es?: number };
+  confirmation?: number;
+  checkedIn?: number;
+  qualificationGranted?: number;
+  registrationCanceled?: number;
+  registrationTransferred?: number;
+  registrationUpdate?: number;
 };
 
 // Events table
