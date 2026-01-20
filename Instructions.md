@@ -6550,3 +6550,39 @@ If the user wants clearer visual indication, we can:
 ---
 
 **STOP**: Awaiting user feedback on whether they want the UI clarification or if the current design is acceptable now that the behavior is understood.
+
+---
+
+# UI Wording Update: Qualified-Only Events
+
+**Status**: ✅ IMPLEMENTED (January 19, 2026)
+
+---
+
+## Change Summary
+
+Updated the Admin Attendees table UI to show clearer wording for people who are qualified but haven't registered yet.
+
+### Before
+- Status column showed: "Not Registered" (gray text)
+- Filter dropdown showed: "Not Registered"
+
+### After
+- Status column shows: "Qualified – Awaiting Registration" (outline badge) — **only for qualified-only events**
+- Filter dropdown shows: "Awaiting Registration"
+
+### Logic
+- For `qualified_verified` events: Shows "Qualified – Awaiting Registration" badge
+- For `open_verified` / `open_anonymous` events: Shows "Not Registered" (unchanged)
+
+### Files Changed
+- `client/src/pages/AttendeesPage.tsx` — Status column rendering and filter labels
+
+### What Was NOT Changed
+- Backend logic
+- Database schema
+- CSV upload behavior
+- Email triggers
+- Qualification rules
+
+---

@@ -1314,7 +1314,13 @@ export default function AttendeesPage() {
         return person.isRegistered && reg ? (
           <StatusBadge status={reg.status} />
         ) : (
-          <span className="text-muted-foreground">Not Registered</span>
+          selectedEvent?.registrationMode === "qualified_verified" ? (
+            <Badge variant="outline" className="text-xs" data-testid={`status-pending-${person.id}`}>
+              Qualified – Awaiting Registration
+            </Badge>
+          ) : (
+            <span className="text-muted-foreground">Not Registered</span>
+          )
         );
       case "swagStatus":
         return reg ? <StatusBadge status={reg.swagStatus || "pending"} type="swag" /> : <span className="text-muted-foreground">-</span>;
@@ -1670,7 +1676,7 @@ export default function AttendeesPage() {
             <SelectContent>
               <SelectItem value="all">All People</SelectItem>
               <SelectItem value="registered">Registered</SelectItem>
-              <SelectItem value="not_registered">Not Registered</SelectItem>
+              <SelectItem value="not_registered">Awaiting Registration</SelectItem>
             </SelectContent>
           </Select>
         )}
@@ -1681,7 +1687,7 @@ export default function AttendeesPage() {
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>
             <SelectItem value="qualified">{t("qualified")}</SelectItem>
-            <SelectItem value="pending">Not Registered</SelectItem>
+            <SelectItem value="pending">Awaiting Registration</SelectItem>
             <SelectItem value="registered">{t("registered")}</SelectItem>
             <SelectItem value="checked_in">{t("checkedIn")}</SelectItem>
             <SelectItem value="not_coming">{t("notComing")}</SelectItem>
