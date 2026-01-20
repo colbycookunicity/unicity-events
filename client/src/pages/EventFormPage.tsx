@@ -126,6 +126,7 @@ const eventFormSchema = z.object({
   thankYouMessageEs: z.string().optional(),
   thankYouQrInstructions: z.string().optional(),
   thankYouQrInstructionsEs: z.string().optional(),
+  headerImageUrl: z.string().optional(),
 }).refine(
   (data) => {
     if (data.startDate && data.endDate) {
@@ -202,6 +203,7 @@ export default function EventFormPage() {
       thankYouMessageEs: "",
       thankYouQrInstructions: "",
       thankYouQrInstructionsEs: "",
+      headerImageUrl: "",
     },
   });
 
@@ -243,6 +245,7 @@ export default function EventFormPage() {
         thankYouMessageEs: (event as any).thankYouMessageEs || "",
         thankYouQrInstructions: (event as any).thankYouQrInstructions || "",
         thankYouQrInstructionsEs: (event as any).thankYouQrInstructionsEs || "",
+        headerImageUrl: (event as any).headerImageUrl || "",
       });
       // Load custom fields if present
       if ((event as any).formFields) {
@@ -564,6 +567,22 @@ export default function EventFormPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="headerImageUrl"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel>Event Header Image URL</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="https://example.com/image.png or /api/objects/..." data-testid="input-event-header-image" />
+                      </FormControl>
+                      <FormDescription>
+                        Branding image shown at the top of all registration steps.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <FormField
                   control={form.control}
                   name="name"
