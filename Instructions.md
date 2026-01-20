@@ -1,6 +1,6 @@
 # Data Consistency - Source of Truth Documentation
 
-**Last Updated**: January 18, 2026
+**Last Updated**: January 20, 2026
 
 ---
 
@@ -78,7 +78,58 @@ Now, NO automatic emails are sent for admin-initiated qualifier/registration man
 
 **Phase 1 Status**: ✅ COMPLETE (January 17, 2026)  
 **Phase 2 Status**: ✅ COMPLETE (January 17, 2026)  
+**Phase 3 Status**: ✅ COMPLETE (January 20, 2026) - Locale-based Template Selection  
 **Created**: January 17, 2026
+
+---
+
+### Phase 3: Single Campaign with Locale Support (COMPLETE - January 2026)
+
+#### Summary
+
+Migrated from dual English/Spanish campaign IDs per email type to a single campaign ID, with Iterable handling locale-based template selection.
+
+#### Key Changes
+
+1. **Schema Update** (`shared/schema.ts`):
+   - Changed `EventIterableCampaigns` from `{ en?: number; es?: number }` per type to just `number`
+   - Single campaign ID per email type (confirmation, checkedIn, etc.)
+
+2. **Backend Changes** (`server/iterable.ts`):
+   - Updated `getCampaignIdForEvent()` to remove language branching
+   - Added `locale` field to all email payloads (`en-US` or `es-US`)
+   - Iterable uses locale to select the correct localized template within a campaign
+   - Backward compatibility: legacy `{ en?, es? }` data is read (prefers English, falls back to Spanish)
+
+3. **Environment Variables**:
+   - Simplified from `ITERABLE_*_CAMPAIGN_ID` + `ITERABLE_*_CAMPAIGN_ID_ES` to single `ITERABLE_*_CAMPAIGN_ID`
+   - Required env vars: `ITERABLE_EVENT_CONFIRMATION_CAMPAIGN_ID`, `ITERABLE_CHECKED_IN_CAMPAIGN_ID`
+
+4. **Admin UI** (`client/src/components/IterableCampaignSelector.tsx`):
+   - Changed from dual EN/ES dropdowns to single campaign selector per email type
+   - Displays explanation that Iterable handles locale-based template selection
+
+#### How Locale Works
+
+When sending emails, the platform:
+1. Determines the user's preferred language (from registration form or URL `?lang=` parameter)
+2. Converts language code to locale: `en` → `en-US`, `es` → `es-US`
+3. Includes `locale` in the email `dataFields` sent to Iterable
+4. Iterable selects the appropriate localized template within the campaign
+
+#### Iterable Template Setup
+
+For each campaign in Iterable:
+1. Create a base template (English)
+2. Add locale variant for Spanish (`es-US`)
+3. Iterable automatically selects based on the `locale` field in dataFields
+
+#### Migration Notes
+
+- Existing events with legacy `{ en?: number; es?: number }` campaign data continue working
+- New events use simplified `number` format
+- No database migration required (JSONB column accepts both formats)
+- Environment variables: can remove `_ES` variants after updating Iterable templates
 
 ---
 
@@ -93,10 +144,12 @@ Phase 1 implemented the backend data model for per-event Iterable campaigns:
 5. ✅ Added `campaignSource` field to structured logs ('event' | 'env_fallback' | 'none')
 6. ✅ Verified backward compatibility - existing events use env var fallback
 
-**Campaign Resolution Priority:**
-1. `event.iterableCampaigns[emailType][language]` → Event-specific
-2. `process.env.ITERABLE_{TYPE}_CAMPAIGN_ID[_ES]` → Env var fallback
+**Campaign Resolution Priority (Updated for Phase 3):**
+1. `event.iterableCampaigns[emailType]` → Event-specific campaign (single ID)
+2. `process.env.ITERABLE_{TYPE}_CAMPAIGN_ID` → Env var fallback (single campaign)
 3. `0` → Skip with warning log
+
+**Locale sent in dataFields** for Iterable template selection
 
 ---
 
