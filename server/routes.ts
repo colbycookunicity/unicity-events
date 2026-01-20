@@ -108,6 +108,39 @@ function extractPhoneFromFormData(
   return undefined;
 }
 
+// Helper function to build acknowledgmentDetails for checkbox fields
+// Stores IP address and timestamp for each checkbox acknowledgment
+function buildAcknowledgmentDetails(
+  formData: Record<string, any> | undefined,
+  formFields: any[] | undefined | null,
+  clientIp: string
+): Record<string, { ip: string; timestamp: string }> | null {
+  if (!formData || !formFields || !Array.isArray(formFields)) return null;
+  
+  const acknowledgmentDetails: Record<string, { ip: string; timestamp: string }> = {};
+  const timestamp = new Date().toISOString();
+  
+  // Find all checkbox fields that are checked (value is true)
+  for (const field of formFields) {
+    const fieldType = field.type?.toLowerCase();
+    const fieldName = field.name || field.id;
+    
+    if (fieldType === 'checkbox' && fieldName) {
+      const value = formData[fieldName];
+      // Only track if the checkbox is actually checked
+      if (value === true) {
+        acknowledgmentDetails[fieldName] = {
+          ip: clientIp,
+          timestamp: timestamp,
+        };
+      }
+    }
+  }
+  
+  // Return null if no checkboxes were found
+  return Object.keys(acknowledgmentDetails).length > 0 ? acknowledgmentDetails : null;
+}
+
 // Helper function to get default sections for each page type
 function getDefaultSectionsForPageType(pageType: string, event: { name: string; nameEs?: string | null; heroImageUrl?: string | null }) {
   const defaultSections: Array<{ type: string; content: Record<string, unknown> }> = [];
@@ -2236,15 +2269,29 @@ export async function registerRoutes(
       }
 
       // Create new registration (use normalizedEmail to prevent duplicates)
+      // Get form fields from event or template for phone extraction and acknowledgment tracking
+      let formFields: any[] | null = event.formFields as any[] || null;
+      if (!formFields && (event as any).formTemplateId) {
+        const template = await storage.getFormTemplate((event as any).formTemplateId);
+        formFields = template?.fields as any[] || null;
+      }
+      
       // Extract phone from custom formData fields if phone wasn't provided directly
       let phoneValue = req.body.phone;
       if ((!phoneValue || !phoneValue.trim()) && req.body.formData) {
-        const customPhone = extractPhoneFromFormData(req.body.formData, event.formFields as any[]);
+        const customPhone = extractPhoneFromFormData(req.body.formData, formFields);
         if (customPhone) {
           phoneValue = customPhone;
           console.log('[DataFlow] Using phone from custom formData field for new registration:', customPhone);
         }
       }
+      
+      // Build acknowledgment details for checkbox fields (IP and timestamp tracking)
+      const acknowledgmentDetails = buildAcknowledgmentDetails(
+        req.body.formData,
+        formFields,
+        String(clientIp)
+      );
       
       console.log('[DataFlow] Creating registration - phone from request:', JSON.stringify({
         phone: phoneValue,
@@ -2276,6 +2323,7 @@ export async function registerRoutes(
         language: req.body.language || "en",
         status: "registered",
         formData: req.body.formData,
+        acknowledgmentDetails: acknowledgmentDetails,
         termsAccepted: req.body.termsAccepted,
         termsAcceptedAt: req.body.termsAccepted ? new Date() : null,
         termsAcceptedIp: req.body.termsAccepted ? String(clientIp) : null,
