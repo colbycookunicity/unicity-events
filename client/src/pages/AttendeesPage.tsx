@@ -1969,8 +1969,12 @@ export default function AttendeesPage() {
                           const displayLabel = field.label || field.name;
                           
                           // For checkbox fields, show shortened label with tooltip for full text
+                          // Also show IP and timestamp from acknowledgmentDetails
                           if (field.type === "checkbox") {
                             const needsTruncation = displayLabel.length > 60;
+                            const ackDetails = (selectedAttendee as Record<string, unknown>).acknowledgmentDetails as Record<string, { ip: string; timestamp: string }> | null;
+                            const fieldAck = ackDetails?.[field.name];
+                            
                             return (
                               <Tooltip key={field.name}>
                                 <TooltipTrigger asChild>
@@ -1978,7 +1982,15 @@ export default function AttendeesPage() {
                                     <span className="text-muted-foreground">
                                       {needsTruncation ? `${displayLabel.slice(0, 60)}...` : displayLabel}
                                     </span>
-                                    <span className="shrink-0">{value === true ? "Yes" : value === false ? "No" : "-"}</span>
+                                    <div className="text-right shrink-0">
+                                      <span>{value === true ? "Yes" : value === false ? "No" : "-"}</span>
+                                      {fieldAck && (
+                                        <div className="text-xs text-muted-foreground mt-0.5">
+                                          {format(new Date(fieldAck.timestamp), "MMM d, yyyy h:mm a")}
+                                          <span className="ml-1">({fieldAck.ip})</span>
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
                                 </TooltipTrigger>
                                 {needsTruncation && (
