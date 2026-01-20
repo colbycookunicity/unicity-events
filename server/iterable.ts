@@ -3,13 +3,19 @@ import type { EventIterableCampaigns } from "@shared/schema";
 const ITERABLE_API_KEY = process.env.ITERABLE_API_KEY;
 const ITERABLE_API_BASE = 'https://api.iterable.com/api';
 
-// Required campaign environment variables
+// Required campaign environment variables (single campaign per type - Iterable handles locales)
 const REQUIRED_CAMPAIGN_ENV_VARS = [
   'ITERABLE_EVENT_CONFIRMATION_CAMPAIGN_ID',
-  'ITERABLE_EVENT_CONFIRMATION_CAMPAIGN_ID_ES',
   'ITERABLE_CHECKED_IN_CAMPAIGN_ID',
-  'ITERABLE_CHECKED_IN_CAMPAIGN_ID_ES',
 ] as const;
+
+/**
+ * Convert language code to full locale for Iterable.
+ * Iterable uses locale to select the correct localized template within a campaign.
+ */
+function getLocaleFromLanguage(language: string): string {
+  return language === 'es' ? 'es-US' : 'en-US';
+}
 
 // Email type keys matching EventIterableCampaigns
 export type IterableEmailType = keyof EventIterableCampaigns;
@@ -130,39 +136,51 @@ function getCampaignId(envVarName: string): number {
  * Get campaign ID for an event with fallback to environment variables.
  * 
  * Resolution priority:
- * 1. event.iterableCampaigns[emailType][language] - Event-specific campaign
- * 2. Environment variable (e.g., ITERABLE_EVENT_CONFIRMATION_CAMPAIGN_ID_ES) - Fallback
+ * 1. event.iterableCampaigns[emailType] - Event-specific campaign (single ID, not per-language)
+ * 2. Environment variable (e.g., ITERABLE_EVENT_CONFIRMATION_CAMPAIGN_ID) - Fallback
  * 3. 0 (skip sending with warning log) - No campaign configured
+ * 
+ * NOTE: Language is no longer used for campaign selection. Iterable handles locale-based
+ * template rendering within a single campaign. The `locale` field (e.g., "en-US", "es-US")
+ * is sent in dataFields for Iterable to select the correct localized template.
  * 
  * @param event - Event object with optional iterableCampaigns
  * @param emailType - Type of email (confirmation, checkedIn, etc.)
- * @param language - Language code (en, es)
  * @returns Campaign ID or 0 if not configured
  */
 function getCampaignIdForEvent(
   event: { id?: string; name?: string; iterableCampaigns?: EventIterableCampaigns | null },
-  emailType: IterableEmailType,
-  language: string
+  emailType: IterableEmailType
 ): { campaignId: number; source: 'event' | 'env_fallback' | 'none' } {
-  const lang = language === 'es' ? 'es' : 'en';
   
-  // 1. Check event-specific campaign
-  const eventCampaign = event.iterableCampaigns?.[emailType]?.[lang];
-  if (eventCampaign && typeof eventCampaign === 'number' && eventCampaign > 0) {
-    log('info', `Using event campaign for ${emailType}/${lang}: ${eventCampaign}`, { 
+  // 1. Check event-specific campaign (new format: single campaign ID)
+  const eventCampaignValue = event.iterableCampaigns?.[emailType];
+  
+  // Handle both new format (number) and legacy format ({ en?: number; es?: number })
+  let eventCampaign: number | undefined;
+  if (typeof eventCampaignValue === 'number' && eventCampaignValue > 0) {
+    // New format: direct number
+    eventCampaign = eventCampaignValue;
+  } else if (eventCampaignValue && typeof eventCampaignValue === 'object') {
+    // Legacy format: { en?: number; es?: number } - prefer English, fall back to Spanish
+    const legacyValue = eventCampaignValue as { en?: number; es?: number };
+    eventCampaign = legacyValue.en || legacyValue.es;
+  }
+  
+  if (eventCampaign && eventCampaign > 0) {
+    log('info', `Using event campaign for ${emailType}: ${eventCampaign}`, { 
       eventId: event.id, 
       eventName: event.name 
     });
     return { campaignId: eventCampaign, source: 'event' };
   }
   
-  // 2. Fallback to environment variable
-  const baseEnvVar = EMAIL_TYPE_TO_ENV_VAR[emailType];
-  if (baseEnvVar) {
-    const envVarName = lang === 'es' ? `${baseEnvVar}_ES` : baseEnvVar;
+  // 2. Fallback to environment variable (single campaign, not language-specific)
+  const envVarName = EMAIL_TYPE_TO_ENV_VAR[emailType];
+  if (envVarName) {
     const envCampaign = getCampaignId(envVarName);
     if (envCampaign > 0) {
-      log('info', `Falling back to env campaign for ${emailType}/${lang}: ${envCampaign}`, { 
+      log('info', `Falling back to env campaign for ${emailType}: ${envCampaign}`, { 
         eventId: event.id, 
         eventName: event.name,
         envVar: envVarName 
@@ -172,7 +190,7 @@ function getCampaignIdForEvent(
   }
   
   // 3. No campaign configured
-  log('warn', `No campaign configured for ${emailType}/${lang}`, { 
+  log('warn', `No campaign configured for ${emailType}`, { 
     eventId: event.id, 
     eventName: event.name 
   });
@@ -299,8 +317,9 @@ export class IterableService {
     checkInQrPayload?: string | null,
     checkInToken?: string | null
   ): Promise<EmailResult> {
-    const { campaignId, source } = getCampaignIdForEvent(event, 'confirmation', language);
+    const { campaignId, source } = getCampaignIdForEvent(event, 'confirmation');
     const eventName = (language === 'es' && event.nameEs) ? event.nameEs : event.name;
+    const locale = getLocaleFromLanguage(language);
     const baseUrl = getBaseUrl();
 
     return this.sendEmailInternal({
@@ -319,6 +338,7 @@ export class IterableService {
         endDate: event.endDate,
         registrationId: registration.id,
         language,
+        locale, // Iterable uses this to select the correct localized template
         // QR code for check-in (CHECKIN:<eventId>:<registrationId>:<token>)
         checkInQrPayload: checkInQrPayload || null,
         // URL to generate QR image (can be used in Iterable template)
@@ -337,8 +357,9 @@ export class IterableService {
     event: any,
     language: string = 'en'
   ): Promise<EmailResult> {
-    const { campaignId, source } = getCampaignIdForEvent(event, 'registrationUpdate', language);
+    const { campaignId, source } = getCampaignIdForEvent(event, 'registrationUpdate');
     const eventName = (language === 'es' && event.nameEs) ? event.nameEs : event.name;
+    const locale = getLocaleFromLanguage(language);
 
     return this.sendEmailInternal({
       campaignId,
@@ -352,6 +373,7 @@ export class IterableService {
         eventUrl: buildEventUrl(event),
         registrationId: registration.id,
         language,
+        locale, // Iterable uses this to select the correct localized template
       },
     });
   }
@@ -362,8 +384,9 @@ export class IterableService {
     event: any,
     language: string = 'en'
   ): Promise<EmailResult> {
-    const { campaignId, source } = getCampaignIdForEvent(event, 'registrationCanceled', language);
+    const { campaignId, source } = getCampaignIdForEvent(event, 'registrationCanceled');
     const eventName = (language === 'es' && event.nameEs) ? event.nameEs : event.name;
+    const locale = getLocaleFromLanguage(language);
 
     return this.sendEmailInternal({
       campaignId,
@@ -380,6 +403,7 @@ export class IterableService {
         eventStartDate: formatDate(event.startDate, language),
         registrationId: registration.id,
         language,
+        locale, // Iterable uses this to select the correct localized template
       },
     });
   }
@@ -390,8 +414,9 @@ export class IterableService {
     event: any,
     language: string = 'en'
   ): Promise<EmailResult> {
-    const { campaignId, source } = getCampaignIdForEvent(event, 'registrationTransferred', language);
+    const { campaignId, source } = getCampaignIdForEvent(event, 'registrationTransferred');
     const eventName = (language === 'es' && event.nameEs) ? event.nameEs : event.name;
+    const locale = getLocaleFromLanguage(language);
 
     return this.sendEmailInternal({
       campaignId,
@@ -408,6 +433,7 @@ export class IterableService {
         eventStartDate: formatDate(event.startDate, language),
         registrationId: registration.id,
         language,
+        locale, // Iterable uses this to select the correct localized template
       },
     });
   }
@@ -420,8 +446,9 @@ export class IterableService {
     checkInQrPayload?: string | null,
     checkInToken?: string | null
   ): Promise<EmailResult> {
-    const { campaignId, source } = getCampaignIdForEvent(event, 'checkedIn', language);
+    const { campaignId, source } = getCampaignIdForEvent(event, 'checkedIn');
     const eventName = (language === 'es' && event.nameEs) ? event.nameEs : event.name;
+    const locale = getLocaleFromLanguage(language);
     const baseUrl = getBaseUrl();
 
     return this.sendEmailInternal({
@@ -439,6 +466,7 @@ export class IterableService {
         eventStartDate: formatDate(event.startDate, language),
         registrationId: registration.id,
         language,
+        locale, // Iterable uses this to select the correct localized template
         checkInQrPayload: checkInQrPayload || null,
         checkInQrImageUrl: checkInQrPayload 
           ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(checkInQrPayload)}`
@@ -454,8 +482,9 @@ export class IterableService {
     event: any,
     language: string = 'en'
   ): Promise<EmailResult> {
-    const { campaignId, source } = getCampaignIdForEvent(event, 'qualificationGranted', language);
+    const { campaignId, source } = getCampaignIdForEvent(event, 'qualificationGranted');
     const eventName = (language === 'es' && event.nameEs) ? event.nameEs : event.name;
+    const locale = getLocaleFromLanguage(language);
 
     return this.sendEmailInternal({
       campaignId,
@@ -472,6 +501,7 @@ export class IterableService {
         eventStartDate: formatDate(event.startDate, language),
         registrationId: registration.id,
         language,
+        locale, // Iterable uses this to select the correct localized template
       },
     });
   }
