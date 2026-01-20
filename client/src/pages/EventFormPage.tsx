@@ -212,6 +212,7 @@ export default function EventFormPage() {
 
   useEffect(() => {
     if (event) {
+      console.log("[DEBUG] Loading event data - formTemplateId from API:", (event as any).formTemplateId);
       form.reset({
         name: event.name,
         nameEs: event.nameEs || "",
