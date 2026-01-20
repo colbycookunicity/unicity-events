@@ -1792,6 +1792,8 @@ export async function registerRoutes(
 
   app.patch("/api/events/:id", authenticateToken, requireRole("admin", "event_manager"), requireMarketAccess() as any, async (req, res) => {
     try {
+      console.log("[DEBUG] PATCH /api/events - received formTemplateId:", req.body.formTemplateId, "typeof:", typeof req.body.formTemplateId);
+      
       // Normalize slug: empty/whitespace -> null
       const normalizedSlug = req.body.slug !== undefined 
         ? (req.body.slug?.trim() || null) 
@@ -1801,6 +1803,8 @@ export async function registerRoutes(
       const normalizedFormTemplateId = req.body.formTemplateId !== undefined
         ? (req.body.formTemplateId?.trim() || null)
         : undefined;
+      
+      console.log("[DEBUG] PATCH /api/events - normalizedFormTemplateId:", normalizedFormTemplateId);
       
       // Build updates object carefully, excluding undefined values
       const updates: Record<string, unknown> = {};
@@ -1840,7 +1844,10 @@ export async function registerRoutes(
       }
       if (req.body.registrationLayout !== undefined) updates.registrationLayout = req.body.registrationLayout;
       if (req.body.formFields !== undefined) updates.formFields = req.body.formFields;
-      if (normalizedFormTemplateId !== undefined) updates.formTemplateId = normalizedFormTemplateId;
+      if (normalizedFormTemplateId !== undefined) {
+        updates.formTemplateId = normalizedFormTemplateId;
+        console.log("[DEBUG] PATCH /api/events - adding formTemplateId to updates:", normalizedFormTemplateId);
+      }
       if (normalizedSlug !== undefined) updates.slug = normalizedSlug;
       if (req.body.defaultLanguage !== undefined) updates.defaultLanguage = req.body.defaultLanguage;
       

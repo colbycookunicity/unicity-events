@@ -278,17 +278,25 @@ export default function EventFormPage() {
   const onSubmit = (data: EventFormData) => {
     // Normalize slug: auto-format and convert empty string to undefined so backend stores null
     const normalizedSlug = data.slug ? normalizeSlug(data.slug) : undefined;
+    
+    // Explicitly handle formTemplateId - empty string should be sent as empty (backend converts to null)
+    const formTemplateId = data.formTemplateId || "";
+    
     const normalizedData: EventFormData = {
       ...data,
       slug: normalizedSlug || undefined,
+      // Explicitly include formTemplateId to ensure it's sent even when empty
+      formTemplateId,
       // Convert Eastern Time dates to UTC for storage
       startDate: convertEasternToUTC(data.startDate),
       endDate: convertEasternToUTC(data.endDate),
       qualificationStartDate: data.qualificationStartDate ? convertEasternToUTC(data.qualificationStartDate) : undefined,
       qualificationEndDate: data.qualificationEndDate ? convertEasternToUTC(data.qualificationEndDate) : undefined,
       // Include custom form fields only when no template is selected
-      formFields: !data.formTemplateId ? customFields : undefined,
+      formFields: !formTemplateId ? customFields : undefined,
     };
+    
+    console.log("Submitting event with formTemplateId:", formTemplateId);
     
     if (isEditing) {
       updateMutation.mutate(normalizedData);
