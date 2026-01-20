@@ -237,6 +237,9 @@ export const registrations = pgTable("registrations", {
   roomType: text("room_type"),
   // Custom form data for event-specific fields
   formData: jsonb("form_data"),
+  // Acknowledgment details - stores IP and timestamp for each checkbox acknowledgment
+  // Format: { "fieldName": { ip: string, timestamp: string } }
+  acknowledgmentDetails: jsonb("acknowledgment_details"),
   // Terms acceptance
   termsAccepted: boolean("terms_accepted").default(false),
   termsAcceptedAt: timestamp("terms_accepted_at"),
