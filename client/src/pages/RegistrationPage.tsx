@@ -1915,9 +1915,20 @@ export default function RegistrationPage() {
     if (thankYouSection) {
       const content = thankYouSection.content as ThankYouSectionContent;
       return (
-        <div className="min-h-screen bg-background">
-          {renderHeader()}
-          <ThankYouSection content={content} />
+        <div className="min-h-screen bg-background flex flex-col items-center">
+          {event?.headerImageUrl && (
+            <div className="w-full h-48 md:h-64 overflow-hidden relative">
+              <img 
+                src={event.headerImageUrl} 
+                alt={event.name} 
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-black/20" />
+            </div>
+          )}
+          <div className="w-full max-w-4xl p-4 md:p-8 space-y-8">
+            {renderHeader()}
+            <ThankYouSection content={content} />
           <div className="max-w-md mx-auto p-6 text-center space-y-6">
             {completedRegistrationId && (
               <div className="flex flex-col items-center gap-3">
@@ -1956,8 +1967,19 @@ export default function RegistrationPage() {
       : ((event as any).thankYouMessage || "Your registration has been completed. You will receive a confirmation email shortly.");
 
     return (
-      <div className="min-h-screen bg-background">
-        <header className="flex items-center justify-end gap-2 p-4">
+      <div className="min-h-screen bg-background flex flex-col items-center">
+        {event?.headerImageUrl && (
+          <div className="w-full h-48 md:h-64 overflow-hidden relative">
+            <img 
+              src={event.headerImageUrl} 
+              alt={event.name} 
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-black/20" />
+          </div>
+        )}
+        <div className="w-full max-w-4xl p-4 md:p-8 space-y-8">
+          <header className="flex items-center justify-end gap-2">
           <ThemeToggle />
           <LanguageToggle />
         </header>
@@ -3496,8 +3518,19 @@ export default function RegistrationPage() {
       <>
       {renderOtpDialog()}
       {renderLookupDialog()}
-      <div className="min-h-screen bg-background relative">
-        {renderHeader()}
+      <div className="min-h-screen bg-background relative flex flex-col items-center">
+        {event?.headerImageUrl && (
+          <div className="w-full h-48 md:h-64 overflow-hidden relative">
+            <img 
+              src={event.headerImageUrl} 
+              alt={event.name} 
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-black/20" />
+          </div>
+        )}
+        <div className="w-full max-w-4xl p-4 md:p-8 space-y-8">
+          {renderHeader()}
         
         {/* Use CMS intro section if available, otherwise use default hero */}
         {introSection ? (
@@ -3581,7 +3614,17 @@ export default function RegistrationPage() {
       <>
       {renderOtpDialog()}
       {renderLookupDialog()}
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background flex flex-col">
+        {event?.headerImageUrl && (
+          <div className="w-full h-32 md:h-40 overflow-hidden relative">
+            <img 
+              src={event.headerImageUrl} 
+              alt={event.name} 
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-black/20" />
+          </div>
+        )}
         {/* Mobile: stacked layout, Desktop: side-by-side */}
         <div className="flex flex-col lg:flex-row lg:min-h-screen">
           {/* Left side - Hero image (full width on mobile, 40% on desktop) */}
@@ -3745,10 +3788,21 @@ export default function RegistrationPage() {
     <>
       {renderOtpDialog()}
       {renderLookupDialog()}
-      <div className="min-h-screen bg-card">
-        {renderHeader()}
-      
-      {/* Hero Image - bright and prominent */}
+      <div className="min-h-screen bg-card flex flex-col items-center">
+        {event?.headerImageUrl && (
+          <div className="w-full h-48 md:h-64 overflow-hidden relative">
+            <img 
+              src={event.headerImageUrl} 
+              alt={event.name} 
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-black/20" />
+          </div>
+        )}
+        <div className="w-full max-w-4xl p-4 md:p-8 space-y-8">
+          {renderHeader()}
+        
+        {/* Hero Image - bright and prominent */}
       {heroImageUrl && (
         <div 
           className="h-80 md:h-96 bg-cover bg-center relative"
