@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+const fs = require('fs');
+const content = `import { useState, useEffect, useRef } from "react";
 import { useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, CheckCircle2, Calendar, MapPin, Mail, Printer } from "lucide-react";
@@ -19,7 +20,7 @@ import { RegistrationForm } from "@/components/RegistrationForm";
 const parseLocalDate = (dateStr) => {
   if (!dateStr) return null;
   if (dateStr instanceof Date) return dateStr;
-  if (typeof dateStr === "string" && dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+  if (typeof dateStr === "string" && dateStr.match(/^\\d{4}-\\d{2}-\\d{2}$/)) {
     return parseISO(dateStr + "T12:00:00");
   }
   return new Date(dateStr);
@@ -257,3 +258,5 @@ export default function RegistrationPage() {
     </div>
   );
 }
+`;
+fs.writeFileSync('client/src/pages/RegistrationPage.tsx', content.trim());
