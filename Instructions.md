@@ -6586,3 +6586,125 @@ Updated the Admin Attendees table UI to show clearer wording for people who are 
 - Qualification rules
 
 ---
+
+---
+
+# Distributor ID Security Fix
+
+**Status**: ✅ IMPLEMENTED (January 20, 2026)
+
+---
+
+## Problem
+
+When a user entered a Distributor ID on the qualification page, the system returned the associated email address to the client. This created a security vulnerability allowing email enumeration by guessing Distributor IDs.
+
+Additionally, the verified Distributor ID was not being consistently carried forward to the registration form after authentication.
+
+---
+
+## Solution
+
+### 1. Email Masking for Distributor ID Lookups
+
+**File**: `server/routes.ts` - `/api/public/qualifier-info/:eventId`
+
+When a user provides ONLY a Distributor ID (no email), the endpoint now:
+- Returns a MASKED email (e.g., `j***n@g***l.com`) for display purposes
+- Sets `emailMasked: true` in the response to signal the frontend to use the secure flow
+
+When a user provides their email directly, the full email is returned (they already know it).
+
+```typescript
+// Example masked email
+"j***n@g***l.com"  // john@gmail.com masked
+```
+
+### 2. New Secure OTP Endpoint with Session Token
+
+**File**: `server/routes.ts` - `/api/register/otp/generate-by-id`
+
+New endpoint that:
+- Accepts `distributorId` and `eventId`
+- Looks up the email internally (never returns it to client)
+- Sends OTP to that email
+- Generates a `sessionToken` (UUID) and stores it in the OTP session
+- Returns `sessionToken` to frontend for secure validation
+- Stores `verifiedDistributorId` in the OTP session for later use
+
+### 3. Session-Token Based OTP Validation
+
+**File**: `server/routes.ts` - `/api/register/otp/validate`
+
+The validation endpoint now accepts EITHER `email` OR `sessionToken`:
+- When `sessionToken` is provided (distributorId flow), looks up session by token
+- Retrieves the actual email from the session for Hydra validation
+- Never requires the client to know the real email
+- Reads `verifiedDistributorId` from the session's customerData
+- Includes it in the profile response (as `unicityId`)
+- Pre-fills the registration form with the verified Distributor ID
+
+**Storage Layer**: `server/storage.ts` - Added `getOtpSessionBySessionToken()` method
+
+### 4. Frontend Updates
+
+**File**: `client/src/pages/RegistrationPage.tsx`
+
+The frontend now:
+- Stores the `sessionToken` received from `/otp/generate-by-id`
+- Uses `sessionToken` instead of `email` when calling `/otp/validate`
+- Clears `sessionToken` on logout, back navigation, or session reset
+- Falls back to email-based validation when `sessionToken` is not present
+
+---
+
+## Security Benefits
+
+1. **No email enumeration**: Attackers cannot discover emails by testing Distributor IDs
+2. **Server-side email resolution**: Email is looked up internally, never exposed to client
+3. **Verified ID persistence**: Distributor ID is securely stored in session and carried forward
+
+---
+
+## Flow Comparison
+
+### Before (Insecure)
+```
+1. User enters Distributor ID
+2. Server returns full email to client  ❌ SECURITY RISK
+3. Frontend sends OTP request with email
+4. User receives OTP
+```
+
+### After (Secure)
+```
+1. User enters Distributor ID
+2. Server returns MASKED email (j***n@g***l.com) + emailMasked flag
+3. Frontend calls /otp/generate-by-id with distributorId
+4. Server looks up email internally, sends OTP, returns sessionToken  ✓ SECURE
+5. User receives OTP
+6. Frontend calls /otp/validate with sessionToken + code (no email needed)
+7. Server looks up session by token, validates with Hydra using internal email
+8. After verification, unicityId pre-filled from session
+```
+
+---
+
+## Files Changed
+
+| File | Changes |
+|------|---------|
+| `server/routes.ts` | Added `maskEmail()` helper, updated qualifier-info endpoint, added `/otp/generate-by-id` endpoint with sessionToken, updated OTP validation to accept sessionToken |
+| `server/storage.ts` | Added `getOtpSessionBySessionToken()` method to IStorage interface and DatabaseStorage class |
+| `client/src/pages/RegistrationPage.tsx` | Added `verificationSessionToken` state, updated handleSendOtp to store sessionToken, updated handleVerifyOtp to use sessionToken for validation |
+
+---
+
+## Backward Compatibility
+
+- Users who enter their email directly → Original flow unchanged
+- Users who enter Distributor ID only → New secure flow
+- Existing registrations → Unaffected
+- No database schema changes required
+
+---

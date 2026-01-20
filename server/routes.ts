@@ -488,11 +488,128 @@ export async function registerRoutes(
     }
   });
 
+  // Generate OTP using Distributor ID (SECURITY: email is never exposed to client)
+  // This endpoint looks up the email internally and sends OTP without returning it
+  app.post("/api/register/otp/generate-by-id", async (req, res) => {
+    try {
+      const { distributorId, eventId } = req.body;
+      if (!distributorId) {
+        return res.status(400).json({ error: "Distributor ID is required" });
+      }
+      if (!eventId) {
+        return res.status(400).json({ error: "Event ID is required for registration verification" });
+      }
+
+      // Verify event exists and is published
+      const event = await storage.getEventByIdOrSlug(eventId);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+      if (event.status !== "published") {
+        return res.status(400).json({ error: "Registration is not open for this event" });
+      }
+
+      // Look up qualifier by distributorId to get their email
+      const qualifier = await storage.getQualifiedRegistrantByUnicityId(event.id, distributorId.trim());
+      if (!qualifier) {
+        // Also check if there's an existing registration with this distributorId
+        const existingReg = await storage.getRegistrationByUnicityId(event.id, distributorId.trim());
+        if (!existingReg) {
+          return res.status(403).json({ 
+            error: "We couldn't find your Distributor ID in the list of qualified attendees for this event. If you believe this is an error, please contact americasevent@unicity.com for assistance." 
+          });
+        }
+        // Use existing registration's email
+        var email = existingReg.email;
+      } else {
+        var email = qualifier.email;
+      }
+
+      if (!email) {
+        return res.status(400).json({ error: "No email address on file for this Distributor ID." });
+      }
+
+      const normalizedEmail = email.toLowerCase().trim();
+
+      // For development, simulate OTP
+      if (process.env.NODE_ENV !== "production") {
+        const devCode = "123456";
+        const sessionToken = crypto.randomUUID();
+        await storage.createOtpSession({
+          email: normalizedEmail,
+          validationId: `dev-reg-${Date.now()}`,
+          verified: false,
+          expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+          // Store distributorId + session token in session
+          customerData: { 
+            registrationEventId: event.id, 
+            verifiedDistributorId: distributorId.trim(),
+            sessionToken, // Used for validation without exposing email
+          },
+        });
+        console.log(`DEV MODE: Registration OTP for ${normalizedEmail} (distributorId: ${distributorId}) is ${devCode}`);
+        return res.json({ success: true, message: "Verification code sent", devCode, sessionToken });
+      }
+
+      // Production: Call Hydra API
+      console.log("Calling Hydra API for registration OTP (by distributorId):", `${HYDRA_API_BASE}/otp/generate`, "email:", normalizedEmail);
+      const response = await fetch(`${HYDRA_API_BASE}/otp/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: normalizedEmail }),
+      });
+
+      const responseText = await response.text();
+      console.log("Hydra OTP generate response status:", response.status, "body:", responseText);
+      
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseErr) {
+        console.error("Failed to parse Hydra response as JSON:", responseText);
+        return res.status(500).json({ error: "Invalid response from verification service" });
+      }
+      
+      if (!response.ok || !data.success) {
+        console.log("Hydra OTP generate failed:", data);
+        return res.status(400).json({ error: data.data?.message || "Failed to send verification code" });
+      }
+
+      // Generate a secure session token that frontend can use for validation
+      // This allows validation without needing to expose email to client
+      const sessionToken = crypto.randomUUID();
+      
+      await storage.createOtpSession({
+        email: normalizedEmail,
+        validationId: data.data.validation_id,
+        verified: false,
+        expiresAt: new Date(data.data.expires_at),
+        // Store distributorId + session token in session
+        customerData: { 
+          registrationEventId: event.id, 
+          verifiedDistributorId: distributorId.trim(),
+          sessionToken, // Used for validation without exposing email
+        },
+      });
+
+      // Return session token so frontend can validate without knowing the email
+      res.json({ success: true, message: "Verification code sent", sessionToken });
+    } catch (error) {
+      console.error("Registration OTP generate-by-id error:", error);
+      res.status(500).json({ error: "Failed to send verification code. Please try again." });
+    }
+  });
+
   app.post("/api/register/otp/validate", async (req, res) => {
     try {
-      const { email, code, eventId } = req.body;
-      if (!email || !code) {
-        return res.status(400).json({ error: "Email and code are required" });
+      const { email, code, eventId, sessionToken } = req.body;
+      
+      // Accept either email OR sessionToken for lookup
+      if (!code) {
+        return res.status(400).json({ error: "Verification code is required" });
+      }
+      if (!email && !sessionToken) {
+        return res.status(400).json({ error: "Email or session token is required" });
       }
 
       // Resolve eventId to actual event.id (could be slug)
@@ -504,10 +621,24 @@ export async function registerRoutes(
         }
       }
 
-      // Verify there's a pending session - use event-scoped lookup if eventId provided
-      const session = resolvedEventId 
-        ? await storage.getOtpSessionForRegistration(email, resolvedEventId)
-        : await storage.getOtpSession(email);
+      // Find session by email OR sessionToken
+      let session;
+      let lookupEmail = email;
+      
+      if (sessionToken && !email) {
+        // SECURITY: Lookup by sessionToken when email is not provided (distributorId flow)
+        // Find session where customerData.sessionToken matches
+        session = await storage.getOtpSessionBySessionToken(sessionToken, resolvedEventId);
+        if (session) {
+          lookupEmail = session.email; // Get email from session for Hydra validation
+        }
+      } else {
+        // Standard flow: lookup by email
+        session = resolvedEventId 
+          ? await storage.getOtpSessionForRegistration(email, resolvedEventId)
+          : await storage.getOtpSession(email);
+      }
+      
       if (!session) {
         return res.status(400).json({ error: "No pending verification. Please request a new code." });
       }
@@ -530,17 +661,18 @@ export async function registerRoutes(
         customerData = {
           id: { unicity: "12345678" },
           humanName: { firstName: "Test", lastName: "User" },
-          email: email,
+          email: lookupEmail,
         };
       } else {
         // Validate with Hydra (works in all environments)
         // Include the validation_id from the OTP session
-        console.log("Validating OTP with Hydra for email:", email, "code length:", code?.length, "validation_id:", session.validationId);
+        // Use lookupEmail which could come from session (distributorId flow) or request (email flow)
+        console.log("Validating OTP with Hydra for email:", lookupEmail, "code length:", code?.length, "validation_id:", session.validationId);
         const response = await fetch(`${HYDRA_API_BASE}/otp/magic-link`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
-            email, 
+            email: lookupEmail, 
             code,
             validation_id: session.validationId 
           }),
@@ -573,16 +705,16 @@ export async function registerRoutes(
               
               if (isOpenRegistration) {
                 // Open registration - allow anyone with valid OTP
-                console.log("Open registration event, allowing verification for:", email);
+                console.log("Open registration event, allowing verification for:", lookupEmail);
                 isValid = true;
                 customerData = {
                   id: { unicity: null },
                   humanName: { firstName: "", lastName: "" },
-                  email: email,
+                  email: lookupEmail,
                 };
               } else {
                 // Qualified registration - check if on the qualified list
-                const qualifiedRegistrant = await storage.getQualifiedRegistrantByEmail(event.id, email);
+                const qualifiedRegistrant = await storage.getQualifiedRegistrantByEmail(event.id, lookupEmail);
                 if (qualifiedRegistrant) {
                   console.log("User is in qualified list, allowing verification:", qualifiedRegistrant);
                   isValid = true;
@@ -592,7 +724,7 @@ export async function registerRoutes(
                       firstName: qualifiedRegistrant.firstName || "", 
                       lastName: qualifiedRegistrant.lastName || "" 
                     },
-                    email: email,
+                    email: lookupEmail,
                   };
                 } else {
                   return res.status(400).json({ error: errorMessage });
@@ -692,8 +824,10 @@ export async function registerRoutes(
       }
 
       // Extract profile data from customer response, with qualifier fallback
+      // Also include verifiedDistributorId from session if it was set during OTP generation
+      const verifiedDistributorId = (session.customerData as any)?.verifiedDistributorId || "";
       const profile = {
-        unicityId: customerData?.id?.unicity || customerData?.unicity_id || qualifierData?.unicityId || "",
+        unicityId: verifiedDistributorId || customerData?.id?.unicity || customerData?.unicity_id || qualifierData?.unicityId || "",
         email: email,
         firstName: customerData?.humanName?.firstName || customerData?.first_name || qualifierData?.firstName || "",
         lastName: customerData?.humanName?.lastName || customerData?.last_name || qualifierData?.lastName || "",
@@ -3981,8 +4115,24 @@ export async function registerRoutes(
   // Event Page Routes (Visual CMS)
   // ========================================
 
+  // Helper function to mask email for display (security: prevents email enumeration)
+  function maskEmail(email: string): string {
+    if (!email || !email.includes("@")) return "***@***.***";
+    const [local, domain] = email.split("@");
+    const domainParts = domain.split(".");
+    const maskedLocal = local.length <= 2 
+      ? local[0] + "***" 
+      : local[0] + "***" + local.slice(-1);
+    const maskedDomain = domainParts[0].length <= 2 
+      ? domainParts[0][0] + "***" 
+      : domainParts[0][0] + "***" + domainParts[0].slice(-1);
+    const tld = domainParts.slice(1).join(".");
+    return `${maskedLocal}@${maskedDomain}.${tld}`;
+  }
+
   // Get qualifier info (public - for pre-populating registration form)
   // Accepts EITHER email OR distributorId (at least one required)
+  // SECURITY: When only distributorId is provided, email is MASKED to prevent enumeration
   app.get("/api/public/qualifier-info/:eventId", async (req, res) => {
     try {
       const email = req.query.email as string;
@@ -4029,12 +4179,16 @@ export async function registerRoutes(
         });
       }
       
-      // Return qualifier info including email (needed for OTP when only distributorId provided)
+      // SECURITY: If user provided email, they already know it - return full email
+      // If user only provided distributorId, mask the email to prevent enumeration
+      const lookupByDistributorIdOnly = distributorId && !email;
+      
       res.json({
         firstName: qualifier.firstName || "",
         lastName: qualifier.lastName || "",
         unicityId: qualifier.unicityId || "",
-        email: qualifier.email || "",
+        email: lookupByDistributorIdOnly ? maskEmail(qualifier.email) : (qualifier.email || ""),
+        emailMasked: lookupByDistributorIdOnly, // Tells frontend to use distributorId-based OTP flow
       });
     } catch (error) {
       console.error("Error fetching qualifier info:", error);

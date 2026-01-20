@@ -1,0 +1,39 @@
+GOAL
+I want to fix a security and UX issue in the Distributor ID qualification → authentication → registration flow.
+
+BACKGROUND
+When a user enters a Distributor ID on the first qualification page, the system currently runs through Hydra and resolves the associated email address, which is then surfaced to the UI.
+This creates a security risk because it allows potential email enumeration by guessing Distributor IDs.
+
+Additionally, after a user authenticates using their Distributor ID, that verified Distributor ID is not consistently carried forward into the registration form, even though the system already knows it was used and verified.
+
+CHANGE REQUEST
+Update the Distributor ID qualification and registration flow so Hydra can confirm that a Distributor ID exists in the system without exposing or returning the associated email address.
+
+After successful authentication, ensure the verified Distributor ID is automatically populated in the registration form, especially when the user authenticated using that Distributor ID.
+
+WHAT I WANT YOU TO DO
+• Research my codebase
+• Locate the Distributor ID qualification flow
+• Identify where Hydra is called and what data is returned
+• Identify where the email address is being resolved and exposed
+• Identify how authentication state is persisted between qualification and registration
+• Implement changes so:
+  - Email addresses are never exposed during the pre-auth qualification step
+  - Hydra only confirms existence/validity at that stage
+  - The verified Distributor ID is securely carried forward after authentication
+  - The registration form is pre-filled with the verified Distributor ID
+
+IMPORTANT CONSTRAINTS
+• Do NOT expose or return email addresses during Distributor ID qualification
+• Do NOT allow email enumeration via Distributor ID input
+• Persist the verified Distributor ID using secure server-side state (session, token, or signed payload)
+• Do NOT rely solely on client-side hidden fields
+• Do NOT break existing authentication or registration flows
+• This should be a low-risk change focused on security and UX
+
+DELIVERABLE
+• Implement the updated qualification and registration behavior
+• Verify no email is exposed during the pre-auth step
+• Verify Distributor ID is pre-filled after authentication
+• Document the change briefly in Instructions.md

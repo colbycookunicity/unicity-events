@@ -294,6 +294,7 @@ export default function RegistrationPage() {
   const [verificationStep, setVerificationStep] = useState<VerificationStep>("email");
   const [verificationEmail, setVerificationEmail] = useState("");
   const [verificationDistributorId, setVerificationDistributorId] = useState(""); // For qualified_verified mode
+  const [verificationSessionToken, setVerificationSessionToken] = useState<string | null>(null); // SECURITY: For sessionToken-based OTP validation
   const [otpCode, setOtpCode] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
   const [verifiedProfile, setVerifiedProfile] = useState<VerifiedProfile | null>(null);
@@ -794,47 +795,83 @@ export default function RegistrationPage() {
           return; // STOP - do NOT call Hydra
         }
 
-        // User IS qualified - get their info (including email if they only provided distributorId)
+        // User IS qualified - get their info
         const qualifierData = await qualRes.json();
         setIsQualified(true);
         setQualificationChecked(true);
         
-        // Use email from qualifier data if user only provided distributorId
-        const emailForOtp = hasEmail ? verificationEmail : qualifierData.email;
+        // SECURITY: If user only provided distributorId, the email is MASKED
+        // Use the new generate-by-id endpoint to send OTP without exposing email
+        const emailIsMasked = qualifierData.emailMasked === true;
         
-        if (!emailForOtp) {
-          toast({
-            title: language === "es" ? "Correo no encontrado" : "Email Not Found",
-            description: language === "es" 
-              ? "No tenemos un correo registrado para este ID. Por favor ingrese su correo." 
-              : "We don't have an email on file for this ID. Please enter your email.",
-            variant: "destructive",
+        if (emailIsMasked) {
+          // Use distributorId-based OTP flow (email never exposed)
+          const res = await apiRequest("POST", "/api/register/otp/generate-by-id", { 
+            distributorId: verificationDistributorId.trim(),
+            eventId: params.eventId,
           });
-          setIsVerifying(false);
-          return;
-        }
-        
-        // Update verificationEmail if it came from qualifier data
-        if (!hasEmail && emailForOtp) {
-          setVerificationEmail(emailForOtp);
-        }
-        
-        // Continue to send OTP via Hydra
-        const res = await apiRequest("POST", "/api/register/otp/generate", { 
-          email: emailForOtp,
-          eventId: params.eventId,
-        });
-        const data = await res.json();
-        
-        setVerificationStep("otp");
-        toast({
-          title: language === "es" ? "Código enviado" : "Code Sent",
-          description: language === "es" ? `Código enviado a ${emailForOtp}` : `Verification code sent to ${emailForOtp}`,
-        });
-        
-        // Show dev code in development
-        if (data.devCode) {
-          console.log("DEV MODE: Use code", data.devCode);
+          const data = await res.json();
+          
+          // SECURITY: Store sessionToken for validation (allows validation without knowing email)
+          if (data.sessionToken) {
+            setVerificationSessionToken(data.sessionToken);
+          }
+          
+          // Show masked email in UI so user knows where code was sent
+          setVerificationEmail(qualifierData.email); // This is masked like "j***n@g***l.com"
+          setVerificationStep("otp");
+          toast({
+            title: language === "es" ? "Código enviado" : "Code Sent",
+            description: language === "es" 
+              ? `Código enviado a ${qualifierData.email}` 
+              : `Verification code sent to ${qualifierData.email}`,
+          });
+          
+          // Show dev code in development
+          if (data.devCode) {
+            console.log("DEV MODE: Use code", data.devCode);
+          }
+        } else {
+          // User provided email directly - use normal flow
+          // SECURITY: Clear any existing sessionToken since we're using email-based flow
+          setVerificationSessionToken(null);
+          
+          const emailForOtp = hasEmail ? verificationEmail : qualifierData.email;
+          
+          if (!emailForOtp) {
+            toast({
+              title: language === "es" ? "Correo no encontrado" : "Email Not Found",
+              description: language === "es" 
+                ? "No tenemos un correo registrado para este ID. Por favor ingrese su correo." 
+                : "We don't have an email on file for this ID. Please enter your email.",
+              variant: "destructive",
+            });
+            setIsVerifying(false);
+            return;
+          }
+          
+          // Update verificationEmail if it came from qualifier data
+          if (!hasEmail && emailForOtp) {
+            setVerificationEmail(emailForOtp);
+          }
+          
+          // Continue to send OTP via Hydra
+          const res = await apiRequest("POST", "/api/register/otp/generate", { 
+            email: emailForOtp,
+            eventId: params.eventId,
+          });
+          const data = await res.json();
+          
+          setVerificationStep("otp");
+          toast({
+            title: language === "es" ? "Código enviado" : "Code Sent",
+            description: language === "es" ? `Código enviado a ${emailForOtp}` : `Verification code sent to ${emailForOtp}`,
+          });
+          
+          // Show dev code in development
+          if (data.devCode) {
+            console.log("DEV MODE: Use code", data.devCode);
+          }
         }
       } catch (error: any) {
         // Parse error message
@@ -936,11 +973,22 @@ export default function RegistrationPage() {
 
     setIsVerifying(true);
     try {
-      const res = await apiRequest("POST", "/api/register/otp/validate", {
-        email: verificationEmail,
+      // SECURITY: Use sessionToken for validation when available (distributorId flow)
+      // This allows validation without needing to expose the real email to the client
+      const validationPayload: { code: string; eventId: string; email?: string; sessionToken?: string } = {
         code: otpCode,
         eventId: params.eventId,
-      });
+      };
+      
+      if (verificationSessionToken) {
+        // DistributorId flow: use sessionToken for validation
+        validationPayload.sessionToken = verificationSessionToken;
+      } else {
+        // Standard email flow: use email for validation
+        validationPayload.email = verificationEmail;
+      }
+      
+      const res = await apiRequest("POST", "/api/register/otp/validate", validationPayload);
       const data = await res.json();
       
       if (data.verified) {
@@ -1081,6 +1129,7 @@ export default function RegistrationPage() {
     setVerificationStep("email");
     setVerifiedProfile(null);
     setVerificationEmail("");
+    setVerificationSessionToken(null); // Clear session token for security
     setOtpCode("");
     setOtpJustVerified(false); // Reset flag to allow session checks on restart
     setExistingRegistrationId(null);
@@ -1769,6 +1818,7 @@ export default function RegistrationPage() {
     setVerifiedProfile(null);
     setVerificationStep("email");
     setVerificationEmail("");
+    setVerificationSessionToken(null); // Clear session token for security
     setOtpCode("");
   };
 
@@ -2133,6 +2183,7 @@ export default function RegistrationPage() {
               onClick={() => {
                 setVerificationStep("email");
                 setOtpCode("");
+                setVerificationSessionToken(null); // Clear session token for security
               }}
               className="w-full"
               data-testid="button-back-to-email"

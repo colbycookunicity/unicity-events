@@ -87,6 +87,7 @@ export interface IStorage {
   getOtpSessionForRegistration(email: string, eventId: string): Promise<OtpSession | undefined>;
   getOtpSessionForAttendeePortal(email: string): Promise<OtpSession | undefined>;
   getOtpSessionByRedirectToken(token: string): Promise<OtpSession | undefined>;
+  getOtpSessionBySessionToken(sessionToken: string, eventId?: string): Promise<OtpSession | undefined>;
   createOtpSession(session: InsertOtpSession): Promise<OtpSession>;
   updateOtpSession(id: string, data: Partial<OtpSession>): Promise<OtpSession | undefined>;
   deleteOtpSession(id: string): Promise<boolean>;
@@ -659,6 +660,23 @@ export class DatabaseStorage implements IStorage {
     const [session] = await db.select().from(otpSessions)
       .where(eq(otpSessions.redirectToken, token));
     return session || undefined;
+  }
+
+  async getOtpSessionBySessionToken(sessionToken: string, eventId?: string): Promise<OtpSession | undefined> {
+    // Find session where customerData.sessionToken matches
+    const sessions = await db.select().from(otpSessions)
+      .where(gte(otpSessions.expiresAt, new Date()))
+      .orderBy(desc(otpSessions.createdAt));
+    
+    // Find session with matching sessionToken in customerData
+    const matchingSession = sessions.find(s => {
+      const data = s.customerData as any;
+      if (data?.sessionToken !== sessionToken) return false;
+      // If eventId provided, also verify it matches
+      if (eventId && data?.registrationEventId !== eventId) return false;
+      return true;
+    });
+    return matchingSession || undefined;
   }
 
   async deleteOtpSession(id: string): Promise<boolean> {
