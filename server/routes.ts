@@ -4206,6 +4206,7 @@ export async function registerRoutes(
       }
       
       let qualifier = null;
+      let existingRegistration = null;
       
       // Try to find qualifier by email first if provided
       if (email) {
@@ -4217,20 +4218,36 @@ export async function registerRoutes(
         qualifier = await storage.getQualifiedRegistrantByUnicityId(event.id, distributorId);
       }
       
+      // If not in qualified list, check for existing registration (returning users)
       if (!qualifier) {
+        if (email) {
+          existingRegistration = await storage.getRegistrationByEmail(event.id, email);
+        }
+        if (!existingRegistration && distributorId) {
+          existingRegistration = await storage.getRegistrationByUnicityId(event.id, distributorId);
+        }
+      }
+      
+      // If neither qualifier nor existing registration found, user is not eligible
+      if (!qualifier && !existingRegistration) {
         return res.status(404).json({ 
           error: "You are not on the qualified list for this event. Please contact support if you believe this is an error." 
         });
       }
       
-      // If both email and distributorId provided, verify they match the qualifier record
-      if (email && distributorId && qualifier.unicityId && qualifier.unicityId !== distributorId) {
+      // Use qualifier data if available, otherwise use registration data
+      const userData = qualifier || existingRegistration;
+      const userEmail = userData?.email || "";
+      const userUnicityId = (qualifier?.unicityId || existingRegistration?.unicityId) || "";
+      
+      // If both email and distributorId provided, verify they match the record
+      if (email && distributorId && userUnicityId && userUnicityId !== distributorId) {
         return res.status(403).json({ 
           error: "The distributor ID does not match our records. Please check your information." 
         });
       }
       
-      if (email && distributorId && qualifier.email && qualifier.email.toLowerCase() !== email.toLowerCase()) {
+      if (email && distributorId && userEmail && userEmail.toLowerCase() !== email.toLowerCase()) {
         return res.status(403).json({ 
           error: "The email does not match our records for this distributor ID. Please check your information." 
         });
@@ -4241,11 +4258,12 @@ export async function registerRoutes(
       const lookupByDistributorIdOnly = distributorId && !email;
       
       res.json({
-        firstName: qualifier.firstName || "",
-        lastName: qualifier.lastName || "",
-        unicityId: qualifier.unicityId || "",
-        email: lookupByDistributorIdOnly ? maskEmail(qualifier.email) : (qualifier.email || ""),
+        firstName: userData?.firstName || "",
+        lastName: userData?.lastName || "",
+        unicityId: userUnicityId,
+        email: lookupByDistributorIdOnly ? maskEmail(userEmail) : userEmail,
         emailMasked: lookupByDistributorIdOnly, // Tells frontend to use distributorId-based OTP flow
+        isExistingRegistration: !!existingRegistration && !qualifier, // Let frontend know this is a returning user
       });
     } catch (error) {
       console.error("Error fetching qualifier info:", error);
