@@ -266,7 +266,9 @@ export default function EventFormPage() {
       return apiRequest("PATCH", `/api/events/${params.id}`, data);
     },
     onSuccess: () => {
+      // Invalidate both the events list and this specific event's cache
       queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events", params.id] });
       toast({ title: t("success"), description: "Event updated successfully" });
       setLocation("/admin/events");
     },

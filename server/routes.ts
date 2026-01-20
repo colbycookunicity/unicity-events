@@ -1883,10 +1883,12 @@ export async function registerRoutes(
         }
       }
       
+      console.log("[DEBUG] PATCH /api/events - final updates object:", JSON.stringify(updates, null, 2));
       const event = await storage.updateEvent(req.params.id, updates);
       if (!event) {
         return res.status(404).json({ error: "Event not found" });
       }
+      console.log("[DEBUG] PATCH /api/events - returned event formTemplateId:", (event as any).formTemplateId);
       res.json(event);
     } catch (error: any) {
       console.error("Update event error:", error);
