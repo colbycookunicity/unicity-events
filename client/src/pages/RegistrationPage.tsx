@@ -410,18 +410,23 @@ export default function RegistrationPage() {
   // Track which event we've initialized language for (to handle navigation between events)
   const languageInitializedForEventRef = useRef<string | null>(null);
   
-  // Set initial language from event's defaultLanguage on first load
-  // This is the source of truth for public registration pages - always apply event's language
-  // Priority: use the direct event query (which includes defaultLanguage from /api/events/:id/public)
+  // Set initial language from URL query param (?lang=en or ?lang=es) or event's defaultLanguage
+  // Priority: 1) URL ?lang= parameter, 2) event's defaultLanguage, 3) keep current language
   useEffect(() => {
     const currentEventId = params.eventId;
     
     // Only initialize language once per event (not on every re-render or navigation)
     if (event && currentEventId && languageInitializedForEventRef.current !== currentEventId) {
-      const eventDefaultLanguage = event.defaultLanguage as 'en' | 'es' | undefined;
-      if (eventDefaultLanguage === 'en' || eventDefaultLanguage === 'es') {
-        // For public registration pages, event's defaultLanguage is always the source of truth on initial load
-        setLanguage(eventDefaultLanguage);
+      // Check URL query parameter first (highest priority)
+      const langParam = urlParams.get("lang");
+      if (langParam === 'en' || langParam === 'es') {
+        setLanguage(langParam);
+      } else {
+        // Fall back to event's defaultLanguage
+        const eventDefaultLanguage = event.defaultLanguage as 'en' | 'es' | undefined;
+        if (eventDefaultLanguage === 'en' || eventDefaultLanguage === 'es') {
+          setLanguage(eventDefaultLanguage);
+        }
       }
       languageInitializedForEventRef.current = currentEventId;
     }
