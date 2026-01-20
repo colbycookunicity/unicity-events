@@ -31,20 +31,26 @@ export function IterableCampaignSelector({ value, onChange }: Props) {
     staleTime: 5 * 60 * 1000,
   });
 
-  const handleCampaignChange = (emailType: keyof EventIterableCampaigns, language: 'en' | 'es', campaignId: number | undefined) => {
+  const handleCampaignChange = (emailType: keyof EventIterableCampaigns, campaignId: number | undefined) => {
     const newValue: EventIterableCampaigns = { ...(value ?? {}) };
-    if (!newValue[emailType]) {
-      newValue[emailType] = {};
-    }
     if (campaignId === undefined || campaignId === 0) {
-      delete newValue[emailType]![language];
-    } else {
-      newValue[emailType]![language] = campaignId;
-    }
-    if (newValue[emailType] && Object.keys(newValue[emailType]!).length === 0) {
       delete newValue[emailType];
+    } else {
+      newValue[emailType] = campaignId;
     }
     onChange(newValue);
+  };
+
+  const getCampaignValue = (emailType: keyof EventIterableCampaigns): number | undefined => {
+    const campaignValue = value?.[emailType];
+    if (typeof campaignValue === 'number') {
+      return campaignValue;
+    }
+    if (campaignValue && typeof campaignValue === 'object') {
+      const legacyValue = campaignValue as { en?: number; es?: number };
+      return legacyValue.en || legacyValue.es;
+    }
+    return undefined;
   };
 
   if (isLoading) {
@@ -53,10 +59,7 @@ export function IterableCampaignSelector({ value, onChange }: Props) {
         {EMAIL_TYPES.map(({ key }) => (
           <div key={key} className="space-y-3">
             <Skeleton className="h-5 w-48" />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </div>
+            <Skeleton className="h-10 w-full" />
           </div>
         ))}
       </div>
@@ -82,20 +85,24 @@ export function IterableCampaignSelector({ value, onChange }: Props) {
 
   return (
     <div className="space-y-6">
-      {EMAIL_TYPES.map(({ key, label, description }) => (
-        <div key={key} className="space-y-3">
-          <div>
-            <h4 className="font-medium">{label}</h4>
-            <p className="text-sm text-muted-foreground">{description}</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">English Campaign</label>
+      <p className="text-sm text-muted-foreground">
+        Select an Iterable campaign for each email type. Iterable will use the recipient's locale (sent as "en-US" or "es-US") 
+        to select the appropriate localized template within the campaign.
+      </p>
+      {EMAIL_TYPES.map(({ key, label, description }) => {
+        const campaignId = getCampaignValue(key);
+        return (
+          <div key={key} className="space-y-2">
+            <div>
+              <h4 className="font-medium">{label}</h4>
+              <p className="text-sm text-muted-foreground">{description}</p>
+            </div>
+            <div className="flex items-center gap-3">
               <Select
-                value={value?.[key]?.en?.toString() || "none"}
-                onValueChange={(v) => handleCampaignChange(key, 'en', v === "none" ? undefined : parseInt(v))}
+                value={campaignId?.toString() || "none"}
+                onValueChange={(v) => handleCampaignChange(key, v === "none" ? undefined : parseInt(v))}
               >
-                <SelectTrigger data-testid={`select-campaign-${key}-en`}>
+                <SelectTrigger data-testid={`select-campaign-${key}`} className="max-w-md">
                   <SelectValue placeholder="Select campaign..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -109,37 +116,13 @@ export function IterableCampaignSelector({ value, onChange }: Props) {
                   ))}
                 </SelectContent>
               </Select>
-              {!value?.[key]?.en && (
-                <Badge variant="outline" className="text-xs">Using fallback</Badge>
-              )}
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Spanish Campaign</label>
-              <Select
-                value={value?.[key]?.es?.toString() || "none"}
-                onValueChange={(v) => handleCampaignChange(key, 'es', v === "none" ? undefined : parseInt(v))}
-              >
-                <SelectTrigger data-testid={`select-campaign-${key}-es`}>
-                  <SelectValue placeholder="Select campaign..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">
-                    <span className="text-muted-foreground">Use system default</span>
-                  </SelectItem>
-                  {campaigns.map((c) => (
-                    <SelectItem key={c.id} value={c.id.toString()}>
-                      {c.name} (ID: {c.id})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {!value?.[key]?.es && (
+              {!campaignId && (
                 <Badge variant="outline" className="text-xs">Using fallback</Badge>
               )}
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
