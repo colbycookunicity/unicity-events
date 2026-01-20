@@ -70,6 +70,55 @@ const DIETARY_OPTIONS = [
   { value: "halal", label: "Halal" },
 ];
 
+// Standard registration fields that are stored as columns (not in formData)
+const STANDARD_REGISTRATION_FIELDS = new Set([
+  "unicityId", "email", "firstName", "lastName", "phone", "gender", "dateOfBirth",
+  "shirtSize", "pantSize", "roomType", "passportNumber", "passportCountry", "passportExpiration",
+  "emergencyContact", "emergencyContactPhone", "dietaryRestrictions", "adaAccommodations"
+]);
+
+// Fields that are part of contact info - already shown in Contact Information section
+const CONTACT_INFO_FIELDS = new Set([
+  "unicityId", "email", "firstName", "lastName", "phone", "gender", "dateOfBirth"
+]);
+
+// Helper function to format a field value for display
+function formatFieldValue(value: unknown, fieldType?: string, options?: Array<{ value: string; label: string }>): string {
+  if (value === null || value === undefined || value === "") return "-";
+  
+  if (typeof value === "boolean") {
+    return value ? "Yes" : "No";
+  }
+  
+  if (Array.isArray(value)) {
+    return value.length > 0 ? value.join(", ") : "None";
+  }
+  
+  // For select/radio fields with options, show the label instead of value
+  if (options && typeof value === "string") {
+    const option = options.find(o => o.value === value);
+    if (option) return option.label;
+  }
+  
+  return String(value);
+}
+
+// Helper to get field value from registration - checks both standard columns and formData
+function getFieldValue(registration: Registration, fieldName: string): unknown {
+  // First check standard registration columns
+  if (STANDARD_REGISTRATION_FIELDS.has(fieldName)) {
+    return (registration as Record<string, unknown>)[fieldName];
+  }
+  
+  // Otherwise check formData JSON column
+  const formData = (registration as Record<string, unknown>).formData as Record<string, unknown> | null;
+  if (formData && fieldName in formData) {
+    return formData[fieldName];
+  }
+  
+  return undefined;
+}
+
 type ColumnKey = 
   | "name" | "unicityId" | "email" | "phone" | "gender" | "dateOfBirth"
   | "status" | "swagStatus" | "shirtSize" | "pantSize" | "roomType"
@@ -1896,81 +1945,144 @@ export default function AttendeesPage() {
 
               <Separator />
 
-              <div className="space-y-3">
-                <h4 className="font-medium">Passport Information</h4>
-                <div className="grid gap-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Passport Number</span>
-                    <span>{selectedAttendee.passportNumber || "-"}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Country</span>
-                    <span>{selectedAttendee.passportCountry || "-"}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Expiration</span>
-                    <span>{formatDateOnly(selectedAttendee.passportExpiration)}</span>
-                  </div>
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="space-y-3">
-                <h4 className="font-medium">Emergency Contact</h4>
-                <div className="grid gap-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Name</span>
-                    <span>{selectedAttendee.emergencyContact || "-"}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Phone</span>
-                    <span>{selectedAttendee.emergencyContactPhone || "-"}</span>
-                  </div>
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="space-y-3">
-                <h4 className="font-medium">Apparel & Preferences</h4>
-                <div className="grid gap-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Shirt Size</span>
-                    <span>{selectedAttendee.shirtSize || "-"}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Pant Size</span>
-                    <span>{selectedAttendee.pantSize || "-"}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Room Type</span>
-                    <span>{selectedAttendee.roomType || "-"}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Dietary Restrictions</span>
-                    <span>
-                      {selectedAttendee.dietaryRestrictions?.length 
-                        ? selectedAttendee.dietaryRestrictions.join(", ") 
-                        : "None"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">ADA Accommodations</span>
-                    <div className="text-right">
-                      <span>{selectedAttendee.adaAccommodations ? "Yes" : "No"}</span>
-                      {selectedAttendee.adaAccommodations && (selectedAttendee as any).adaAccommodationsAt && (
-                        <div className="text-xs text-muted-foreground mt-0.5">
-                          {format(new Date((selectedAttendee as any).adaAccommodationsAt), "MMM d, yyyy h:mm a")}
-                          {(selectedAttendee as any).adaAccommodationsIp && (
-                            <span className="ml-1">({(selectedAttendee as any).adaAccommodationsIp})</span>
-                          )}
-                        </div>
-                      )}
+              {/* Dynamic Form Template Fields - uses eventFormFields which supports both templates and custom formFields */}
+              {(() => {
+                // eventFormFields already handles both template fields and custom formFields
+                // Filter out contact info fields (already shown above) 
+                const displayFields = eventFormFields
+                  ? (eventFormFields as Array<{
+                      name: string;
+                      label?: string;
+                      type?: string;
+                      options?: Array<{ value: string; label: string }>;
+                    }>).filter(f => !CONTACT_INFO_FIELDS.has(f.name))
+                  : null;
+                
+                if (displayFields && displayFields.length > 0) {
+                  return (
+                    <div className="space-y-3">
+                      <h4 className="font-medium">Registration Details</h4>
+                      <div className="grid gap-2 text-sm">
+                        {displayFields.map((field) => {
+                          const value = getFieldValue(selectedAttendee, field.name);
+                          const displayValue = formatFieldValue(value, field.type, field.options);
+                          const displayLabel = field.label || field.name;
+                          
+                          // For checkbox fields, show shortened label with tooltip for full text
+                          if (field.type === "checkbox") {
+                            const needsTruncation = displayLabel.length > 60;
+                            return (
+                              <Tooltip key={field.name}>
+                                <TooltipTrigger asChild>
+                                  <div className="flex justify-between gap-4 cursor-default">
+                                    <span className="text-muted-foreground">
+                                      {needsTruncation ? `${displayLabel.slice(0, 60)}...` : displayLabel}
+                                    </span>
+                                    <span className="shrink-0">{value === true ? "Yes" : value === false ? "No" : "-"}</span>
+                                  </div>
+                                </TooltipTrigger>
+                                {needsTruncation && (
+                                  <TooltipContent side="left" className="max-w-sm">
+                                    <p className="text-sm">{displayLabel}</p>
+                                  </TooltipContent>
+                                )}
+                              </Tooltip>
+                            );
+                          }
+                          
+                          return (
+                            <div key={field.name} className="flex justify-between gap-4">
+                              <span className="text-muted-foreground">{displayLabel}</span>
+                              <span className="text-right">{displayValue}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                </div>
-              </div>
+                  );
+                }
+                
+                // Fallback to legacy hardcoded fields for events without templates
+                return (
+                  <>
+                    <div className="space-y-3">
+                      <h4 className="font-medium">Passport Information</h4>
+                      <div className="grid gap-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Passport Number</span>
+                          <span>{selectedAttendee.passportNumber || "-"}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Country</span>
+                          <span>{selectedAttendee.passportCountry || "-"}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Expiration</span>
+                          <span>{formatDateOnly(selectedAttendee.passportExpiration)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-3">
+                      <h4 className="font-medium">Emergency Contact</h4>
+                      <div className="grid gap-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Name</span>
+                          <span>{selectedAttendee.emergencyContact || "-"}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Phone</span>
+                          <span>{selectedAttendee.emergencyContactPhone || "-"}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-3">
+                      <h4 className="font-medium">Apparel & Preferences</h4>
+                      <div className="grid gap-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Shirt Size</span>
+                          <span>{selectedAttendee.shirtSize || "-"}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Pant Size</span>
+                          <span>{selectedAttendee.pantSize || "-"}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Room Type</span>
+                          <span>{selectedAttendee.roomType || "-"}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Dietary Restrictions</span>
+                          <span>
+                            {selectedAttendee.dietaryRestrictions?.length 
+                              ? selectedAttendee.dietaryRestrictions.join(", ") 
+                              : "None"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">ADA Accommodations</span>
+                          <div className="text-right">
+                            <span>{selectedAttendee.adaAccommodations ? "Yes" : "No"}</span>
+                            {selectedAttendee.adaAccommodations && (selectedAttendee as any).adaAccommodationsAt && (
+                              <div className="text-xs text-muted-foreground mt-0.5">
+                                {format(new Date((selectedAttendee as any).adaAccommodationsAt), "MMM d, yyyy h:mm a")}
+                                {(selectedAttendee as any).adaAccommodationsIp && (
+                                  <span className="ml-1">({(selectedAttendee as any).adaAccommodationsIp})</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
 
               <Separator />
 
