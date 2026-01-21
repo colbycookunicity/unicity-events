@@ -124,7 +124,7 @@ type ColumnKey =
   | "status" | "swagStatus" | "shirtSize" | "pantSize" | "roomType"
   | "passportNumber" | "passportCountry" | "passportExpiration"
   | "emergencyContact" | "emergencyContactPhone" | "dietaryRestrictions" | "adaAccommodations"
-  | "dietaryPreference" | "dietaryNotes"
+  | "dietaryPreference" | "dietaryNotes" | "language"
   | "registeredAt" | "checkedInAt" | "lastModified" | "verifiedByHydra" | "event" | "actions";
 
 // Shared columns to show when "All Events" is selected (global view)
@@ -159,6 +159,7 @@ const ALL_COLUMNS: { key: ColumnKey; label: string; defaultVisible: boolean }[] 
   { key: "dietaryPreference", label: "Dietary Preference", defaultVisible: false },
   { key: "dietaryNotes", label: "Dietary Notes", defaultVisible: false },
   { key: "adaAccommodations", label: "ADA Accommodations", defaultVisible: false },
+  { key: "language", label: "Locale", defaultVisible: false },
   { key: "registeredAt", label: "Registered", defaultVisible: true },
   { key: "checkedInAt", label: "Checked In At", defaultVisible: false },
   { key: "lastModified", label: "Last Modified", defaultVisible: false },
@@ -1400,6 +1401,11 @@ export default function AttendeesPage() {
         return <span className="text-muted-foreground whitespace-nowrap">{(reg?.formData as any)?.dietaryNotes || "-"}</span>;
       case "adaAccommodations":
         return <span className="text-muted-foreground whitespace-nowrap">{reg?.adaAccommodations ? "Yes" : "No"}</span>;
+      case "language":
+        if (!reg) return <span className="text-muted-foreground">-</span>;
+        return reg.language === "es" 
+          ? <Badge variant="outline" className="text-xs">ES</Badge>
+          : <Badge variant="outline" className="text-xs">EN</Badge>;
       case "registeredAt":
         return <span className="text-muted-foreground text-sm whitespace-nowrap">{reg?.registeredAt ? format(new Date(reg.registeredAt), "MMM d, yyyy") : "-"}</span>;
       case "checkedInAt":
