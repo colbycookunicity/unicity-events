@@ -1,0 +1,63 @@
+GOAL
+Allow admin users to reorder table columns and have the UI display columns in that exact order, with the system remembering the order per admin user.
+
+BACKGROUND
+There is an existing "Visible Columns" control that allows admins to toggle which columns are shown (Name, Status, Unicity ID, Email, Swag Status, Locale, Registered, Checked In At, Last Modified, Verified by Hydra).
+
+Currently:
+- Columns can be shown/hidden
+- Column order is fixed and not user-configurable
+
+We want:
+- Admins to control the ORDER of columns
+- The displayed table to respect that order
+- The order to persist per admin user across sessions
+
+CHANGE REQUEST
+Add support for column reordering in the Visible Columns UI and apply that order to the table rendering.
+
+WHAT I WANT YOU TO DO
+1. Research the codebase to identify:
+   - Where column definitions are stored
+   - Where visible columns state is managed
+   - Where the table is rendered
+   - Where user/admin preferences are stored (DB, localStorage, or API)
+
+2. Implement column ordering:
+   - Allow drag-and-drop reordering in the Visible Columns UI OR
+     provide up/down controls per column
+   - Maintain an ordered array of column keys instead of relying on a static list
+
+3. Persist column order:
+   - Save the ordered column list per admin user
+   - Use the same persistence mechanism currently used for admin preferences
+     (localStorage, user_settings table, or equivalent)
+   - Load and apply this order on page load
+
+4. Update table rendering:
+   - Render columns strictly in the saved order
+   - Respect both visibility AND order (hidden columns excluded, order preserved)
+
+5. Backward compatibility:
+   - If no saved column order exists, fall back to the current default order
+   - Do not break existing admin views
+
+6. Write a clear implementation plan:
+   - Files touched
+   - State changes
+   - Persistence strategy
+   - UI behavior
+
+IMPORTANT CONSTRAINTS
+- Column order must be remembered per admin user
+- Do not hardcode column order in the table
+- Do not break existing visible/hidden column functionality
+- Keep the UX simple and predictable
+
+DELIVERABLE
+- Updated column reorder + persistence feature fully implemented
+- Table displays columns in the exact order selected by the admin
+- Instructions.md updated with:
+  - Design decisions
+  - Data model or storage used
+  - How to extend this for future columns

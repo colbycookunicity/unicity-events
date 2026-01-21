@@ -1,7 +1,10 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useSearch, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Search, Download, MoreHorizontal, Mail, Edit, Trash2, User, Shirt, Save, Pencil, ChevronUp, ChevronDown, Settings2, ArrowUpDown, Plus, Upload, Edit2, ArrowRightLeft, Copy, ExternalLink, Printer as PrinterIcon, CheckCircle2, XCircle, Clock, Send, HelpCircle } from "lucide-react";
+import { Search, Download, MoreHorizontal, Mail, Edit, Trash2, User, Shirt, Save, Pencil, ChevronUp, ChevronDown, Settings2, ArrowUpDown, Plus, Upload, Edit2, ArrowRightLeft, Copy, ExternalLink, Printer as PrinterIcon, CheckCircle2, XCircle, Clock, Send, HelpCircle, GripVertical } from "lucide-react";
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PhoneInput from "react-phone-number-input";
@@ -29,6 +32,7 @@ import {
 import { useTranslation } from "@/lib/i18n";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/lib/auth";
 import { format } from "date-fns";
 import type { Registration, Event, SwagAssignmentWithDetails, QualifiedRegistrant, GuestAllowanceRule, FormTemplate, PrintLog, Printer } from "@shared/schema";
 
@@ -168,15 +172,76 @@ const ALL_COLUMNS: { key: ColumnKey; label: string; defaultVisible: boolean }[] 
 ];
 
 const STORAGE_KEY = "attendees-visible-columns";
+const ORDER_STORAGE_KEY = "attendees-column-order";
+
+// Sortable column item for drag-and-drop reordering
+function SortableColumnItem({ 
+  id, 
+  label, 
+  isVisible, 
+  onToggle 
+}: { 
+  id: string; 
+  label: string; 
+  isVisible: boolean; 
+  onToggle: () => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center gap-2 py-1 px-1 rounded hover:bg-muted/50"
+    >
+      <button
+        type="button"
+        className="cursor-grab touch-none text-muted-foreground hover:text-foreground"
+        data-testid={`drag-handle-column-${id}`}
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <Checkbox
+        id={`col-${id}`}
+        checked={isVisible}
+        onCheckedChange={onToggle}
+        data-testid={`checkbox-column-${id}`}
+      />
+      <Label htmlFor={`col-${id}`} className="text-sm font-normal cursor-pointer flex-1">
+        {label}
+      </Label>
+    </div>
+  );
+}
 
 export default function AttendeesPage() {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const { user } = useAuth();
   const searchParams = useSearch();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [registrationStatusFilter, setRegistrationStatusFilter] = useState<string>("all");
+
+  // User-scoped storage keys for column preferences
+  const userStorageKey = user?.id ? `attendees-visible-columns-${user.id}` : STORAGE_KEY;
+  const userOrderStorageKey = user?.id ? `attendees-column-order-${user.id}` : ORDER_STORAGE_KEY;
   
   // Initialize event filter from URL query parameter if present
   const initialEventId = useMemo(() => {
@@ -224,19 +289,77 @@ export default function AttendeesPage() {
   const [bulkResendDialogOpen, setBulkResendDialogOpen] = useState(false);
   const [bulkResendLanguage, setBulkResendLanguage] = useState<string>("en");
   
-  const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(() => {
+  // Helper to load visible columns from storage
+  const loadVisibleColumns = useCallback((storageKey: string): Set<ColumnKey> => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const saved = localStorage.getItem(storageKey);
       if (saved) {
         return new Set(JSON.parse(saved) as ColumnKey[]);
       }
     } catch {}
     return new Set(ALL_COLUMNS.filter(c => c.defaultVisible).map(c => c.key));
-  });
+  }, []);
 
+  // Helper to load column order from storage
+  const loadColumnOrder = useCallback((storageKey: string): ColumnKey[] => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved) as ColumnKey[];
+        const validKeys = new Set(ALL_COLUMNS.map(c => c.key));
+        const filteredOrder = parsed.filter(k => validKeys.has(k));
+        const savedSet = new Set(filteredOrder);
+        ALL_COLUMNS.forEach(c => {
+          if (!savedSet.has(c.key)) {
+            filteredOrder.push(c.key);
+          }
+        });
+        return filteredOrder;
+      }
+    } catch {}
+    return ALL_COLUMNS.map(c => c.key);
+  }, []);
+
+  const [visibleColumns, setVisibleColumns] = useState<Set<ColumnKey>>(() => 
+    loadVisibleColumns(userStorageKey)
+  );
+
+  const [columnOrder, setColumnOrder] = useState<ColumnKey[]>(() => 
+    loadColumnOrder(userOrderStorageKey)
+  );
+
+  // Reload preferences when user changes (scoped per user)
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(visibleColumns)));
-  }, [visibleColumns]);
+    setVisibleColumns(loadVisibleColumns(userStorageKey));
+    setColumnOrder(loadColumnOrder(userOrderStorageKey));
+  }, [userStorageKey, userOrderStorageKey, loadVisibleColumns, loadColumnOrder]);
+
+  // Save visible columns to user-scoped storage
+  useEffect(() => {
+    localStorage.setItem(userStorageKey, JSON.stringify(Array.from(visibleColumns)));
+  }, [visibleColumns, userStorageKey]);
+
+  // Save column order to user-scoped storage
+  useEffect(() => {
+    localStorage.setItem(userOrderStorageKey, JSON.stringify(columnOrder));
+  }, [columnOrder, userOrderStorageKey]);
+
+  // DnD sensors for column reordering
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setColumnOrder((items) => {
+        const oldIndex = items.indexOf(active.id as ColumnKey);
+        const newIndex = items.indexOf(over.id as ColumnKey);
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
+  }, []);
 
   useEffect(() => {
     if (eventFilter === "all") {
@@ -1547,7 +1670,22 @@ export default function AttendeesPage() {
     return new Set(Array.from(visibleColumns).filter(c => relevantColumns.has(c)));
   }, [eventFilter, visibleColumns, relevantColumns]);
   
-  const visibleColumnList = ALL_COLUMNS.filter(c => effectiveVisibleColumns.has(c.key));
+  // Build visible column list respecting user's column order
+  const visibleColumnList = useMemo(() => {
+    const columnMap = new Map(ALL_COLUMNS.map(c => [c.key, c]));
+    // Use columnOrder for ordering, filter by visibility
+    return columnOrder
+      .filter(key => effectiveVisibleColumns.has(key) && columnMap.has(key))
+      .map(key => columnMap.get(key)!);
+  }, [columnOrder, effectiveVisibleColumns]);
+
+  // Get orderable columns for the popover (respects current order, filters by relevance)
+  const orderableColumns = useMemo(() => {
+    const columnMap = new Map(ALL_COLUMNS.map(c => [c.key, c]));
+    return columnOrder
+      .filter(key => key !== "actions" && relevantColumns.has(key) && columnMap.has(key))
+      .map(key => columnMap.get(key)!);
+  }, [columnOrder, relevantColumns]);
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -1616,27 +1754,34 @@ export default function AttendeesPage() {
                   Columns
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-64" align="end">
+              <PopoverContent className="w-72" align="end">
                 <div className="space-y-2">
                   <h4 className="font-medium text-sm">Visible Columns</h4>
-                  <p className="text-xs text-muted-foreground">Select which columns to display</p>
+                  <p className="text-xs text-muted-foreground">Drag to reorder, check to show/hide</p>
                   <Separator />
                   <ScrollArea className="h-[300px] pr-3">
-                    <div className="space-y-2">
-                      {ALL_COLUMNS.filter(c => c.key !== "actions" && relevantColumns.has(c.key)).map((col) => (
-                        <div key={col.key} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`col-${col.key}`}
-                            checked={visibleColumns.has(col.key)}
-                            onCheckedChange={() => toggleColumn(col.key)}
-                            data-testid={`checkbox-column-${col.key}`}
-                          />
-                          <Label htmlFor={`col-${col.key}`} className="text-sm font-normal cursor-pointer">
-                            {col.label}
-                          </Label>
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <SortableContext
+                        items={orderableColumns.map(c => c.key)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        <div className="space-y-1">
+                          {orderableColumns.map((col) => (
+                            <SortableColumnItem
+                              key={col.key}
+                              id={col.key}
+                              label={col.label}
+                              isVisible={visibleColumns.has(col.key)}
+                              onToggle={() => toggleColumn(col.key)}
+                            />
+                          ))}
                         </div>
-                      ))}
-                    </div>
+                      </SortableContext>
+                    </DndContext>
                   </ScrollArea>
                 </div>
               </PopoverContent>

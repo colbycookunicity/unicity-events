@@ -40,7 +40,7 @@ Preferred communication style: Simple, everyday language.
 - **Reimbursements**: Expense tracking with receipt uploads
 
 ### Key Pages
-- **AttendeesPage**: Unified page showing both registered attendees and qualifiers (non-registered people). When an event is selected, shows qualifier management tools (Add Person, Upload CSV, Export List). Supports registration status filter (All/Registered/Not Registered).
+- **AttendeesPage**: Unified page showing both registered attendees and qualifiers (non-registered people). When an event is selected, shows qualifier management tools (Add Person, Upload CSV, Export List). Supports registration status filter (All/Registered/Not Registered). Features drag-and-drop column reordering and column visibility controls, with preferences stored per-user in localStorage (keys scoped by user ID to prevent cross-user conflicts).
 
 ### File Structure Pattern
 ```
