@@ -142,7 +142,7 @@ export default function GuestRegistrationPage() {
     },
     onSuccess: (data) => {
       if (data.requiresPayment && data.checkoutUrl) {
-        // Redirect to Stripe checkout
+        // Redirect to payment checkout
         window.location.href = data.checkoutUrl;
       } else {
         // No payment required, show success

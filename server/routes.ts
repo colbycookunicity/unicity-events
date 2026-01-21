@@ -3,8 +3,6 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertEventSchema, insertRegistrationSchema, insertGuestSchema, insertFlightSchema, insertReimbursementSchema, insertSwagItemSchema, insertSwagAssignmentSchema, insertQualifiedRegistrantSchema, insertUserSchema, insertPrinterSchema, insertPrintLogSchema, insertBadgeTemplateSchema, userRoleEnum, deriveRegistrationFlags, deriveRegistrationMode, type RegistrationMode, generateCheckInToken, parseCheckInQRPayload, buildCheckInQRPayload } from "@shared/schema";
 import { z } from "zod";
-import { stripeService } from "./stripeService";
-import { getStripePublishableKey } from "./stripeClient";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { ObjectPermission } from "./objectAcl";
 import { iterableService, validateIterableConfig } from "./iterable";
@@ -3103,63 +3101,17 @@ export async function registerRoutes(
         return res.status(400).json({ error: "This event does not require payment" });
       }
 
-      // Build success/cancel URLs
-      const host = req.headers.host || 'localhost:5000';
-      const protocol = req.headers['x-forwarded-proto'] || 'http';
-      const baseUrl = `${protocol}://${host}`;
-
-      // Update registration to pending payment status
-      await storage.updateRegistration(registration.id, {
-        paymentStatus: 'pending',
-        amountPaidCents: event.buyInPrice * 100,
-      });
-
-      const session = await stripeService.createCheckoutSessionForRegistration(
-        registration.id,
-        `${registration.firstName} ${registration.lastName}`,
-        event.buyInPrice * 100,
-        event.name,
-        `${baseUrl}/my-dashboard?payment=success&registration_id=${registration.id}&session_id={CHECKOUT_SESSION_ID}`,
-        `${baseUrl}/my-dashboard?payment=canceled&registration_id=${registration.id}`
-      );
-
-      res.json({ checkoutUrl: session.url });
+      // Payment processing is not currently configured
+      return res.status(503).json({ error: "Payment processing is not currently available" });
     } catch (error) {
       console.error("Initiate payment error:", error);
       res.status(500).json({ error: "Failed to initiate payment" });
     }
   });
 
-  // Verify registration payment (after Stripe redirect)
+  // Verify registration payment - payment processing not currently configured
   app.post("/api/registrations/:id/verify-payment", authenticateToken, async (req: AuthenticatedRequest, res) => {
-    try {
-      const { sessionId } = req.body;
-      if (!sessionId) {
-        return res.status(400).json({ error: "Session ID is required" });
-      }
-
-      const registration = await storage.getRegistration(req.params.id);
-      if (!registration) {
-        return res.status(404).json({ error: "Registration not found" });
-      }
-
-      // Check if already paid (idempotency)
-      if (registration.paymentStatus === 'paid') {
-        return res.json({ success: true, message: "Payment already confirmed" });
-      }
-
-      const result = await stripeService.handlePaymentSuccess(sessionId);
-      
-      if (result.success) {
-        const updatedRegistration = await storage.getRegistration(req.params.id);
-        res.json({ success: true, registration: updatedRegistration });
-      } else {
-        res.status(400).json({ error: "Payment verification failed" });
-      }
-    } catch (error) {
-      console.error("Verify payment error:", error);
-      res.status(500).json({ error: "Failed to verify payment" });
-    }
+    return res.status(503).json({ error: "Payment processing is not currently available" });
   });
 
   // My Registrations (for authenticated users)
@@ -3376,71 +3328,6 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Delete reimbursement error:", error);
       res.status(500).json({ error: "Failed to delete reimbursement" });
-    }
-  });
-
-  // Stripe Payment Routes
-  app.get("/api/stripe/config", async (req, res) => {
-    try {
-      const publishableKey = await getStripePublishableKey();
-      res.json({ publishableKey });
-    } catch (error) {
-      console.error("Get Stripe config error:", error);
-      res.status(500).json({ error: "Failed to get Stripe configuration" });
-    }
-  });
-
-  app.post("/api/guests/:guestId/checkout", authenticateToken, async (req, res) => {
-    try {
-      const guest = await storage.getGuestsByRegistration(req.params.guestId);
-      const guestData = guest.find(g => g.id === req.params.guestId);
-      
-      if (!guestData) {
-        return res.status(404).json({ error: "Guest not found" });
-      }
-
-      const registration = await storage.getRegistration(guestData.registrationId);
-      if (!registration) {
-        return res.status(404).json({ error: "Registration not found" });
-      }
-
-      const event = await storage.getEvent(registration.eventId);
-      if (!event || !event.buyInPrice) {
-        return res.status(400).json({ error: "Event buy-in price not configured" });
-      }
-
-      const host = req.headers.host || 'localhost:5000';
-      const protocol = req.headers['x-forwarded-proto'] || 'http';
-      const baseUrl = `${protocol}://${host}`;
-
-      const session = await stripeService.createCheckoutSessionForGuest(
-        guestData.id,
-        `${guestData.firstName} ${guestData.lastName}`,
-        event.buyInPrice * 100, // Convert to cents
-        event.name,
-        `${baseUrl}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-        `${baseUrl}/payment/cancel`
-      );
-
-      res.json({ url: session.url });
-    } catch (error) {
-      console.error("Checkout error:", error);
-      res.status(500).json({ error: "Failed to create checkout session" });
-    }
-  });
-
-  app.post("/api/payment/verify", authenticateToken, async (req, res) => {
-    try {
-      const { sessionId } = req.body;
-      if (!sessionId) {
-        return res.status(400).json({ error: "Session ID required" });
-      }
-
-      const success = await stripeService.handlePaymentSuccess(sessionId);
-      res.json({ success });
-    } catch (error) {
-      console.error("Payment verification error:", error);
-      res.status(500).json({ error: "Failed to verify payment" });
     }
   });
 
@@ -4424,27 +4311,11 @@ export async function registerRoutes(
         paymentStatus: requiresPayment ? "pending" : "not_required",
       });
 
-      // If payment is required, create a Stripe checkout session
+      // If payment is required, return error (payment processing not currently configured)
       if (requiresPayment) {
-        const host = req.headers.host || 'localhost:5000';
-        const protocol = req.headers['x-forwarded-proto'] || 'http';
-        const baseUrl = `${protocol}://${host}`;
-        const eventSlug = event.slug || event.id;
-
-        const session = await stripeService.createCheckoutSessionForGuest(
-          guest.id,
-          `${firstName} ${lastName}`,
-          event.buyInPrice! * 100,
-          event.name,
-          `${baseUrl}/events/${eventSlug}/guest-payment-success?session_id={CHECKOUT_SESSION_ID}&guest_id=${guest.id}`,
-          `${baseUrl}/events/${eventSlug}/guest-register?canceled=true`
-        );
-
-        return res.status(201).json({
-          guest,
-          checkoutUrl: session.url,
-          requiresPayment: true,
-        });
+        // Delete the guest record since payment can't be processed
+        await storage.deleteGuest(guest.id);
+        return res.status(503).json({ error: "Payment processing is not currently available" });
       }
 
       // No payment required
@@ -4462,26 +4333,9 @@ export async function registerRoutes(
     }
   });
 
-  // Verify guest payment (public - called after Stripe redirect)
+  // Verify guest payment - payment processing not currently configured
   app.post("/api/public/verify-guest-payment", async (req, res) => {
-    try {
-      const { sessionId, guestId } = req.body;
-      if (!sessionId || !guestId) {
-        return res.status(400).json({ error: "Session ID and guest ID are required" });
-      }
-
-      const success = await stripeService.handlePaymentSuccess(sessionId);
-      
-      if (success) {
-        const updatedGuest = await storage.getGuest(guestId);
-        res.json({ success: true, guest: updatedGuest });
-      } else {
-        res.status(400).json({ error: "Payment verification failed" });
-      }
-    } catch (error) {
-      console.error("Error verifying guest payment:", error);
-      res.status(500).json({ error: "Failed to verify payment" });
-    }
+    return res.status(503).json({ error: "Payment processing is not currently available" });
   });
 
   /**

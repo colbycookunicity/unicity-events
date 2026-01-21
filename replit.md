@@ -76,12 +76,6 @@ shared/           # Shared code between client/server
   - Production: `https://hydra.unicity.net/v6`
   - QA: `https://hydraqa.unicity.net/v6-test`
 
-### Payment Processing
-- **Stripe**: Guest buy-in payments via Stripe Checkout
-  - Uses Replit's Stripe connector for credential management
-  - Webhook handling for payment confirmation
-  - `stripe-replit-sync` package for schema migrations
-
 ### Email & Marketing Automation
 - **Iterable**: Email and engagement platform for events
   - Confirmation emails, check-in notifications, qualification grants
@@ -108,5 +102,4 @@ shared/           # Shared code between client/server
 
 ### Environment Variables Required
 - `DATABASE_URL`: PostgreSQL connection string
-- Stripe credentials (managed via Replit connector)
 - `REPLIT_DOMAINS`: For webhook URL construction
