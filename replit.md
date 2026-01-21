@@ -31,7 +31,7 @@ Preferred communication style: Simple, everyday language.
 - **Connection**: PostgreSQL via `DATABASE_URL` environment variable
 
 ### Core Data Models
-- **Users**: Admin/staff accounts with role-based access (admin, event_manager, marketing, readonly)
+- **Users**: Admin/staff accounts with role-based access (admin, event_manager, marketing, readonly). Includes `signupSource` field to track user creation origin (EVENTS_APP, API_GENERIC, ADMIN_UI) and `signupContext` JSONB field for additional context (e.g., eventId, eventName for events-originated signups).
 - **Events**: Event definitions with bilingual support, qualification periods, and registration settings
 - **Registrations**: Attendee records linked to events and Unicity IDs
 - **QualifiedRegistrants**: Pre-approved people who can register for events (managed via unified Attendees page)
