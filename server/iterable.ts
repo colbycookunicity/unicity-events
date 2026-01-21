@@ -10,11 +10,11 @@ const REQUIRED_CAMPAIGN_ENV_VARS = [
 ] as const;
 
 /**
- * Convert language code to full locale for Iterable.
+ * Convert language code to ISO 639-1 two-letter locale for Iterable.
  * Iterable uses locale to select the correct localized template within a campaign.
  */
 function getLocaleFromLanguage(language: string): string {
-  return language === 'es' ? 'es-US' : 'en-US';
+  return language === 'es' ? 'es' : 'en';
 }
 
 // Email type keys matching EventIterableCampaigns
@@ -141,7 +141,7 @@ function getCampaignId(envVarName: string): number {
  * 3. 0 (skip sending with warning log) - No campaign configured
  * 
  * NOTE: Language is no longer used for campaign selection. Iterable handles locale-based
- * template rendering within a single campaign. The `locale` field (e.g., "en-US", "es-US")
+ * template rendering within a single campaign. The `locale` field (e.g., "en", "es")
  * is sent in dataFields for Iterable to select the correct localized template.
  * 
  * @param event - Event object with optional iterableCampaigns
@@ -524,7 +524,7 @@ export class IterableService {
     profile: {
       firstName?: string;
       lastName?: string;
-      locale?: string; // e.g. "en-US", "es-US", "fr-FR"
+      locale?: string; // e.g. "en", "es", "fr" (ISO 639-1 two-letter codes)
     }
   ): Promise<{ success: boolean; error?: string }> {
     if (!isConfigured()) {
@@ -790,8 +790,8 @@ export class IterableService {
       return;
     }
 
-    // Derive locale from language (e.g. "en" -> "en-US", "es" -> "es-US")
-    const locale = registration.language === 'es' ? 'es-US' : 'en-US';
+    // Derive locale from language (ISO 639-1 two-letter codes)
+    const locale = registration.language === 'es' ? 'es' : 'en';
 
     // Step 1: Create or update user profile
     try {
