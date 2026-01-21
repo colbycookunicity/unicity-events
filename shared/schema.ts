@@ -36,6 +36,18 @@ export type ReimbursementStatus = typeof reimbursementStatusEnum[number];
 export const marketCodeEnum = ["US", "CA", "PR", "EU", "MX", "CO", "TH", "KR", "JP", "AU", "NZ", "SG", "HK", "TW", "PH", "MY", "ID", "VN"] as const;
 export type MarketCode = typeof marketCodeEnum[number];
 
+// Signup source enum values
+export const signupSourceEnum = ["EVENTS_APP", "API_GENERIC", "ADMIN_UI"] as const;
+export type SignupSource = typeof signupSourceEnum[number];
+
+// Events-specific signup context interface
+export interface EventsSignupContext {
+  eventId: string;
+  eventType: "METHOD" | "SKILL_SCHOOL" | "DIAMOND_CAMP";
+  market: string;
+  role: "attendee" | "guest" | "admin_added";
+}
+
 // Users table - for admin/staff accounts
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -48,6 +60,10 @@ export const users = pgTable("users", {
   // Market-based scoping (Phase 1: nullable, not enforced yet)
   // null = global access (or feature not enabled), array = access to specific markets
   assignedMarkets: text("assigned_markets").array(),
+  // Signup tracking - where the user was created from
+  signupSource: text("signup_source").default("API_GENERIC"),
+  // Signup context - structured JSON for Events-originated users (EventsSignupContext)
+  signupContext: jsonb("signup_context"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   lastModified: timestamp("last_modified").defaultNow().notNull(),
 });

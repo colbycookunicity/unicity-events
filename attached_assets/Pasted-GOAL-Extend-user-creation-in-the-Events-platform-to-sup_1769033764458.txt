@@ -1,0 +1,60 @@
+GOAL
+Extend user creation in the Events platform to support a strongly-typed EventsSignupContext object, while setting signupSource to "EVENTS_APP" for all Events-originated users.
+
+BACKGROUND
+Users created via the Events application are currently stored with:
+signupSource = "API"
+
+We already agreed to change this to:
+signupSource = "EVENTS_APP"
+
+We now want to formalize and enforce a structured signupContext specifically for Events using a typed interface, so event-related metadata is consistent, queryable, and future-proof.
+
+CHANGE REQUEST
+1. Ensure all users created via the Events application explicitly set:
+   signupSource = "EVENTS_APP"
+
+2. Add support for a typed signupContext object that follows this interface:
+
+   interface EventsSignupContext {
+     eventId: string;
+     eventType: "METHOD" | "SKILL_SCHOOL" | "DIAMOND_CAMP";
+     market: string;
+     role: "attendee" | "guest" | "admin_added";
+   }
+
+3. signupContext should be optional, nullable, and stored as a JSON / object field.
+   - It should only be populated for Events-created users.
+   - Other user creation flows should remain unchanged.
+
+WHAT I WANT YOU TO DO
+- Research the codebase to locate:
+  - The user creation service/function
+  - All Events-related user creation entry points (registration flow, admin add, qualification → registration flow)
+
+- Update the Events user creation logic to:
+  - Pass signupSource = "EVENTS_APP"
+  - Pass a signupContext object conforming to EventsSignupContext
+
+- Ensure the core user creation service:
+  - Accepts signupContext as an optional parameter
+  - Defaults signupSource to "API_GENERIC" if no explicit source is provided
+  - Does NOT enforce EventsSignupContext for non-Events callers
+
+- Add or update TypeScript typings so:
+  - EventsSignupContext is explicitly defined
+  - signupContext is typed as EventsSignupContext | null in Events code paths
+  - Generic user code treats signupContext as unknown / JSON
+
+IMPORTANT CONSTRAINTS
+- Do NOT backfill or modify existing users
+- Do NOT overwrite signupSource for existing records
+- Do NOT break non-Events user creation flows
+- signupContext must be optional and nullable
+- Keep naming, enums, and file structure consistent with the existing codebase
+
+DELIVERABLE
+1. signupSource correctly set to "EVENTS_APP" for Events-created users
+2. EventsSignupContext interface added and used in Events flows
+3. signupContext persisted as structured JSON
+4. Summary of files changed and confirmation that no backfill was performed
