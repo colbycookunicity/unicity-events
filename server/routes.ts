@@ -355,6 +355,7 @@ export async function registerRoutes(
           name: email.split("@")[0],
           role: "admin",
           customerId,
+          signupSource: "ADMIN_UI",
         });
         console.log(`Bootstrap: Created fallback admin user for ${email}`);
       }
@@ -1221,7 +1222,13 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Invalid role" });
       }
 
-      const user = await storage.createUser(parsed.data);
+      // Set signupSource to ADMIN_UI for users created via the admin interface
+      const userData = {
+        ...parsed.data,
+        signupSource: "ADMIN_UI" as const,
+      };
+
+      const user = await storage.createUser(userData);
       res.status(201).json(user);
     } catch (error) {
       console.error("Create user error:", error);
