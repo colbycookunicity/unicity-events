@@ -442,8 +442,8 @@ export default function AttendeesPage() {
       }
     }
     
-    // Include swagStatus, checkedInAt, lastModified, and verifiedByHydra for all events
-    const additionalColumns: ColumnKey[] = ["swagStatus", "checkedInAt", "lastModified", "verifiedByHydra"];
+    // Include swagStatus, checkedInAt, lastModified, verifiedByHydra, and language for all events
+    const additionalColumns: ColumnKey[] = ["swagStatus", "checkedInAt", "lastModified", "verifiedByHydra", "language"];
     
     return new Set([...alwaysVisible, ...relevantFromForm, ...additionalColumns]);
   }, [eventFormFields, eventFilter]);
