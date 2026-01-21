@@ -1891,6 +1891,12 @@ export default function AttendeesPage() {
                   <StatusBadge status={selectedAttendee.swagStatus || "pending"} type="swag" />
                 </div>
                 <div>
+                  <p className="text-sm text-muted-foreground">Locale</p>
+                  <Badge variant="outline" className="text-xs">
+                    {selectedAttendee.language === "es" ? "ES" : "EN"}
+                  </Badge>
+                </div>
+                <div>
                   <p className="text-sm text-muted-foreground">Registered</p>
                   <span className="text-sm font-medium">
                     {selectedAttendee.registeredAt 
@@ -2269,6 +2275,19 @@ export default function AttendeesPage() {
                     <SelectItem value="registered">Registered</SelectItem>
                     <SelectItem value="checked_in">Checked In</SelectItem>
                     <SelectItem value="not_coming">Not Coming</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Locale</Label>
+                <Select value={editForm.language || "en"} onValueChange={(v) => handleFormChange("language", v)}>
+                  <SelectTrigger data-testid="edit-language">
+                    <SelectValue placeholder="Select locale" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="en">English (EN)</SelectItem>
+                    <SelectItem value="es">Spanish (ES)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
