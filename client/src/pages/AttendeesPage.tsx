@@ -1198,7 +1198,11 @@ export default function AttendeesPage() {
   const handleExportCSV = () => {
     if (!filteredPeople?.length) return;
 
-    const exportColumns = ALL_COLUMNS.filter(c => effectiveVisibleColumns.has(c.key) && c.key !== "actions");
+    // Use column order and only include visible columns (excluding actions)
+    const exportColumns = columnOrder
+      .filter(key => effectiveVisibleColumns.has(key) && key !== "actions")
+      .map(key => ALL_COLUMNS.find(c => c.key === key)!)
+      .filter(Boolean);
     const headers = exportColumns.map(c => c.label);
     
     const csvContent = [
@@ -1268,6 +1272,9 @@ export default function AttendeesPage() {
             case "adaAccommodations":
               value = reg?.adaAccommodations ? "Yes" : "No";
               break;
+            case "language":
+              value = reg?.language === "es" ? "ES" : "EN";
+              break;
             case "registeredAt":
               value = reg?.registeredAt ? format(new Date(reg.registeredAt), "yyyy-MM-dd HH:mm") : "";
               break;
@@ -1304,7 +1311,11 @@ export default function AttendeesPage() {
     if (selectedPeople.size === 0) return;
 
     const selectedList = filteredPeople.filter(p => selectedPeople.has(p.id));
-    const exportColumns = ALL_COLUMNS.filter(c => effectiveVisibleColumns.has(c.key) && c.key !== "actions");
+    // Use column order and only include visible columns (excluding actions)
+    const exportColumns = columnOrder
+      .filter(key => effectiveVisibleColumns.has(key) && key !== "actions")
+      .map(key => ALL_COLUMNS.find(c => c.key === key)!)
+      .filter(Boolean);
     const headers = exportColumns.map(c => c.label);
     
     const csvContent = [
@@ -1373,6 +1384,9 @@ export default function AttendeesPage() {
               break;
             case "adaAccommodations":
               value = reg?.adaAccommodations ? "Yes" : "No";
+              break;
+            case "language":
+              value = reg?.language === "es" ? "ES" : "EN";
               break;
             case "registeredAt":
               value = reg?.registeredAt ? format(new Date(reg.registeredAt), "yyyy-MM-dd HH:mm") : "";
@@ -1787,29 +1801,17 @@ export default function AttendeesPage() {
               </PopoverContent>
             </Popover>
           )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" data-testid="button-export-csv">
-                <Download className="h-4 w-4 mr-2" />
-                {t("export")}
-                {selectedPeople.size > 0 && (
-                  <Badge variant="secondary" className="ml-2">{selectedPeople.size}</Badge>
-                )}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleExportCSV} data-testid="button-export-all">
-                Export All ({filteredPeople.length})
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onClick={handleExportSelectedCSV} 
-                disabled={selectedPeople.size === 0}
-                data-testid="button-export-selected"
-              >
-                Export Selected ({selectedPeople.size})
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button 
+            variant="outline" 
+            onClick={() => selectedPeople.size > 0 ? handleExportSelectedCSV() : handleExportCSV()}
+            data-testid="button-export-csv"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Export CSV
+            {selectedPeople.size > 0 && (
+              <Badge variant="secondary" className="ml-2">{selectedPeople.size}</Badge>
+            )}
+          </Button>
           {selectedPeople.size > 0 && (
             <>
               <Button 
