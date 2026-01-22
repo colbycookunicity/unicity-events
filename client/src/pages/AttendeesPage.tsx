@@ -931,9 +931,22 @@ export default function AttendeesPage() {
           locale = "en";
         }
         
+        // Get raw name values
+        let firstName = values[firstNameIdx] || "";
+        let lastName = values[lastNameIdx] || "";
+        
+        // If firstName is empty but lastName has a value, use lastName as firstName
+        if (!firstName.trim() && lastName.trim()) {
+          firstName = lastName;
+          lastName = "";
+        }
+        
+        // Skip rows with no name at all
+        if (!firstName.trim()) continue;
+        
         parsedData.push({
-          firstName: values[firstNameIdx] || "",
-          lastName: values[lastNameIdx] || "",
+          firstName,
+          lastName,
           email,
           unicityId: unicityIdIdx >= 0 ? values[unicityIdIdx] || "" : "",
           phone: phoneIdx >= 0 ? values[phoneIdx] || "" : "",
