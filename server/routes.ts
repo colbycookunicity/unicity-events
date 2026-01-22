@@ -1956,6 +1956,83 @@ export async function registerRoutes(
     }
   });
 
+  /**
+   * ONE-TIME BACKFILL: Sync qualified registrants to Iterable
+   * 
+   * This endpoint creates/updates Iterable user profiles for CSV-uploaded qualifiers.
+   * 
+   * IMPORTANT SAFETY GUARANTEES:
+   * - ZERO emails will be sent (uses /users/update only, not /email/target)
+   * - ZERO campaigns are triggered (no campaign IDs referenced)
+   * - ZERO events tracked (no /events/track calls)
+   * - Idempotent - safe to run multiple times
+   * 
+   * Query params:
+   * - eventId (optional): Limit backfill to specific event
+   * - dryRun=true (optional): Preview what would be synced without executing
+   * 
+   * Admin-only. Requires explicit confirmation header.
+   */
+  app.post("/api/admin/iterable/backfill-qualifiers", authenticateToken, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const eventId = req.query.eventId as string | undefined;
+      const dryRun = req.query.dryRun === 'true';
+      
+      // Safety: Require explicit confirmation header
+      const confirmHeader = req.headers['x-confirm-backfill'];
+      if (confirmHeader !== 'CONFIRMED' && !dryRun) {
+        return res.status(400).json({
+          error: "Safety check failed",
+          message: "This is a one-time backfill operation. To proceed, include header: X-Confirm-Backfill: CONFIRMED",
+          hint: "Use dryRun=true to preview without executing"
+        });
+      }
+
+      console.log(`[BACKFILL] Initiated by user ${req.user!.email}`, {
+        eventId: eventId || 'ALL',
+        dryRun,
+        timestamp: new Date().toISOString(),
+      });
+
+      // Get qualified registrants
+      let qualifiers: any[];
+      if (eventId) {
+        qualifiers = await storage.getQualifiedRegistrantsByEvent(eventId);
+      } else {
+        qualifiers = await storage.getAllQualifiedRegistrants();
+      }
+
+      console.log(`[BACKFILL] Found ${qualifiers.length} qualifiers to process`);
+
+      if (dryRun) {
+        return res.json({
+          dryRun: true,
+          message: "Dry run - no changes made",
+          totalQualifiers: qualifiers.length,
+          sampleEmails: qualifiers.slice(0, 10).map((q: any) => q.email),
+          eventId: eventId || 'ALL',
+        });
+      }
+
+      // Execute backfill
+      const results = await iterableService.backfillQualifiersToIterable(qualifiers);
+
+      console.log(`[BACKFILL] Completed`, results);
+
+      res.json({
+        success: true,
+        message: "Backfill completed",
+        ...results,
+      });
+    } catch (error) {
+      console.error("[BACKFILL] Failed:", error);
+      res.status(500).json({ 
+        error: "Backfill failed", 
+        details: error instanceof Error ? error.message : String(error) 
+      });
+    }
+  });
+
   // Event Manager Assignments Routes
   app.get("/api/events/:id/managers", authenticateToken, requireRole("admin"), async (req, res) => {
     try {

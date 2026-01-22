@@ -1,0 +1,64 @@
+GOAL
+Perform a one-time backfill to create Iterable user profiles for CSV-uploaded qualified users WITHOUT sending any emails.
+
+BACKGROUND
+Users uploaded via CSV are stored in the qualified_registrants table and were intentionally not synced to Iterable.
+As a result, these users do not exist in Iterable at all (no profile, no list membership).
+We now want these users to exist in Iterable for segmentation and visibility purposes only.
+This is a one-time backfill. Future CSV uploads should remain unchanged.
+
+CHANGE REQUEST
+Implement a one-time backfill script/process to create or update Iterable user profiles for existing qualified_registrants records.
+
+WHAT I WANT YOU TO DO
+1. Research the codebase and database to identify:
+   - The qualified_registrants table
+   - Fields available per record (email, eventId, role, market, etc.)
+   - Any existing Iterable utilities or clients
+
+2. Build a one-time backfill process that:
+   - Iterates over existing qualified_registrants
+   - Creates or updates users in Iterable using:
+     - users/update or users/bulkUpdate
+   - Uses email as the primary identifier
+
+3. Ensure the backfill is SILENT:
+   - Do NOT call events/track
+   - Do NOT reference campaign IDs
+   - Do NOT trigger workflows
+   - Do NOT subscribe users to marketing campaigns
+   - User creation only (profile-level write)
+
+4. Add clear tagging to the Iterable profile to indicate origin, for example:
+   - signupSource: "CSV_IMPORT"
+   - qualificationSource: "EVENT_ADMIN"
+   - eventId
+   - role
+   - market
+   - backfilledAt (timestamp)
+
+5. Add safety instrumentation:
+   - Log total users scanned
+   - Log total users written to Iterable
+   - Log any Iterable API errors
+   - Sample-log a small number of emails for verification
+
+6. Ensure the process is:
+   - Idempotent (safe to run once without duplicates)
+   - Manually invoked (script or admin-only route)
+   - Clearly marked as ONE-TIME USE
+
+IMPORTANT CONSTRAINTS
+- ZERO emails may be sent
+- No campaign triggers
+- No future CSV behavior changes
+- No automatic syncing added to CSV uploads
+- This is a one-time backfill only
+
+DELIVERABLE
+- Write the backfill plan and implementation details to Instructions.md
+- Include:
+  - Exact Iterable API calls used
+  - Confirmation that no email-triggering endpoints are used
+  - How to safely execute the backfill
+  - Expected results after completion (users searchable in Iterable)

@@ -878,6 +878,120 @@ export class IterableService {
       isPaid: !!isPaid 
     });
   }
+
+  /**
+   * ONE-TIME BACKFILL: Sync qualified registrants to Iterable as user profiles.
+   * 
+   * IMPORTANT: This is a SILENT sync - it ONLY creates/updates user profiles.
+   * - Does NOT call /events/track
+   * - Does NOT trigger any campaigns
+   * - Does NOT send any emails
+   * - Does NOT subscribe to marketing lists
+   * 
+   * Uses POST /users/update for each user (safe, idempotent).
+   * 
+   * @param qualifiers - Array of qualified registrants to sync
+   * @returns Summary of backfill results
+   */
+  async backfillQualifiersToIterable(
+    qualifiers: Array<{
+      id: string;
+      email: string;
+      firstName: string;
+      lastName: string;
+      locale: string;
+      eventId: string;
+      unicityId?: string | null;
+    }>
+  ): Promise<{
+    total: number;
+    synced: number;
+    failed: number;
+    errors: Array<{ email: string; error: string }>;
+    sampleEmails: string[];
+  }> {
+    const results = {
+      total: qualifiers.length,
+      synced: 0,
+      failed: 0,
+      errors: [] as Array<{ email: string; error: string }>,
+      sampleEmails: [] as string[],
+    };
+
+    log('info', `[BACKFILL] Starting one-time qualifier backfill to Iterable`, {
+      totalUsers: qualifiers.length,
+    });
+
+    if (!isConfigured()) {
+      log('error', '[BACKFILL] Cannot proceed - ITERABLE_API_KEY not configured');
+      return {
+        ...results,
+        failed: qualifiers.length,
+        errors: [{ email: 'ALL', error: 'ITERABLE_API_KEY not configured' }],
+      };
+    }
+
+    const backfilledAt = new Date().toISOString();
+
+    for (const qualifier of qualifiers) {
+      try {
+        // Build dataFields with origin tagging
+        const dataFields: Record<string, any> = {
+          firstName: qualifier.firstName,
+          lastName: qualifier.lastName,
+          locale: qualifier.locale || 'en',
+          // Origin tagging for backfill visibility
+          signupSource: 'CSV_IMPORT',
+          qualificationSource: 'EVENT_ADMIN',
+          backfilledAt,
+          lastEventId: qualifier.eventId,
+        };
+
+        // Add unicityId if present
+        if (qualifier.unicityId) {
+          dataFields.unicityId = qualifier.unicityId;
+        }
+
+        // SILENT SYNC: Only /users/update - no events, no campaigns, no emails
+        await this.request('POST', '/users/update', {
+          email: qualifier.email,
+          dataFields,
+          preferUserId: false, // Use email as primary identifier
+        });
+
+        results.synced++;
+
+        // Sample log first 5 emails for verification
+        if (results.sampleEmails.length < 5) {
+          results.sampleEmails.push(qualifier.email);
+        }
+
+        // Progress log every 100 users
+        if (results.synced % 100 === 0) {
+          log('info', `[BACKFILL] Progress: ${results.synced}/${results.total} synced`);
+        }
+      } catch (error) {
+        results.failed++;
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        
+        // Only store first 50 errors to avoid memory issues
+        if (results.errors.length < 50) {
+          results.errors.push({ email: qualifier.email, error: errorMessage });
+        }
+        
+        log('error', `[BACKFILL] Failed to sync user: ${qualifier.email}`, { error: errorMessage });
+      }
+    }
+
+    log('info', `[BACKFILL] Completed`, {
+      total: results.total,
+      synced: results.synced,
+      failed: results.failed,
+      sampleEmails: results.sampleEmails,
+    });
+
+    return results;
+  }
 }
 
 export const iterableService = new IterableService();

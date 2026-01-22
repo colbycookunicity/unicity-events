@@ -6906,8 +6906,176 @@ When true, call the silent sync for each imported qualifier.
 
 ---
 
-## No Changes Made
+---
 
-Per the constraints, this document is discovery and documentation only. No code changes have been implemented.
+# One-Time Backfill: CSV Qualifiers → Iterable
+
+**Date**: January 22, 2026  
+**Status**: ✅ IMPLEMENTED
+
+---
+
+## Purpose
+
+Create Iterable user profiles for CSV-uploaded qualified registrants WITHOUT sending any emails.
+
+---
+
+## Implementation Details
+
+### API Endpoint
+
+**POST** `/api/admin/iterable/backfill-qualifiers`
+
+**Authentication**: Admin-only (`requireRole("admin")`)
+
+**Query Parameters**:
+- `eventId` (optional): Limit backfill to a specific event
+- `dryRun=true` (optional): Preview what would be synced without executing
+
+**Required Header** (for non-dry-run):
+```
+X-Confirm-Backfill: CONFIRMED
+```
+
+### Safety Guarantees
+
+| Concern | Status |
+|---------|--------|
+| Emails sent? | ❌ ZERO - Uses `/users/update` only |
+| Campaigns triggered? | ❌ ZERO - No campaign IDs referenced |
+| Events tracked? | ❌ ZERO - No `/events/track` calls |
+| Idempotent? | ✅ YES - Safe to run multiple times |
+| List subscriptions? | ❌ NONE - Profile-only updates |
+
+### Iterable API Used
+
+```
+POST /api/users/update
+{
+  "email": "user@example.com",
+  "dataFields": {
+    "firstName": "...",
+    "lastName": "...",
+    "locale": "en",
+    "signupSource": "CSV_IMPORT",
+    "qualificationSource": "EVENT_ADMIN",
+    "backfilledAt": "2026-01-22T...",
+    "lastEventId": "event-uuid",
+    "unicityId": "..." (if present)
+  },
+  "preferUserId": false
+}
+```
+
+This endpoint **ONLY** creates/updates user profiles. It does not:
+- Send emails
+- Trigger workflows
+- Subscribe to lists
+- Track events
+
+---
+
+## How to Execute the Backfill
+
+### Step 1: Dry Run (Preview)
+
+```bash
+curl -X POST "https://your-app.replit.app/api/admin/iterable/backfill-qualifiers?dryRun=true" \
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+Response:
+```json
+{
+  "dryRun": true,
+  "message": "Dry run - no changes made",
+  "totalQualifiers": 150,
+  "sampleEmails": ["user1@example.com", "user2@example.com", ...],
+  "eventId": "ALL"
+}
+```
+
+### Step 2: Execute Backfill (All Events)
+
+```bash
+curl -X POST "https://your-app.replit.app/api/admin/iterable/backfill-qualifiers" \
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "X-Confirm-Backfill: CONFIRMED"
+```
+
+### Step 3: Execute Backfill (Specific Event)
+
+```bash
+curl -X POST "https://your-app.replit.app/api/admin/iterable/backfill-qualifiers?eventId=YOUR-EVENT-UUID" \
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "X-Confirm-Backfill: CONFIRMED"
+```
+
+---
+
+## Response Format
+
+```json
+{
+  "success": true,
+  "message": "Backfill completed",
+  "total": 150,
+  "synced": 148,
+  "failed": 2,
+  "errors": [
+    { "email": "bad1@example.com", "error": "Invalid email format" },
+    { "email": "bad2@example.com", "error": "API rate limit" }
+  ],
+  "sampleEmails": ["user1@example.com", "user2@example.com", ...]
+}
+```
+
+---
+
+## Iterable Profile Fields
+
+After backfill, each user in Iterable will have:
+
+| Field | Value | Purpose |
+|-------|-------|---------|
+| `signupSource` | `"CSV_IMPORT"` | Identifies backfilled users |
+| `qualificationSource` | `"EVENT_ADMIN"` | Indicates admin-created qualification |
+| `backfilledAt` | ISO timestamp | When the backfill ran |
+| `lastEventId` | UUID | The event they were qualified for |
+| `unicityId` | String (if present) | Distributor ID |
+| `firstName` | String | From CSV |
+| `lastName` | String | From CSV |
+| `locale` | `"en"` or `"es"` | Language preference |
+
+---
+
+## Verification
+
+After running the backfill:
+
+1. **In Iterable**: Search for `ravmalik01@gmail.com` (or any CSV user)
+2. **Check profile fields**: Should see `signupSource: "CSV_IMPORT"`
+3. **Check logs**: Server logs show `[BACKFILL]` entries with progress
+
+---
+
+## Files Modified
+
+| File | Changes |
+|------|---------|
+| `server/iterable.ts` | Added `backfillQualifiersToIterable()` method |
+| `server/routes.ts` | Added `POST /api/admin/iterable/backfill-qualifiers` endpoint |
+
+---
+
+## Important Notes
+
+1. **One-time use**: This is designed for a single backfill operation
+2. **No future sync**: CSV uploads remain unchanged - they still don't sync to Iterable automatically
+3. **Safe to re-run**: The `/users/update` API is idempotent - running again just updates the same profiles
 
 ---
