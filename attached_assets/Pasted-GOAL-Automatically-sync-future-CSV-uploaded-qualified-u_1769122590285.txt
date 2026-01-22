@@ -1,0 +1,67 @@
+GOAL
+Automatically sync future CSV-uploaded qualified users to Iterable by adding a syncQualifierToIterable() function, without sending any emails.
+
+BACKGROUND
+CSV uploads currently create records in qualified_registrants but intentionally skip all Iterable writes.
+We completed (or will complete) a one-time backfill for existing users.
+Going forward, we want CSV-uploaded users to be created/updated as profiles in Iterable so they are visible and segmentable.
+This must remain a silent operation with no emails sent.
+
+CHANGE REQUEST
+Add a syncQualifierToIterable() function and integrate it into the CSV upload flow so that all future CSV-qualified users are synced to Iterable at profile level only.
+
+WHAT I WANT YOU TO DO
+1. Research the codebase to locate:
+   - The CSV upload handler
+   - The loop or batch processor that iterates over CSV rows
+   - Any existing Iterable client or helper utilities
+
+2. Implement a new function named syncQualifierToIterable() that:
+   - Accepts a batch of qualified user records
+   - Calls Iterable using users/update or users/bulkUpdate
+   - Uses email as the primary identifier
+   - Is safe and idempotent
+
+3. The Iterable payload must:
+   - Create or update the user profile only
+   - Include metadata fields such as:
+     - signupSource: "CSV_IMPORT"
+     - qualificationSource: "EVENT_ADMIN"
+     - eventId
+     - eventType
+     - role
+     - market
+     - qualifiedAt (timestamp)
+
+4. (Optional but recommended)
+   - Subscribe users to a static event-specific list for segmentation
+   - Ensure this is list-level only (no campaigns, no workflows)
+
+5. Integrate syncQualifierToIterable() into the CSV upload flow so that:
+   - It runs automatically after qualified_registrants are written
+   - It batches requests for efficiency (Iterable bulkUpdate)
+   - Failures do not block the CSV upload itself
+
+6. Add logging and safety checks:
+   - Log when syncQualifierToIterable() is invoked
+   - Log batch sizes sent to Iterable
+   - Log Iterable API responses and errors
+   - Ensure errors are visible but non-blocking
+
+IMPORTANT CONSTRAINTS
+- ZERO emails may be sent
+- Do NOT call events/track
+- Do NOT reference campaign IDs
+- Do NOT trigger workflows
+- Profiles and optional list subscription only
+- Existing backfill logic must remain separate
+- No retroactive behavior changes
+
+DELIVERABLE
+- Implement syncQualifierToIterable()
+- Integrate it into the CSV upload pipeline
+- Update Instructions.md with:
+  - Where the function lives
+  - When it is invoked
+  - Why it is safe (no email risk)
+  - How to disable or modify it in the future if needed
