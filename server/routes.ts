@@ -3784,6 +3784,7 @@ export async function registerRoutes(
       lastName: z.string().min(1),
       email: z.string().email(),
       unicityId: z.string().optional(),
+      phone: z.string().optional(),
       locale: z.enum(["en", "es"]).optional().default("en"),
     })),
     clearExisting: z.boolean().optional().default(false),
@@ -3857,6 +3858,7 @@ export async function registerRoutes(
         lastName: r.lastName.trim(),
         email: r.email.trim().toLowerCase(),
         unicityId: r.unicityId?.trim() || null,
+        phone: r.phone?.trim() || null,
         locale: r.locale || "en",
         importedBy,
       }));

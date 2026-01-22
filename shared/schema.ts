@@ -614,6 +614,7 @@ export const qualifiedRegistrants = pgTable("qualified_registrants", {
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   unicityId: text("unicity_id"),
+  phone: text("phone"), // Phone number for contact
   locale: text("locale").notNull().default("en"), // Preferred language: "en" or "es"
   // Guest allowance fields for mixed policy
   guestAllowanceRuleId: varchar("guest_allowance_rule_id").references(() => guestAllowanceRules.id),

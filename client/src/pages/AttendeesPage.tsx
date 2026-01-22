@@ -269,7 +269,7 @@ export default function AttendeesPage() {
   const [registrationToMove, setRegistrationToMove] = useState<Registration | null>(null);
   const [targetEventId, setTargetEventId] = useState<string>("");
   const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [csvData, setCsvData] = useState<Array<{ firstName: string; lastName: string; email: string; unicityId: string; locale: string }>>([]);
+  const [csvData, setCsvData] = useState<Array<{ firstName: string; lastName: string; email: string; unicityId: string; phone: string; locale: string }>>([]);
   const [replaceExisting, setReplaceExisting] = useState(false);
   const [qualifierFormData, setQualifierFormData] = useState({
     firstName: "",
@@ -886,6 +886,7 @@ export default function AttendeesPage() {
       const lastNameIdx = headers.findIndex(h => h.includes("last") && h.includes("name"));
       const emailIdx = headers.findIndex(h => h.includes("email"));
       const unicityIdIdx = headers.findIndex(h => h.includes("unicity") || h.includes("distributor") || h === "id");
+      const phoneIdx = headers.findIndex(h => h.includes("phone") || h.includes("mobile") || h.includes("cell") || h.includes("tel"));
       const localeIdx = headers.findIndex(h => h.includes("locale") || h.includes("language") || h.includes("lang"));
 
       if (emailIdx === -1) {
@@ -910,6 +911,7 @@ export default function AttendeesPage() {
           lastName: values[lastNameIdx] || "",
           email,
           unicityId: unicityIdIdx >= 0 ? values[unicityIdIdx] || "" : "",
+          phone: phoneIdx >= 0 ? values[phoneIdx] || "" : "",
           locale,
         });
       }
@@ -931,9 +933,9 @@ export default function AttendeesPage() {
     if (!qualifiers?.length) return;
 
     const csvContent = [
-      "First Name,Last Name,Email,Unicity ID,Locale,Status",
+      "First Name,Last Name,Email,Unicity ID,Phone,Locale,Status",
       ...qualifiers.map(q => 
-        `"${q.firstName}","${q.lastName}","${q.email}","${q.unicityId || ""}","${(q as any).locale || "en"}","${isQualifierRegistered(q) ? "Registered" : "Not Registered"}"`
+        `"${q.firstName}","${q.lastName}","${q.email}","${q.unicityId || ""}","${(q as any).phone || ""}","${(q as any).locale || "en"}","${isQualifierRegistered(q) ? "Registered" : "Not Registered"}"`
       ),
     ].join("\n");
 
@@ -949,9 +951,9 @@ export default function AttendeesPage() {
 
   const handleDownloadTemplate = () => {
     const csvContent = [
-      "First Name,Last Name,Email,Unicity ID,Locale",
-      "John,Doe,john.doe@example.com,12345678,en",
-      "Jane,Smith,jane.smith@example.com,87654321,es",
+      "First Name,Last Name,Email,Unicity ID,Phone,Locale",
+      "John,Doe,john.doe@example.com,12345678,+1-555-123-4567,en",
+      "Jane,Smith,jane.smith@example.com,87654321,+1-555-987-6543,es",
     ].join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv" });
@@ -3006,6 +3008,7 @@ export default function AttendeesPage() {
                     <th className="text-left p-2 font-medium">Name</th>
                     <th className="text-left p-2 font-medium">Email</th>
                     <th className="text-left p-2 font-medium">ID</th>
+                    <th className="text-left p-2 font-medium">Phone</th>
                     <th className="text-left p-2 font-medium">Locale</th>
                   </tr>
                 </thead>
@@ -3015,12 +3018,13 @@ export default function AttendeesPage() {
                       <td className="p-2">{row.firstName} {row.lastName}</td>
                       <td className="p-2 text-muted-foreground">{row.email}</td>
                       <td className="p-2">{row.unicityId || "-"}</td>
+                      <td className="p-2">{row.phone || "-"}</td>
                       <td className="p-2">{row.locale === "es" ? "ES" : "EN"}</td>
                     </tr>
                   ))}
                   {csvData.length > 50 && (
                     <tr className="border-t">
-                      <td colSpan={4} className="p-2 text-center text-muted-foreground">
+                      <td colSpan={5} className="p-2 text-center text-muted-foreground">
                         ...and {csvData.length - 50} more
                       </td>
                     </tr>
