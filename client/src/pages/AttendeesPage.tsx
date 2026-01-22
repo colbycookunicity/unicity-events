@@ -922,9 +922,12 @@ export default function AttendeesPage() {
         const email = values[emailIdx] || "";
         if (!email || !email.includes("@")) continue;
         
-        // Parse locale - default to "en" if not specified or invalid
-        let locale = localeIdx >= 0 ? (values[localeIdx] || "").toLowerCase() : "en";
-        if (locale !== "en" && locale !== "es") {
+        // Parse locale - extract language from locale codes like "en-US", "es-MX", etc.
+        let localeRaw = localeIdx >= 0 ? (values[localeIdx] || "").toLowerCase().trim() : "";
+        let locale: "en" | "es" = "en"; // Default to English
+        if (localeRaw.startsWith("es")) {
+          locale = "es";
+        } else if (localeRaw.startsWith("en") || localeRaw === "") {
           locale = "en";
         }
         
