@@ -3781,7 +3781,7 @@ export async function registerRoutes(
   const csvImportSchema = z.object({
     registrants: z.array(z.object({
       firstName: z.string().min(1),
-      lastName: z.string().min(1),
+      lastName: z.string().default(""), // Allow empty last names for company names
       email: z.string().email(),
       unicityId: z.string().optional(),
       phone: z.string().optional(),
