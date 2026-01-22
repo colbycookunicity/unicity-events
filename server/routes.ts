@@ -3851,6 +3851,22 @@ export async function registerRoutes(
         });
       }
 
+      // Check for existing emails in the event's qualifier list (if not clearing)
+      const alreadyExisted: string[] = [];
+      if (!validated.clearExisting) {
+        const existingQualifiers = await storage.getQualifiedRegistrantsByEvent(eventId);
+        const existingEmails = new Set(existingQualifiers.map((q: { email: string }) => q.email.toLowerCase()));
+        
+        registrantsToProcess = registrantsToProcess.filter(r => {
+          const normalizedEmail = r.email.trim().toLowerCase();
+          if (existingEmails.has(normalizedEmail)) {
+            alreadyExisted.push(r.email);
+            return false;
+          }
+          return true;
+        });
+      }
+
       // Prepare registrants for bulk insert
       const registrantsToInsert = registrantsToProcess.map(r => ({
         eventId,
@@ -3873,9 +3889,14 @@ export async function registerRoutes(
         imported: created.length, 
         registrants: created,
         skippedDuplicates: skippedDuplicates.length > 0 ? skippedDuplicates : undefined,
-        warnings: skippedDuplicates.length > 0 
-          ? [`Skipped ${skippedDuplicates.length} duplicate entries`]
-          : undefined,
+        alreadyExisted: alreadyExisted.length > 0 ? alreadyExisted : undefined,
+        warnings: [
+          ...(skippedDuplicates.length > 0 ? [`Skipped ${skippedDuplicates.length} duplicate ID entries from CSV`] : []),
+          ...(alreadyExisted.length > 0 ? [`Skipped ${alreadyExisted.length} emails that already exist in the list`] : []),
+        ].length > 0 ? [
+          ...(skippedDuplicates.length > 0 ? [`Skipped ${skippedDuplicates.length} duplicate ID entries from CSV`] : []),
+          ...(alreadyExisted.length > 0 ? [`Skipped ${alreadyExisted.length} emails that already exist in the list`] : []),
+        ] : undefined,
       });
     } catch (error) {
       if (error instanceof z.ZodError) {

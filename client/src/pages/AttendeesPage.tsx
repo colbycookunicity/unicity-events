@@ -838,7 +838,29 @@ export default function AttendeesPage() {
       setImportDialogOpen(false);
       setCsvData([]);
       setReplaceExisting(false);
-      toast({ title: t("success"), description: `Imported ${data.imported} qualifiers` });
+      
+      // Show detailed import results
+      let message = `Imported ${data.imported} qualifiers`;
+      if (data.alreadyExisted?.length > 0) {
+        message += `. Skipped ${data.alreadyExisted.length} emails that already exist`;
+        console.log("Emails already in the list:", data.alreadyExisted);
+      }
+      toast({ 
+        title: t("success"), 
+        description: message,
+        duration: data.alreadyExisted?.length > 0 ? 10000 : 5000,
+      });
+      
+      // If there were skipped emails, show them in a follow-up toast
+      if (data.alreadyExisted?.length > 0 && data.alreadyExisted.length <= 10) {
+        setTimeout(() => {
+          toast({
+            title: "Skipped emails (already in list)",
+            description: data.alreadyExisted.join(", "),
+            duration: 15000,
+          });
+        }, 500);
+      }
     },
     onError: () => {
       toast({ title: t("error"), description: "Failed to import qualifiers", variant: "destructive" });
