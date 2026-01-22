@@ -6761,3 +6761,153 @@ The frontend now:
 - No database schema changes required
 
 ---
+
+# CSV Upload → Iterable Integration Analysis
+
+**Date**: January 22, 2026  
+**Status**: Discovery Complete - No Code Changes Made
+
+---
+
+## Root Cause Summary
+
+**Users uploaded via CSV are NOT created in Iterable because the CSV import flow intentionally skips all Iterable API calls.**
+
+This is by design, not a bug. The code comments explicitly state this decision.
+
+---
+
+## Detailed Findings
+
+### 1. CSV Import Flow (What Currently Happens)
+
+```
+CSV Upload → Backend Validation → Database Write (qualified_registrants table) → Response
+                                        ↓
+                                 NO ITERABLE CALLS
+```
+
+**Location:** `server/routes.ts` lines 3794-3907
+
+The CSV import endpoint (`POST /api/events/:eventId/qualifiers/import`) does the following:
+1. Validates CSV data with Zod schema
+2. Checks for duplicate distributor IDs
+3. Filters out existing emails (duplicate detection)
+4. Writes to `qualified_registrants` table via `storage.createQualifiedRegistrantsBulk()`
+5. Returns success response
+
+**Crucially, there are NO Iterable API calls.** The code explicitly documents this:
+
+```javascript
+// Line 3884-3886 in routes.ts
+// NOTE: No automatic emails are sent when admins import qualifiers via CSV.
+// Admins retain full control over if/when emails are sent manually.
+// This prevents confusion from automatic emails for admin-initiated bulk imports.
+```
+
+### 2. Self-Registration Flow (What DOES Sync to Iterable)
+
+```
+User Self-Registers → Registration Created → iterableService.syncRegistrationToIterable() → Iterable
+```
+
+**Location:** `server/routes.ts` line 2376
+
+Only when a user completes self-registration does the system call:
+```javascript
+iterableService.syncRegistrationToIterable(registration, event)
+```
+
+This function (in `server/iterable.ts` lines 753+):
+1. Updates/creates user profile in Iterable
+2. Subscribes user to event's Iterable list
+3. Tracks registration event
+4. Tracks purchase if payment made
+
+### 3. Two Separate Data Models
+
+| Model | Table | Purpose | Synced to Iterable? |
+|-------|-------|---------|---------------------|
+| Qualified Registrant | `qualified_registrants` | Pre-approved people who CAN register | ❌ No |
+| Registration | `registrations` | People who HAVE registered | ✅ Yes |
+
+CSV uploads create **Qualified Registrants**, not Registrations. The Iterable sync only happens for Registrations.
+
+### 4. Key Code Locations
+
+| File | Lines | Purpose |
+|------|-------|---------|
+| `server/routes.ts` | 3794-3907 | CSV import endpoint |
+| `server/routes.ts` | 2376 | Where `syncRegistrationToIterable` is called |
+| `server/iterable.ts` | 753-850 | `syncRegistrationToIterable` implementation |
+| `server/storage.ts` | 1123-1126 | `createQualifiedRegistrantsBulk` (DB only) |
+
+### 5. Verification
+
+The following Iterable integration points exist, but NONE are called from CSV import:
+- `syncRegistrationToIterable` - Only called on self-registration
+- `sendRegistrationConfirmation` - Only called for email sending
+- `sendCheckedInConfirmation` - Only for check-in flows
+- No `syncQualifierToIterable` function exists
+
+---
+
+## Why This Behavior Was Chosen
+
+The comments indicate this was intentional:
+1. **Admin control** - Admins should decide when/if to contact imported users
+2. **Prevent spam** - Bulk imports shouldn't trigger mass emails
+3. **Data separation** - Qualifiers are "potential" registrants, not actual registrants
+
+---
+
+## Recommended Fix
+
+To create Iterable users from CSV without sending emails, you would need to:
+
+### Option A: Add Silent Sync Function
+
+Create a new function `syncQualifierToIterable()` that:
+1. Calls Iterable's `users/update` API to create/update the user profile
+2. Optionally subscribes to an event-specific list
+3. Does NOT trigger any campaign emails
+
+**Iterable API endpoint:** `POST /api/users/update`
+- This creates/updates user profiles without sending emails
+- Safe to call for bulk imports
+
+### Option B: Sync on Qualifier Creation (Configurable)
+
+Add a flag to the import endpoint or event settings:
+```javascript
+syncToIterable: boolean  // default: false
+```
+
+When true, call the silent sync for each imported qualifier.
+
+### Implementation Notes
+
+1. Use Iterable's `users/update` endpoint (not `email/target`)
+2. Set `preferUserId: false` to use email as identifier
+3. Include relevant dataFields: firstName, lastName, unicityId, eventId, locale
+4. Do NOT trigger campaigns - this is a profile-only operation
+5. Consider batching (Iterable supports bulk user updates via `POST /api/users/bulkUpdate`)
+
+---
+
+## Summary Table
+
+| Question | Answer |
+|----------|--------|
+| Why isn't `ravmalik01@gmail.com` in Iterable? | CSV imports don't call any Iterable APIs |
+| Is this intentional? | Yes - explicitly documented in code comments |
+| Is this a bug? | No - it's working as designed |
+| What needs to change? | Add a new `syncQualifierToIterable()` function that creates users without triggering emails |
+
+---
+
+## No Changes Made
+
+Per the constraints, this document is discovery and documentation only. No code changes have been implemented.
+
+---

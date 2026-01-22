@@ -1,0 +1,63 @@
+GOAL
+Identify why users uploaded via CSV (e.g. ravmalik01@gmail.com) were not created as users in Iterable.
+
+BACKGROUND
+Admins can upload CSV files to add qualified users to events.
+These users should be created or updated in Iterable (user profile + list/segment membership),
+but should NOT receive any emails.
+When searching in Iterable, the user ravmalik01@gmail.com does not exist at all.
+
+CHANGE REQUEST
+Investigate the CSV upload → backend → Iterable integration to determine why users are not being created in Iterable.
+
+WHAT I WANT YOU TO DO
+1. Research the codebase and locate:
+   - The CSV upload handler
+   - The code path that processes each CSV row
+   - Any functions responsible for creating or updating users in Iterable
+
+2. Trace the full data flow for a single CSV row:
+   CSV upload
+   → parsing / validation
+   → database writes (if any)
+   → Iterable API calls (users/update, lists/subscribe, etc.)
+
+3. Verify whether:
+   - Iterable is intentionally skipped for CSV uploads
+   - Iterable writes are gated behind a flag (e.g. sendEmail, source, isManual, etc.)
+   - Iterable calls are failing silently
+   - Iterable calls are batched, deferred, or queued
+   - Errors are logged but not surfaced
+   - The email field is missing, transformed, or invalid by the time it reaches Iterable
+
+4. Check environment/config:
+   - Iterable API key presence in this environment
+   - Correct project ID
+   - Any feature flags disabling Iterable writes for admin uploads
+
+5. Add temporary instrumentation if needed:
+   - Log when a CSV row attempts an Iterable write
+   - Log the exact payload sent to Iterable
+   - Log Iterable API responses or errors
+
+6. Confirm whether the system currently:
+   - Creates Iterable users only on self-registration
+   - Skips Iterable entirely for admin-added or CSV-added users
+
+7. Summarize findings clearly:
+   - Exact reason users like ravmalik01@gmail.com do not exist in Iterable
+   - Whether this is expected behavior or a bug
+   - What would need to change to ensure CSV users are always created in Iterable (without sending email)
+
+IMPORTANT CONSTRAINTS
+- Do NOT send any emails
+- Do NOT backfill existing users
+- Discovery and documentation only
+- No behavior changes unless explicitly recommended in the findings
+
+DELIVERABLE
+- Write a clear root-cause analysis to Instructions.md
+- Include:
+  - Where the CSV → Iterable flow breaks
+  - Whether the behavior is intentional or accidental
+  - A recommended fix (but do not implement it yet)
