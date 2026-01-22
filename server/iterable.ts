@@ -992,6 +992,150 @@ export class IterableService {
 
     return results;
   }
+
+  /**
+   * Sync CSV-uploaded qualifiers to Iterable (profile-only, no emails).
+   * 
+   * This function is called automatically after CSV imports to create/update
+   * Iterable user profiles. It is safe and idempotent.
+   * 
+   * SAFETY GUARANTEES:
+   * - Uses /users/update only (profile creation/update)
+   * - ZERO emails sent
+   * - ZERO campaigns triggered  
+   * - ZERO events tracked
+   * - Non-blocking: failures don't stop CSV import
+   * 
+   * @param qualifiers - Array of qualifier records from CSV import
+   * @param eventId - The event ID these qualifiers are associated with
+   * @param eventName - The event name for logging/metadata
+   */
+  async syncQualifiersToIterable(
+    qualifiers: Array<{
+      id: string;
+      email: string;
+      firstName: string;
+      lastName: string;
+      locale: string;
+      unicityId?: string | null;
+      phone?: string | null;
+    }>,
+    eventId: string,
+    eventName?: string
+  ): Promise<{
+    total: number;
+    synced: number;
+    failed: number;
+    errors: Array<{ email: string; error: string }>;
+  }> {
+    const results = {
+      total: qualifiers.length,
+      synced: 0,
+      failed: 0,
+      errors: [] as Array<{ email: string; error: string }>,
+    };
+
+    log('info', `[CSV_SYNC] Starting Iterable sync for CSV-uploaded qualifiers`, {
+      totalUsers: qualifiers.length,
+      eventId,
+      eventName: eventName || 'unknown',
+    });
+
+    if (!isConfigured()) {
+      log('warn', '[CSV_SYNC] Skipping - ITERABLE_API_KEY not configured');
+      return {
+        ...results,
+        failed: qualifiers.length,
+        errors: [{ email: 'ALL', error: 'ITERABLE_API_KEY not configured' }],
+      };
+    }
+
+    if (qualifiers.length === 0) {
+      log('info', '[CSV_SYNC] No qualifiers to sync');
+      return results;
+    }
+
+    const syncedAt = new Date().toISOString();
+
+    // Process in batches of 50 to avoid overwhelming Iterable
+    const batchSize = 50;
+    for (let i = 0; i < qualifiers.length; i += batchSize) {
+      const batch = qualifiers.slice(i, i + batchSize);
+      
+      log('info', `[CSV_SYNC] Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(qualifiers.length / batchSize)}`);
+
+      // Process batch in parallel for efficiency
+      // Use a wrapper that preserves email context on errors
+      const batchResults = await Promise.allSettled(
+        batch.map(async (qualifier) => {
+          try {
+            const dataFields: Record<string, any> = {
+              firstName: qualifier.firstName,
+              lastName: qualifier.lastName,
+              locale: qualifier.locale || 'en',
+              // Origin tagging for visibility
+              signupSource: 'CSV_IMPORT',
+              qualificationSource: 'EVENT_ADMIN',
+              csvSyncedAt: syncedAt,
+              lastEventId: eventId,
+            };
+
+            // Add optional fields
+            if (qualifier.unicityId) {
+              dataFields.unicityId = qualifier.unicityId;
+            }
+            if (qualifier.phone) {
+              dataFields.phone = qualifier.phone;
+            }
+            if (eventName) {
+              dataFields.lastEventName = eventName;
+            }
+
+            // SILENT SYNC: Only /users/update - no events, no campaigns, no emails
+            await this.request('POST', '/users/update', {
+              email: qualifier.email,
+              dataFields,
+              preferUserId: false, // Use email as primary identifier
+            });
+
+            return { success: true, email: qualifier.email };
+          } catch (error) {
+            // Wrap error with email context for proper logging
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            log('warn', `[CSV_SYNC] Failed to sync user: ${qualifier.email}`, { error: errorMessage });
+            throw { email: qualifier.email, error: errorMessage };
+          }
+        })
+      );
+
+      // Process batch results with proper email context
+      for (const result of batchResults) {
+        if (result.status === 'fulfilled') {
+          results.synced++;
+        } else {
+          results.failed++;
+          const reason = result.reason as { email: string; error: string };
+          
+          // Only store first 20 errors to avoid memory issues
+          if (results.errors.length < 20) {
+            results.errors.push({ 
+              email: reason?.email || 'unknown', 
+              error: reason?.error || String(result.reason) 
+            });
+          }
+        }
+      }
+    }
+
+    log('info', `[CSV_SYNC] Completed`, {
+      total: results.total,
+      synced: results.synced,
+      failed: results.failed,
+      eventId,
+    });
+
+    return results;
+  }
 }
 
 export const iterableService = new IterableService();

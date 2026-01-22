@@ -3962,6 +3962,41 @@ export async function registerRoutes(
       // Admins retain full control over if/when emails are sent manually.
       // This prevents confusion from automatic emails for admin-initiated bulk imports.
 
+      // Sync newly created qualifiers to Iterable (non-blocking, profile-only, no emails)
+      // This creates/updates Iterable user profiles so they're visible and segmentable
+      if (created.length > 0) {
+        // Fully non-blocking: event lookup and sync are both fire-and-forget
+        // Failures are logged but don't block the CSV import response
+        (async () => {
+          try {
+            // Get event name for metadata (inside non-blocking block)
+            let eventName = 'Unknown Event';
+            try {
+              const event = await storage.getEvent(eventId);
+              eventName = event?.name || 'Unknown Event';
+            } catch (lookupError) {
+              console.warn('[CSV_SYNC] Could not fetch event name, using default:', lookupError);
+            }
+
+            await iterableService.syncQualifiersToIterable(
+              created.map(q => ({
+                id: q.id,
+                email: q.email,
+                firstName: q.firstName,
+                lastName: q.lastName,
+                locale: q.locale || 'en',
+                unicityId: q.unicityId,
+                phone: q.phone,
+              })),
+              eventId,
+              eventName
+            );
+          } catch (error) {
+            console.error('[CSV_SYNC] Non-blocking Iterable sync failed:', error);
+          }
+        })();
+      }
+
       res.status(201).json({ 
         imported: created.length, 
         registrants: created,

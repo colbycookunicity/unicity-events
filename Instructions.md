@@ -7075,7 +7075,118 @@ After running the backfill:
 ## Important Notes
 
 1. **One-time use**: This is designed for a single backfill operation
-2. **No future sync**: CSV uploads remain unchanged - they still don't sync to Iterable automatically
+2. ~~**No future sync**: CSV uploads remain unchanged~~ **UPDATE**: Future CSV uploads now auto-sync (see below)
 3. **Safe to re-run**: The `/users/update` API is idempotent - running again just updates the same profiles
+
+---
+
+# Automatic CSV → Iterable Sync (Future Uploads)
+
+**Date**: January 22, 2026  
+**Status**: ✅ IMPLEMENTED
+
+---
+
+## Purpose
+
+Automatically sync future CSV-uploaded qualified registrants to Iterable (profile-only, no emails).
+
+---
+
+## How It Works
+
+When an admin uploads a CSV via the qualifier import endpoint:
+
+1. CSV is parsed and validated
+2. Qualified registrants are created in the database
+3. **NEW**: `syncQualifiersToIterable()` is called automatically
+4. Response is returned to the admin immediately
+
+The Iterable sync is **non-blocking** - failures are logged but don't stop the CSV import.
+
+---
+
+## Implementation Details
+
+### Function Location
+
+**File**: `server/iterable.ts`  
+**Function**: `syncQualifiersToIterable()`
+
+### Integration Point
+
+**File**: `server/routes.ts`  
+**Endpoint**: `POST /api/events/:eventId/qualifiers/import`
+
+After `storage.createQualifiedRegistrantsBulk()` succeeds, the sync is triggered:
+
+```typescript
+// Non-blocking: fire-and-forget sync to Iterable
+iterableService.syncQualifiersToIterable(
+  created.map(q => ({...})),
+  eventId,
+  eventName
+).catch((error) => {
+  console.error('[CSV_SYNC] Non-blocking Iterable sync failed:', error);
+});
+```
+
+---
+
+## Safety Guarantees
+
+| Concern | Status |
+|---------|--------|
+| Emails sent? | ❌ ZERO - Uses `/users/update` only |
+| Campaigns triggered? | ❌ ZERO - No campaign IDs referenced |
+| Events tracked? | ❌ ZERO - No `/events/track` calls |
+| Idempotent? | ✅ YES - Safe if same user uploaded twice |
+| Blocks CSV import? | ❌ NO - Non-blocking with `.catch()` |
+
+---
+
+## Iterable User Profile Fields
+
+After CSV sync, each user in Iterable will have:
+
+| Field | Value | Purpose |
+|-------|-------|---------|
+| `signupSource` | `"CSV_IMPORT"` | Identifies CSV-uploaded users |
+| `qualificationSource` | `"EVENT_ADMIN"` | Indicates admin-created qualification |
+| `csvSyncedAt` | ISO timestamp | When the sync ran |
+| `lastEventId` | UUID | The event they were qualified for |
+| `lastEventName` | String | Human-readable event name |
+| `unicityId` | String (if present) | Distributor ID |
+| `phone` | String (if present) | Phone number |
+| `firstName` | String | From CSV |
+| `lastName` | String | From CSV |
+| `locale` | `"en"` or `"es"` | Language preference |
+
+---
+
+## Logging
+
+Look for `[CSV_SYNC]` in server logs:
+
+```
+[CSV_SYNC] Starting Iterable sync for CSV-uploaded qualifiers { totalUsers: 50, eventId: "...", eventName: "Rise 2026" }
+[CSV_SYNC] Processing batch 1/1
+[CSV_SYNC] Completed { total: 50, synced: 50, failed: 0, eventId: "..." }
+```
+
+---
+
+## Disabling the Sync
+
+To disable automatic CSV→Iterable sync:
+
+1. Comment out the `iterableService.syncQualifiersToIterable(...)` call in `server/routes.ts`
+2. Or remove the `ITERABLE_API_KEY` environment variable (sync will be skipped)
+
+---
+
+## Batch Processing
+
+For efficiency, users are synced in batches of 50 with parallel requests per batch.
 
 ---
