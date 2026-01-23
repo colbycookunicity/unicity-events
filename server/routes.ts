@@ -2434,6 +2434,15 @@ export async function registerRoutes(
       // Send confirmation email via Iterable
       if (process.env.ITERABLE_API_KEY) {
         try {
+          // IMPORTANT: Update user profile locale BEFORE sending email
+          // Iterable multi-locale campaigns use the user's profile locale to select template
+          const locale = registration.language === 'es' ? 'es' : 'en';
+          await iterableService.createOrUpdateUser(registration.email, {
+            firstName: registration.firstName,
+            lastName: registration.lastName,
+            locale,
+          });
+          
           await iterableService.sendRegistrationConfirmation(
             registration.email,
             registration,
@@ -2797,6 +2806,15 @@ export async function registerRoutes(
       // Use provided language or fallback to registration's language
       const emailLanguage = language || registration.language || 'en';
 
+      // IMPORTANT: Update user profile locale BEFORE sending email
+      // Iterable multi-locale campaigns use the user's profile locale to select template
+      const locale = emailLanguage === 'es' ? 'es' : 'en';
+      await iterableService.createOrUpdateUser(registration.email, {
+        firstName: registration.firstName,
+        lastName: registration.lastName,
+        locale,
+      });
+
       const result = await iterableService.sendRegistrationConfirmation(
         registration.email,
         registration,
@@ -2862,6 +2880,15 @@ export async function registerRoutes(
 
           // Use provided language or fallback to registration's language
           const emailLanguage = language || registration.language || 'en';
+
+          // IMPORTANT: Update user profile locale BEFORE sending email
+          // Iterable multi-locale campaigns use the user's profile locale to select template
+          const locale = emailLanguage === 'es' ? 'es' : 'en';
+          await iterableService.createOrUpdateUser(registration.email, {
+            firstName: registration.firstName,
+            lastName: registration.lastName,
+            locale,
+          });
 
           const result = await iterableService.sendRegistrationConfirmation(
             registration.email,
