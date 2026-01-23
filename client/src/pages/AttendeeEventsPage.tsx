@@ -145,8 +145,14 @@ export default function AttendeeEventsPage() {
   });
 
   const { data: eventsData, isLoading: eventsLoading, error: eventsError } = useQuery<{ email: string; events: AttendeeEvent[] }>({
-    queryKey: ["/api/attendee/events"],
+    // Include attendeeToken in queryKey to ensure cache is keyed per session
+    // This prevents stale data from previous sessions being returned
+    queryKey: ["/api/attendee/events", attendeeToken],
     enabled: !!attendeeToken,
+    // Always refetch on mount to ensure fresh data on first load
+    refetchOnMount: "always",
+    // Don't use stale cache data - always wait for fresh fetch
+    staleTime: 0,
     queryFn: async () => {
       const response = await fetch("/api/attendee/events", {
         headers: { Authorization: `Bearer ${attendeeToken}` },
