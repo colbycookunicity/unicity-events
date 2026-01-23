@@ -1,0 +1,70 @@
+GOAL
+Fix a first-load bug on /my-events where all registered events do not appear
+until the page is hard-refreshed.
+
+BACKGROUND
+User: colby.cook+tobias@unicity.com
+
+Observed behavior:
+- User is properly registered for:
+  • Las Vegas Method Seminar (Registered)
+  • Skills Academy (Qualified / Action needed)
+- On FIRST page load of /my-events:
+  → Only Skills Academy appears
+  → Las Vegas Method is missing
+- On HARD REFRESH:
+  → Both events appear correctly
+
+This confirms the data exists and the backend is correct.
+The issue is related to first-load client-side state, caching, or hydration.
+
+WHAT I WANT YOU TO DO
+1. Investigate the /my-events page lifecycle:
+   - Initial render
+   - Data fetching (API calls)
+   - State initialization
+   - Re-renders after auth/session resolution
+
+2. Identify all relevant files including:
+   - Frontend page/component for /my-events
+   - API hook or fetch logic used to load events
+   - Auth/session resolution logic (email, userId, token)
+   - Any useEffect / useQuery / SWR / React Query logic
+
+3. Specifically look for common first-load failure patterns:
+   - API call firing BEFORE user/session is fully resolved
+   - Cached empty response being reused
+   - Missing dependency array values in useEffect
+   - Race condition between auth state and event fetch
+   - Client-side filtering running on partial data
+   - Stale memoized values (useMemo / useCallback)
+   - Conditional fetches that only rerun on refresh
+
+4. Confirm:
+   - What API response is returned on first load
+   - Whether the Method event is missing from the API OR filtered out on the client
+   - Whether a second render should trigger but doesn’t
+
+5. Implement the fix so that:
+   - /my-events ALWAYS loads complete, correct data on first visit
+   - No hard refresh is required
+   - Both registered and pending events appear reliably
+
+6. Add temporary logging (if helpful) to confirm:
+   - When auth is ready
+   - When the events fetch fires
+   - What data is returned and rendered
+
+7. Remove any temporary logs once verified.
+
+IMPORTANT CONSTRAINTS
+- Do NOT add artificial delays or timeouts
+- Fix the root cause, not the symptom
+- Avoid double-fetching unless required
+- Maintain performance and clean render flow
+
+DELIVERABLES
+1. Root cause explanation (why first load fails)
+2. Code fix that resolves the issue
+3. Verification steps (fresh login, no hard refresh)
+4. Summary written to Instructions.md
