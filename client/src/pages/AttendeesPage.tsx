@@ -2502,6 +2502,15 @@ export default function AttendeesPage() {
                   </div>
                 </div>
                 <div className="space-y-2">
+                  <Label>Distributor ID</Label>
+                  <Input 
+                    value={editForm.unicityId || ""} 
+                    onChange={(e) => handleFormChange("unicityId", e.target.value)}
+                    placeholder="Enter distributor ID"
+                    data-testid="edit-unicityId"
+                  />
+                </div>
+                <div className="space-y-2">
                   <Label>Email</Label>
                   <Input 
                     type="email"
