@@ -4082,6 +4082,133 @@ export async function registerRoutes(
     }
   });
 
+  // Admin register a qualifier directly (bypasses OTP verification)
+  // Used when users can't receive OTP emails (e.g., Hotmail blocking issues)
+  app.post("/api/qualifiers/:id/admin-register", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const qualifier = await storage.getQualifiedRegistrant(req.params.id);
+      if (!qualifier) {
+        return res.status(404).json({ error: "Qualifier not found" });
+      }
+
+      const event = await storage.getEvent(qualifier.eventId);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      // Check if already registered
+      const existingRegistration = await storage.getRegistrationByEmail(qualifier.eventId, qualifier.email);
+      if (existingRegistration) {
+        return res.status(400).json({ error: "This person is already registered for this event" });
+      }
+
+      // Also check by Unicity ID if available
+      if (qualifier.unicityId) {
+        const existingByUnicityId = await storage.getRegistrationByUnicityId(qualifier.eventId, qualifier.unicityId);
+        if (existingByUnicityId) {
+          return res.status(400).json({ error: "This person is already registered for this event (by Unicity ID)" });
+        }
+      }
+
+      // Determine language from qualifier's locale or default to English
+      const language = qualifier.locale || 'en';
+
+      // Create registration from qualifier data
+      const registration = await storage.createRegistration({
+        eventId: event.id,
+        email: qualifier.email.toLowerCase().trim(),
+        firstName: qualifier.firstName,
+        lastName: qualifier.lastName,
+        phone: qualifier.phone || null,
+        unicityId: qualifier.unicityId || null,
+        language: language,
+        status: "registered",
+        verifiedByHydra: false, // Not verified via OTP
+        registeredAt: new Date(),
+        // Optional fields - set to null/defaults
+        gender: null,
+        dateOfBirth: null,
+        passportNumber: null,
+        passportCountry: null,
+        passportExpiration: null,
+        emergencyContact: null,
+        emergencyContactPhone: null,
+        shirtSize: null,
+        pantSize: null,
+        dietaryRestrictions: [],
+        adaAccommodations: false,
+        adaAccommodationsAt: null,
+        adaAccommodationsIp: null,
+        roomType: null,
+        formData: null,
+        acknowledgmentDetails: null,
+        termsAccepted: false,
+        termsAcceptedAt: null,
+        termsAcceptedIp: null,
+      });
+
+      console.log(`[AdminRegister] Admin ${req.user?.email} registered qualifier ${qualifier.email} for event ${event.name}`);
+
+      // Generate check-in token for email QR code
+      let checkInToken;
+      try {
+        checkInToken = await storage.createCheckInToken({
+          registrationId: registration.id,
+          eventId: event.id,
+          token: generateCheckInToken(),
+        });
+      } catch (tokenErr) {
+        console.error('[AdminRegister] Failed to create check-in token:', tokenErr);
+      }
+
+      // Build QR code payload for email
+      const checkInQrPayload = checkInToken 
+        ? buildCheckInQRPayload(event.id, registration.id, checkInToken.token)
+        : null;
+
+      // Send confirmation email via Iterable
+      if (process.env.ITERABLE_API_KEY) {
+        try {
+          // Update user profile locale before sending email
+          const locale = language === 'es' ? 'es' : 'en';
+          await iterableService.createOrUpdateUser(registration.email, {
+            firstName: registration.firstName,
+            lastName: registration.lastName,
+            locale,
+          });
+          
+          await iterableService.sendRegistrationConfirmation(
+            registration.email,
+            registration,
+            event,
+            language,
+            checkInQrPayload,
+            checkInToken?.token || null
+          );
+          console.log(`[AdminRegister] Confirmation email sent to ${registration.email}`);
+        } catch (err) {
+          console.error('[AdminRegister] Failed to send confirmation email:', err);
+        }
+      }
+
+      // Sync to Iterable (non-blocking, guarded by API key)
+      if (process.env.ITERABLE_API_KEY) {
+        iterableService.syncRegistrationToIterable(registration, event).catch((err) => {
+          console.error('[AdminRegister] Iterable sync failed:', err);
+        });
+      }
+
+      res.status(201).json({
+        ...registration,
+        checkInToken: checkInToken?.token || null,
+        message: `Successfully registered ${registration.firstName} ${registration.lastName}`,
+      });
+    } catch (error) {
+      console.error("Admin register error:", error);
+      res.status(500).json({ error: "Failed to register qualifier" });
+    }
+  });
+
   // ========================================
   // Guest Allowance Rules Routes
   // ========================================

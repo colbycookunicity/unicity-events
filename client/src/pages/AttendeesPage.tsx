@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useSearch, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Search, Download, MoreHorizontal, Mail, Edit, Trash2, User, Shirt, Save, Pencil, ChevronUp, ChevronDown, Settings2, ArrowUpDown, Plus, Upload, Edit2, ArrowRightLeft, Copy, ExternalLink, Printer as PrinterIcon, CheckCircle2, XCircle, Clock, Send, HelpCircle, GripVertical } from "lucide-react";
+import { Search, Download, MoreHorizontal, Mail, Edit, Trash2, User, Shirt, Save, Pencil, ChevronUp, ChevronDown, Settings2, ArrowUpDown, Plus, Upload, Edit2, ArrowRightLeft, Copy, ExternalLink, Printer as PrinterIcon, CheckCircle2, XCircle, Clock, Send, HelpCircle, GripVertical, UserPlus } from "lucide-react";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -744,6 +744,42 @@ export default function AttendeesPage() {
     },
     onError: () => {
       toast({ title: t("error"), description: "Failed to remove qualifier", variant: "destructive" });
+    },
+  });
+
+  // Admin register a qualifier directly (bypasses OTP verification)
+  const adminRegisterMutation = useMutation({
+    mutationFn: async ({ qualifierId, eventId }: { qualifierId: string; eventId: string }) => {
+      const response = await apiRequest("POST", `/api/qualifiers/${qualifierId}/admin-register`);
+      return { ...(response as object), eventId };
+    },
+    onSuccess: (data: any) => {
+      // Invalidate registrations and qualifiers caches
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = String(query.queryKey[0]);
+          return key.startsWith("/api/registrations") || key.includes("/qualifiers");
+        }
+      });
+      toast({ 
+        title: t("success"), 
+        description: data.message || "Successfully registered" 
+      });
+    },
+    onError: async (error: any) => {
+      // Try to parse error from response JSON
+      let message = "Failed to register";
+      if (error?.response?.json) {
+        try {
+          const data = await error.response.json();
+          message = data?.error || message;
+        } catch {
+          // Ignore parse errors
+        }
+      } else if (error?.message) {
+        message = error.message;
+      }
+      toast({ title: t("error"), description: message, variant: "destructive" });
     },
   });
 
@@ -1686,26 +1722,44 @@ export default function AttendeesPage() {
             </DropdownMenu>
           );
         } else if (person.qualifier) {
+          const q = person.qualifier;
           return (
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={(e) => { e.stopPropagation(); handleEditQualifier(person.qualifier!); }}
-                data-testid={`action-edit-qualifier-${person.id}`}
-              >
-                <Edit2 className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={(e) => { e.stopPropagation(); setQualifierToDelete(person.qualifier!); setQualifierDeleteDialogOpen(true); }}
-                className="text-destructive"
-                data-testid={`action-delete-qualifier-${person.id}`}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" data-testid={`button-actions-qualifier-${person.id}`} onClick={(e) => e.stopPropagation()}>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    adminRegisterMutation.mutate({ qualifierId: q.id, eventId: q.eventId });
+                  }}
+                  disabled={adminRegisterMutation.isPending}
+                  data-testid={`action-register-qualifier-${person.id}`}
+                >
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  {adminRegisterMutation.isPending ? "Registering..." : "Register"}
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={(e) => { e.stopPropagation(); handleEditQualifier(q); }}
+                  data-testid={`action-edit-qualifier-${person.id}`}
+                >
+                  <Edit2 className="h-4 w-4 mr-2" />
+                  {t("edit")}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={(e) => { e.stopPropagation(); setQualifierToDelete(q); setQualifierDeleteDialogOpen(true); }}
+                  className="text-destructive"
+                  data-testid={`action-delete-qualifier-${person.id}`}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  {t("delete")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           );
         }
         return "-";
