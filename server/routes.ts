@@ -4084,8 +4084,11 @@ export async function registerRoutes(
 
   // Admin register a qualifier directly (bypasses OTP verification)
   // Used when users can't receive OTP emails (e.g., Hotmail blocking issues)
+  // Query param: sendEmail=true|false (default true)
   app.post("/api/qualifiers/:id/admin-register", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
     try {
+      const sendEmail = req.query.sendEmail !== 'false'; // Default to true
+      
       const qualifier = await storage.getQualifiedRegistrant(req.params.id);
       if (!qualifier) {
         return res.status(404).json({ error: "Qualifier not found" });
@@ -4166,8 +4169,9 @@ export async function registerRoutes(
         ? buildCheckInQRPayload(event.id, registration.id, checkInToken.token)
         : null;
 
-      // Send confirmation email via Iterable
-      if (process.env.ITERABLE_API_KEY) {
+      // Send confirmation email via Iterable (if requested)
+      let emailSent = false;
+      if (sendEmail && process.env.ITERABLE_API_KEY) {
         try {
           // Update user profile locale before sending email
           const locale = language === 'es' ? 'es' : 'en';
@@ -4185,10 +4189,13 @@ export async function registerRoutes(
             checkInQrPayload,
             checkInToken?.token || null
           );
+          emailSent = true;
           console.log(`[AdminRegister] Confirmation email sent to ${registration.email}`);
         } catch (err) {
           console.error('[AdminRegister] Failed to send confirmation email:', err);
         }
+      } else if (!sendEmail) {
+        console.log(`[AdminRegister] Confirmation email skipped (admin opted out) for ${registration.email}`);
       }
 
       // Sync to Iterable (non-blocking, guarded by API key)
@@ -4198,10 +4205,15 @@ export async function registerRoutes(
         });
       }
 
+      const emailMessage = sendEmail 
+        ? (emailSent ? 'Confirmation email sent.' : 'Confirmation email could not be sent.')
+        : 'No confirmation email sent (skipped).';
+
       res.status(201).json({
         ...registration,
         checkInToken: checkInToken?.token || null,
-        message: `Successfully registered ${registration.firstName} ${registration.lastName}`,
+        emailSent,
+        message: `Successfully registered ${registration.firstName} ${registration.lastName}. ${emailMessage}`,
       });
     } catch (error) {
       console.error("Admin register error:", error);

@@ -289,6 +289,11 @@ export default function AttendeesPage() {
   const [bulkResendDialogOpen, setBulkResendDialogOpen] = useState(false);
   const [bulkResendLanguage, setBulkResendLanguage] = useState<string>("en");
   
+  // Admin register qualifier dialog state
+  const [adminRegisterDialogOpen, setAdminRegisterDialogOpen] = useState(false);
+  const [qualifierToRegister, setQualifierToRegister] = useState<QualifiedRegistrant | null>(null);
+  const [adminRegisterSendEmail, setAdminRegisterSendEmail] = useState(true);
+  
   // Helper to load visible columns from storage
   const loadVisibleColumns = useCallback((storageKey: string): Set<ColumnKey> => {
     try {
@@ -749,8 +754,8 @@ export default function AttendeesPage() {
 
   // Admin register a qualifier directly (bypasses OTP verification)
   const adminRegisterMutation = useMutation({
-    mutationFn: async ({ qualifierId, eventId }: { qualifierId: string; eventId: string }) => {
-      const response = await apiRequest("POST", `/api/qualifiers/${qualifierId}/admin-register`);
+    mutationFn: async ({ qualifierId, eventId, sendEmail }: { qualifierId: string; eventId: string; sendEmail: boolean }) => {
+      const response = await apiRequest("POST", `/api/qualifiers/${qualifierId}/admin-register?sendEmail=${sendEmail}`);
       return { ...(response as object), eventId };
     },
     onSuccess: (data: any) => {
@@ -761,6 +766,10 @@ export default function AttendeesPage() {
           return key.startsWith("/api/registrations") || key.includes("/qualifiers");
         }
       });
+      // Close dialog and reset state
+      setAdminRegisterDialogOpen(false);
+      setQualifierToRegister(null);
+      setAdminRegisterSendEmail(true);
       toast({ 
         title: t("success"), 
         description: data.message || "Successfully registered" 
@@ -1734,13 +1743,14 @@ export default function AttendeesPage() {
                 <DropdownMenuItem
                   onClick={(e) => { 
                     e.stopPropagation(); 
-                    adminRegisterMutation.mutate({ qualifierId: q.id, eventId: q.eventId });
+                    setQualifierToRegister(q);
+                    setAdminRegisterSendEmail(true);
+                    setAdminRegisterDialogOpen(true);
                   }}
-                  disabled={adminRegisterMutation.isPending}
                   data-testid={`action-register-qualifier-${person.id}`}
                 >
                   <UserPlus className="h-4 w-4 mr-2" />
-                  {adminRegisterMutation.isPending ? "Registering..." : "Register"}
+                  Register
                 </DropdownMenuItem>
                 <DropdownMenuItem 
                   onClick={(e) => { e.stopPropagation(); handleEditQualifier(q); }}
@@ -2892,6 +2902,49 @@ export default function AttendeesPage() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Admin Register Qualifier Confirmation Dialog */}
+      <AlertDialog open={adminRegisterDialogOpen} onOpenChange={(open) => {
+        setAdminRegisterDialogOpen(open);
+        if (!open) {
+          setQualifierToRegister(null);
+          setAdminRegisterSendEmail(true);
+        }
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Register Person</AlertDialogTitle>
+            <AlertDialogDescription>
+              Register {qualifierToRegister?.firstName} {qualifierToRegister?.lastName} ({qualifierToRegister?.email}) for this event?
+              This bypasses OTP verification and directly creates their registration.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex items-center space-x-2 py-4">
+            <Checkbox 
+              id="admin-register-send-email" 
+              checked={adminRegisterSendEmail}
+              onCheckedChange={(checked) => setAdminRegisterSendEmail(checked === true)}
+              data-testid="checkbox-admin-register-send-email"
+            />
+            <Label htmlFor="admin-register-send-email" className="text-sm font-normal cursor-pointer">
+              Send confirmation email to attendee
+            </Label>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => qualifierToRegister && adminRegisterMutation.mutate({ 
+                qualifierId: qualifierToRegister.id, 
+                eventId: qualifierToRegister.eventId,
+                sendEmail: adminRegisterSendEmail
+              })}
+              disabled={adminRegisterMutation.isPending}
+            >
+              {adminRegisterMutation.isPending ? "Registering..." : "Register"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
