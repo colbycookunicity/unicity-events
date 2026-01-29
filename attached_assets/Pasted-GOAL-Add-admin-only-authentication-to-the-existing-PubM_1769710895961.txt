@@ -1,0 +1,86 @@
+GOAL
+Add admin-only authentication to the existing PubMed Research Ingestion System so that only approved admin users can log in and perform actions. There is NO public user registration.
+
+BACKGROUND
+This application is an internal research ingestion and review tool. We need authentication only to:
+- Identify which admin is performing actions
+- Control access to admin-only pages
+- Attribute approvals, rejections, and notes to a specific admin
+
+There must be NO self-service signup or public authentication.
+
+CHANGE REQUEST
+Implement an admin-only authentication system with the following requirements:
+
+1) Admin User Model
+Create an `admins` table with:
+- id
+- email (unique)
+- password_hash
+- name
+- role (admin / super_admin)
+- is_active
+- last_login_at
+- created_at
+- created_by_admin_id (nullable)
+
+Admins will be added manually (via seed script or admin-only UI later).
+
+2) Authentication Method
+- Email + password login
+- Passwords must be securely hashed
+- No registration endpoint
+- No password reset flow for now (manual reset only)
+
+3) Sessions & Authorization
+- Use session-based authentication (preferred for admin tools)
+- Create middleware: `requireAdmin`
+- Protect all admin routes and APIs
+- Redirect unauthenticated users to `/login`
+
+4) Login UI
+Create a simple login page:
+- Email
+- Password
+- Error handling for invalid credentials
+- Loading state
+
+5) Admin Context
+Once logged in:
+- Store admin ID in session
+- Make admin info available to frontend
+- Display logged-in admin name in the UI
+
+6) Audit Trail Integration
+Update existing admin actions to store:
+- approved_by (admin id)
+- rejected_by (admin id)
+- reviewed_by (admin id)
+
+Ensure all approvals, rejections, and notes are attributable to a specific admin.
+
+WHAT I WANT YOU TO DO
+- Review the existing codebase and architecture
+- Identify where authentication should live
+- Add the admin table and migrations
+- Implement login, logout, and session handling
+- Protect admin routes and APIs
+- Update admin actions to record which admin performed them
+- Write documentation in Instructions.md explaining:
+  - How admins are created
+  - How login works
+  - How access is enforced
+
+IMPORTANT CONSTRAINTS
+- No public user accounts
+- No signup or registration flow
+- Keep the system simple and secure
+- Must work cleanly in a Replit deployment
+- Do not over-engineer (no OAuth unless necessary)
+
+DELIVERABLE
+- Admin login page
+- Admin authentication backend
+- Protected admin routes
+- Admin attribution on review actions
+- Updated Instructions.md documentation
