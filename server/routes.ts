@@ -346,10 +346,19 @@ export async function registerRoutes(
           customerId = data.customer?.id;
           bearerToken = data.token;
         } else {
-          // Return the actual error message from Hydra
           const errorMessage = data.message || data.data?.message || "Invalid verification code";
-          console.log("[Admin OTP] Validation failed for", sessionEmail, "- Hydra error:", errorMessage);
-          return res.status(400).json({ error: errorMessage });
+          
+          // Special case: "Customer not found" means the OTP was VALID but user has no Unicity account
+          // For admin users (internal staff), this is OK - they may not be distributors
+          // The fact that Hydra sent them an OTP and they entered it correctly proves their identity
+          if (errorMessage.toLowerCase().includes("customer not found")) {
+            console.log("[Admin OTP] OTP valid but no Hydra customer for", sessionEmail, "- allowing admin login");
+            isValid = true;
+            // No customerId or bearerToken since they don't have a Unicity account
+          } else {
+            console.log("[Admin OTP] Validation failed for", sessionEmail, "- Hydra error:", errorMessage);
+            return res.status(400).json({ error: errorMessage });
+          }
         }
       }
 
