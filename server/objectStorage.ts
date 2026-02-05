@@ -12,23 +12,44 @@ import {
 
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
 
-export const objectStorageClient = new Storage({
-  credentials: {
-    audience: "replit",
-    subject_token_type: "access_token",
-    token_url: `${REPLIT_SIDECAR_ENDPOINT}/token`,
-    type: "external_account",
-    credential_source: {
-      url: `${REPLIT_SIDECAR_ENDPOINT}/credential`,
-      format: {
-        type: "json",
-        subject_token_field_name: "access_token",
+function createStorageClient(): Storage {
+  // Option 1: Explicit service account credentials (preferred for production)
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
+    try {
+      const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
+      console.log("[ObjectStorage] Using explicit GCS credentials from GOOGLE_APPLICATION_CREDENTIALS_JSON");
+      return new Storage({
+        credentials,
+        projectId: credentials.project_id || "",
+      });
+    } catch (err) {
+      console.error("[ObjectStorage] Failed to parse GOOGLE_APPLICATION_CREDENTIALS_JSON:", err);
+      throw new Error("Invalid GOOGLE_APPLICATION_CREDENTIALS_JSON - must be valid JSON");
+    }
+  }
+  
+  // Option 2: Fall back to Replit sidecar (may not work in all environments)
+  console.log("[ObjectStorage] Using Replit sidecar for GCS authentication (GOOGLE_APPLICATION_CREDENTIALS_JSON not set)");
+  return new Storage({
+    credentials: {
+      audience: "replit",
+      subject_token_type: "access_token",
+      token_url: `${REPLIT_SIDECAR_ENDPOINT}/token`,
+      type: "external_account",
+      credential_source: {
+        url: `${REPLIT_SIDECAR_ENDPOINT}/credential`,
+        format: {
+          type: "json",
+          subject_token_field_name: "access_token",
+        },
       },
+      universe_domain: "googleapis.com",
     },
-    universe_domain: "googleapis.com",
-  },
-  projectId: "",
-});
+    projectId: "",
+  });
+}
+
+export const objectStorageClient = createStorageClient();
 
 export class ObjectNotFoundError extends Error {
   constructor() {

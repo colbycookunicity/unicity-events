@@ -1,0 +1,71 @@
+GOAL
+Fix Google Cloud Storage authentication failures caused by missing Replit identity
+tokens (REPL_IDENTITY / /tmp/replidentity) that are breaking public object URL
+generation and uploads.
+
+BACKGROUND
+The application is using @google-cloud/storage with implicit authentication.
+In this environment, Replit’s metasidecar identity token is NOT available, which
+causes google-auth-library to fail during token exchange with errors like:
+
+- metasidecar: failed to get signing authority
+- could not read token from /tmp/replidentity or REPL_IDENTITY
+- Error getting public object URL
+
+This is causing user-facing failures when generating or accessing GCS object URLs.
+
+REQUIREMENTS
+1. Remove reliance on implicit Replit workload identity.
+2. Explicitly authenticate Google Cloud Storage using a service account.
+3. Support both local/dev and production without crashing.
+4. Fail fast with clear logging if credentials are missing.
+5. Do NOT silence or ignore errors — fix the root cause.
+
+CHANGE REQUEST
+1. Update Google Cloud Storage initialization to explicitly use credentials from
+   an environment variable named:
+   GOOGLE_APPLICATION_CREDENTIALS_JSON
+
+2. Parse this env var as JSON and pass it directly to the Storage constructor.
+
+3. Add a safe guard:
+   - If the env var is missing, log a clear error explaining what is required.
+   - Do not attempt to use Replit identity as a fallback.
+
+4. Replace any existing `new Storage()` calls with a centralized helper such as:
+   `getGcsClient()` to prevent future regressions.
+
+IMPLEMENTATION DETAILS
+- Locate all usages of `@google-cloud/storage`
+- Create a single helper (e.g. `lib/gcs.ts` or similar):
+
+   export function getGcsClient() {
+     if (!process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
+       throw new Error(
+         'Missing GOOGLE_APPLICATION_CREDENTIALS_JSON env var. ' +
+         'This is required to access Google Cloud Storage.'
+       );
+     }
+
+     return new Storage({
+       credentials: JSON.parse(
+         process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
+       ),
+     });
+   }
+
+- Update all imports to use this helper.
+- Ensure existing functionality (uploads, signed URLs, public URLs) continues
+  working with no behavior change other than fixing auth.
+
+VALIDATION
+- App boots without metasidecar / replidentity errors.
+- Public object URLs generate successfully.
+- Uploads succeed.
+- No calls are made to 127.0.0.1:1106/token.
+- Logs no longer contain:
+  "failed to get signing authority"
+
+NOTES
+This is an urgent production fix. Optimize for correctness and stability over
+clever abstractions.

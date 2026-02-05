@@ -302,19 +302,44 @@ export async function registerRoutes(
         // Validate with Hydra (works in all environments)
         // IMPORTANT: Use the email from the stored session to ensure exact match with what Hydra received
         const sessionEmail = session.email;
-        console.log("Admin Hydra OTP validation - sessionEmail:", sessionEmail, "inputEmail:", email, "validation_id:", session.validationId);
+        const requestBody = { 
+          email: sessionEmail, 
+          code,
+          validation_id: session.validationId 
+        };
+        console.log("[Admin OTP] Validating with Hydra:", {
+          endpoint: `${HYDRA_API_BASE}/otp/magic-link`,
+          sessionEmail,
+          inputEmail: email,
+          validation_id: session.validationId,
+          codeLength: code?.length,
+          sessionCreatedAt: session.createdAt,
+          sessionExpiresAt: session.expiresAt,
+        });
+        
         const response = await fetch(`${HYDRA_API_BASE}/otp/magic-link`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            email: sessionEmail, 
-            code,
-            validation_id: session.validationId 
-          }),
+          body: JSON.stringify(requestBody),
         });
 
-        const data = await response.json();
-        console.log("Admin Hydra OTP validation response:", response.status, JSON.stringify(data, null, 2));
+        const responseText = await response.text();
+        let data;
+        try {
+          data = JSON.parse(responseText);
+        } catch (parseErr) {
+          console.error("[Admin OTP] Failed to parse Hydra response:", responseText);
+          return res.status(500).json({ error: "Invalid response from verification service" });
+        }
+        
+        console.log("[Admin OTP] Hydra validation response:", {
+          status: response.status,
+          success: data.success,
+          message: data.message,
+          dataMessage: data.data?.message,
+          hasCustomer: !!data.customer,
+          hasToken: !!data.token,
+        });
         
         if (response.ok && data.success) {
           isValid = true;
@@ -323,6 +348,7 @@ export async function registerRoutes(
         } else {
           // Return the actual error message from Hydra
           const errorMessage = data.message || data.data?.message || "Invalid verification code";
+          console.log("[Admin OTP] Validation failed for", sessionEmail, "- Hydra error:", errorMessage);
           return res.status(400).json({ error: errorMessage });
         }
       }
