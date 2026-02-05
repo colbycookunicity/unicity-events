@@ -198,6 +198,7 @@ export interface IStorage {
   createCheckInToken(token: InsertCheckInToken): Promise<CheckInToken>;
   updateCheckInToken(id: string, data: Partial<InsertCheckInToken>): Promise<CheckInToken | undefined>;
   markCheckInTokenUsed(id: string): Promise<CheckInToken | undefined>;
+  tryConsumeCheckInToken(id: string): Promise<CheckInToken | null>;
 
   // Badge Templates
   getBadgeTemplatesByEvent(eventId: string): Promise<BadgeTemplate[]>;
@@ -1549,6 +1550,17 @@ export class DatabaseStorage implements IStorage {
       .where(eq(checkInTokens.id, id))
       .returning();
     return updated || undefined;
+  }
+
+  async tryConsumeCheckInToken(id: string): Promise<CheckInToken | null> {
+    const [updated] = await db.update(checkInTokens)
+      .set({ usedAt: new Date() })
+      .where(and(
+        eq(checkInTokens.id, id),
+        sql`${checkInTokens.usedAt} IS NULL`
+      ))
+      .returning();
+    return updated || null;
   }
 
   // Badge Templates

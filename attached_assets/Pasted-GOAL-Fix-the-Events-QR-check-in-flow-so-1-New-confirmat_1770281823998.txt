@@ -1,0 +1,127 @@
+GOAL
+Fix the Events QR check-in flow so:
+1) New confirmation emails include a secure, single-use token QR that can be scanned WITHOUT login.
+2) Previously sent confirmation emails (legacy QR codes) also scan successfully without login (backward compatibility).
+3) Existing admin-authenticated scanning continues to work unchanged.
+
+BACKGROUND
+We currently have two QR flows:
+- In-app / post-registration QR codes that work because scanning occurs in an authenticated context.
+- Email QR codes that fail with "Authentication required" when scanned from a fresh device (no cookies/session).
+
+We need an auth-free, secure, single-use email check-in flow using signed tokens. We ALSO need legacy support for email QR codes already sent in the past so they keep working for qualified users.
+
+CHANGE REQUEST
+
+A) DATABASE: checkin_tokens
+Create a new table `checkin_tokens`:
+
+- id (uuid, primary key, default gen_random_uuid())
+- token (text, unique, indexed)
+- registration_id (uuid, not null, indexed)
+- event_id (uuid, not null, indexed)
+- used_at (timestamptz, nullable)
+- expires_at (timestamptz, not null, indexed)
+- created_at (timestamptz, not null, default now())
+
+Add foreign keys to registrations/events if applicable in this codebase.
+
+B) TOKEN GENERATION (NEW EMAILS GOING FORWARD)
+When a registration is completed (where we currently trigger the confirmation email):
+- Generate a cryptographically strong token (do NOT use registration_id as token).
+  Example: base64url(randomBytes(32)) or crypto.randomUUID() + additional entropy.
+- Insert into `checkin_tokens` with:
+  - registration_id
+  - event_id
+  - expires_at = event_end + 2 hours (or if no event_end exists, event_date end-of-day + 2 hours)
+- Embed token into confirmation email QR code as a URL:
+  https://events.unicity.com/scan?token=TOKEN_VALUE
+
+C) SCAN PAGE LOGIC
+Update `/scan` page behavior:
+
+1) If `token` query param exists:
+  - Use NEW email-token check-in flow (auth-free).
+  - Call POST /api/check-in/email with { token }.
+
+2) Else:
+  - Continue existing admin-authenticated scanning behavior EXACTLY as-is.
+  - Do not break the current admin scanner flow.
+
+D) NEW AUTH-FREE ENDPOINT: POST /api/check-in/email
+Create:
+POST /api/check-in/email
+
+Rules:
+- MUST NOT require authentication middleware.
+- Validate:
+  - token exists in checkin_tokens
+  - used_at is null
+  - expires_at > now()
+  - referenced registration exists and matches event_id
+  - event is valid and (optionally) within allowable time window
+- Perform atomic transaction:
+  - Mark registration checked_in (whatever your existing check-in field/table is)
+  - Set used_at = now() on checkin_tokens row
+- Return JSON:
+  { ok: true, attendeeName, eventName, checkedInAt }
+
+If already checked in or token used:
+- Return { ok: false, code: "ALREADY_CHECKED_IN" } with 200 or 409 (choose consistent with existing API style).
+If invalid/expired:
+- Return { ok: false, code: "INVALID_OR_EXPIRED" }.
+
+E) UI BEHAVIOR FOR EMAIL TOKEN FLOW
+When token flow is used:
+- Show success once the endpoint returns ok:true.
+- DO NOT run any follow-up calls that require authentication (this is causing the current “success then auth error” flip).
+- If the existing scan UI does extra “verify status” calls, bypass them for token scans.
+
+F) LEGACY EMAIL QR SUPPORT (BACKWARD COMPATIBILITY)
+We must support QR codes that were already emailed BEFORE token QR was implemented.
+
+Implement a legacy fallback on the backend and scan page:
+
+1) Determine what legacy QR contains:
+- In this codebase, locate the logic that generates the email QR code payload/URL (search for QR generation in email template or server email send).
+- Identify the legacy parameters (examples: registrationId, registration_id, qrId, checkInId, attendeeId, etc.).
+
+2) Update `/scan` page:
+- If NO `token` param exists BUT a recognized legacy identifier exists:
+  - Use legacy flow endpoint (auth-free) instead of admin-auth flow.
+  - Call POST /api/check-in/legacy with { legacyId, eventId? } depending on what’s available.
+  - Do NOT require login.
+
+3) Create auth-free endpoint:
+POST /api/check-in/legacy
+- MUST NOT require authentication middleware.
+- Resolve the legacy identifier to a single registration record.
+- Validate:
+  - registration exists
+  - registration belongs to an event
+  - registration not already checked in
+  - event is within a safe window (REQUIRED):
+    - only allow on event day OR within (event_start - 6 hours) to (event_end + 2 hours)
+- Then perform atomic transaction:
+  - mark registration checked_in
+  - (optional but recommended) generate and store a checkin_tokens row marked used_at=now() for audit trail
+- Return JSON:
+  { ok: true, attendeeName, eventName, checkedInAt, legacy: true }
+
+If cannot resolve or out of window:
+- Return { ok:false, code:"INVALID_OR_OUT_OF_WINDOW" }.
+
+SECURITY REQUIREMENTS
+- Token is single-use (used_at).
+- Token has expiration.
+- Legacy fallback is time-window restricted and single-use (cannot re-check-in).
+- Do not expose raw registration IDs in new QR tokens.
+- Preserve existing admin auth checks for admin scan mode.
+
+ACCEPTANCE CRITERIA
+- New confirmation emails generate QR codes that check in successfully on a fresh device with no login.
+- Old confirmation email QR codes already sent in the past also check in successfully without login (within safe event window).
+- No “Authentication required” appears after a successful scan in token/legacy flows.
+- Admin authenticated scan flow remains unchanged and still works.
+- Tokens cannot be reused.
+- Legacy scans are time-window restricted.

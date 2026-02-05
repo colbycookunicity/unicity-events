@@ -3042,6 +3042,298 @@ export async function registerRoutes(
     }
   });
 
+  // ============================================
+  // AUTH-FREE CHECK-IN ENDPOINTS (for email QR codes)
+  // These endpoints allow check-in without login for attendees scanning QR codes from emails
+  // ============================================
+
+  // POST /api/check-in/email - Auth-free check-in using secure token from email QR
+  // QR contains a URL like: https://events.unicity.com/scan?token=TOKEN_VALUE
+  // This endpoint validates the token and performs check-in without requiring login
+  app.post("/api/check-in/email", async (req, res) => {
+    try {
+      const { token } = req.body;
+      
+      if (!token || typeof token !== 'string') {
+        console.log('[Email Check-in] Missing token');
+        return res.status(400).json({ ok: false, code: "MISSING_TOKEN", message: "Token is required" });
+      }
+      
+      // Look up the token
+      const checkInToken = await storage.getCheckInTokenByToken(token);
+      if (!checkInToken) {
+        console.log('[Email Check-in] Token not found:', token.substring(0, 16) + '...');
+        return res.status(400).json({ ok: false, code: "INVALID_OR_EXPIRED", message: "Invalid or expired QR code" });
+      }
+      
+      // Check if token was already used (single-use enforcement)
+      if (checkInToken.usedAt) {
+        console.log('[Email Check-in] Token already used:', { tokenId: checkInToken.id, usedAt: checkInToken.usedAt });
+        
+        // Get registration to return info even for already-used tokens
+        const registration = await storage.getRegistration(checkInToken.registrationId);
+        const event = await storage.getEvent(checkInToken.eventId);
+        
+        if (registration && registration.checkedInAt) {
+          return res.json({ 
+            ok: true, 
+            code: "ALREADY_CHECKED_IN",
+            attendeeName: `${registration.firstName} ${registration.lastName}`,
+            eventName: event?.name || "Event",
+            checkedInAt: registration.checkedInAt,
+            message: "Already checked in"
+          });
+        }
+        
+        return res.status(400).json({ ok: false, code: "TOKEN_ALREADY_USED", message: "This QR code has already been used" });
+      }
+      
+      // Check expiration if set
+      if (checkInToken.expiresAt && new Date(checkInToken.expiresAt) < new Date()) {
+        console.log('[Email Check-in] Token expired:', { tokenId: checkInToken.id, expiresAt: checkInToken.expiresAt });
+        return res.status(400).json({ ok: false, code: "INVALID_OR_EXPIRED", message: "QR code has expired" });
+      }
+      
+      // Get the registration
+      const registration = await storage.getRegistration(checkInToken.registrationId);
+      if (!registration) {
+        console.log('[Email Check-in] Registration not found:', checkInToken.registrationId);
+        return res.status(400).json({ ok: false, code: "INVALID_OR_EXPIRED", message: "Registration not found" });
+      }
+      
+      // Validate registration's eventId matches token's eventId
+      if (registration.eventId !== checkInToken.eventId) {
+        console.log('[Email Check-in] Event ID mismatch:', { 
+          registrationEventId: registration.eventId, 
+          tokenEventId: checkInToken.eventId 
+        });
+        return res.status(400).json({ ok: false, code: "INVALID_OR_EXPIRED", message: "Registration does not match event" });
+      }
+      
+      // Get the event for response and validation
+      const event = await storage.getEvent(checkInToken.eventId);
+      if (!event) {
+        console.log('[Email Check-in] Event not found:', checkInToken.eventId);
+        return res.status(400).json({ ok: false, code: "INVALID_OR_EXPIRED", message: "Event not found" });
+      }
+      
+      // Check if already checked in (idempotent response)
+      if (registration.checkedInAt) {
+        console.log('[Email Check-in] Already checked in:', { registrationId: registration.id, checkedInAt: registration.checkedInAt });
+        
+        // Mark token as used even if already checked in
+        if (!checkInToken.usedAt) {
+          await storage.markCheckInTokenUsed(checkInToken.id);
+        }
+        
+        return res.json({ 
+          ok: true, 
+          code: "ALREADY_CHECKED_IN",
+          attendeeName: `${registration.firstName} ${registration.lastName}`,
+          eventName: event.name,
+          checkedInAt: registration.checkedInAt,
+          message: "Already checked in"
+        });
+      }
+      
+      // Atomic token consumption - prevents race conditions (single-use enforcement)
+      // This conditional update only succeeds if usedAt is NULL
+      // Two concurrent requests: only one will successfully consume the token
+      const consumedToken = await storage.tryConsumeCheckInToken(checkInToken.id);
+      if (!consumedToken) {
+        // Token was already consumed by a concurrent request
+        console.log('[Email Check-in] Token race condition - already consumed:', checkInToken.id);
+        return res.status(400).json({ ok: false, code: "TOKEN_ALREADY_USED", message: "This QR code has already been used" });
+      }
+      
+      // Perform check-in (use 'self-service' as the checker since no auth)
+      await storage.checkInRegistration(registration.id, 'self-service');
+      
+      // Get updated registration
+      const updatedRegistration = await storage.getRegistration(registration.id);
+      
+      console.log('[Email Check-in] Success:', { 
+        registrationId: registration.id, 
+        name: `${registration.firstName} ${registration.lastName}`,
+        eventId: event.id
+      });
+      
+      // Send check-in confirmation email (non-blocking)
+      if (process.env.ITERABLE_API_KEY) {
+        const checkInQrPayload = buildCheckInQRPayload(event.id, registration.id, checkInToken.token);
+        iterableService.sendCheckedInConfirmation(
+          registration.email,
+          registration,
+          event,
+          registration.language,
+          checkInQrPayload,
+          checkInToken.token
+        ).catch(err => {
+          console.error('[Email Check-in] Failed to send check-in confirmation email:', err);
+        });
+      }
+      
+      return res.json({ 
+        ok: true,
+        attendeeName: `${registration.firstName} ${registration.lastName}`,
+        eventName: event.name,
+        checkedInAt: updatedRegistration?.checkedInAt || new Date().toISOString(),
+        message: "Check-in successful"
+      });
+      
+    } catch (error) {
+      console.error("[Email Check-in] Error:", error);
+      res.status(500).json({ ok: false, code: "INTERNAL_ERROR", message: "Unable to process check-in. Please try again." });
+    }
+  });
+
+  // POST /api/check-in/legacy - Auth-free check-in for legacy QR codes (REG:registrationId format)
+  // These are QR codes sent in emails before the token-based system was implemented
+  // Restricted to event day window for security
+  app.post("/api/check-in/legacy", async (req, res) => {
+    try {
+      const { registrationId, eventId } = req.body;
+      
+      if (!registrationId || typeof registrationId !== 'string') {
+        console.log('[Legacy Check-in] Missing registrationId');
+        return res.status(400).json({ ok: false, code: "MISSING_ID", message: "Registration ID is required" });
+      }
+      
+      // Get the registration
+      const registration = await storage.getRegistration(registrationId);
+      if (!registration) {
+        console.log('[Legacy Check-in] Registration not found:', registrationId);
+        return res.status(400).json({ ok: false, code: "INVALID_OR_OUT_OF_WINDOW", message: "Registration not found" });
+      }
+      
+      // Validate event ID matches if provided
+      if (eventId && registration.eventId !== eventId) {
+        console.log('[Legacy Check-in] Event mismatch:', { expected: eventId, got: registration.eventId });
+        return res.status(400).json({ ok: false, code: "INVALID_OR_OUT_OF_WINDOW", message: "This registration is for a different event" });
+      }
+      
+      // Get the event
+      const event = await storage.getEvent(registration.eventId);
+      if (!event) {
+        console.log('[Legacy Check-in] Event not found:', registration.eventId);
+        return res.status(400).json({ ok: false, code: "INVALID_OR_OUT_OF_WINDOW", message: "Event not found" });
+      }
+      
+      // Time window validation for security (event day ± safe window)
+      // Allow: event_start - 6 hours to event_end + 2 hours
+      const now = new Date();
+      const HOURS_BEFORE = 6;
+      const HOURS_AFTER = 2;
+      
+      let windowStart: Date;
+      let windowEnd: Date;
+      
+      if (event.startDate) {
+        windowStart = new Date(event.startDate);
+        windowStart.setHours(windowStart.getHours() - HOURS_BEFORE);
+      } else {
+        // If no start date, don't allow legacy check-in (require token)
+        console.log('[Legacy Check-in] Event has no start date, cannot validate time window');
+        return res.status(400).json({ ok: false, code: "INVALID_OR_OUT_OF_WINDOW", message: "Legacy check-in not available for this event" });
+      }
+      
+      if (event.endDate) {
+        windowEnd = new Date(event.endDate);
+        windowEnd.setHours(windowEnd.getHours() + HOURS_AFTER);
+      } else {
+        // If no end date, use start date end-of-day + 2 hours
+        windowEnd = new Date(event.startDate);
+        windowEnd.setHours(23, 59, 59, 999);
+        windowEnd.setHours(windowEnd.getHours() + HOURS_AFTER);
+      }
+      
+      if (now < windowStart || now > windowEnd) {
+        console.log('[Legacy Check-in] Outside time window:', { 
+          now: now.toISOString(), 
+          windowStart: windowStart.toISOString(), 
+          windowEnd: windowEnd.toISOString() 
+        });
+        return res.status(400).json({ 
+          ok: false, 
+          code: "INVALID_OR_OUT_OF_WINDOW", 
+          message: "Check-in is only available during the event day" 
+        });
+      }
+      
+      // Check if already checked in
+      if (registration.checkedInAt) {
+        console.log('[Legacy Check-in] Already checked in:', { registrationId: registration.id, checkedInAt: registration.checkedInAt });
+        return res.json({ 
+          ok: true, 
+          code: "ALREADY_CHECKED_IN",
+          attendeeName: `${registration.firstName} ${registration.lastName}`,
+          eventName: event.name,
+          checkedInAt: registration.checkedInAt,
+          legacy: true,
+          message: "Already checked in"
+        });
+      }
+      
+      // Perform check-in
+      await storage.checkInRegistration(registration.id, 'legacy-self-service');
+      
+      // Create a token record for audit trail (marked as used immediately)
+      try {
+        const auditToken = await storage.createCheckInToken({
+          registrationId: registration.id,
+          eventId: event.id,
+          token: `legacy-${registration.id}-${Date.now()}`,
+        });
+        await storage.markCheckInTokenUsed(auditToken.id);
+      } catch (tokenErr) {
+        // Non-fatal - just for audit
+        console.log('[Legacy Check-in] Failed to create audit token:', tokenErr);
+      }
+      
+      // Get updated registration
+      const updatedRegistration = await storage.getRegistration(registration.id);
+      
+      console.log('[Legacy Check-in] Success:', { 
+        registrationId: registration.id, 
+        name: `${registration.firstName} ${registration.lastName}`,
+        eventId: event.id
+      });
+      
+      // Send check-in confirmation email (non-blocking)
+      if (process.env.ITERABLE_API_KEY) {
+        // Get or create check-in token for QR payload
+        const existingToken = await storage.getCheckInTokenByRegistration(registration.id);
+        const checkInQrPayload = existingToken 
+          ? buildCheckInQRPayload(event.id, registration.id, existingToken.token)
+          : null;
+        
+        iterableService.sendCheckedInConfirmation(
+          registration.email,
+          registration,
+          event,
+          registration.language,
+          checkInQrPayload,
+          existingToken?.token || null
+        ).catch(err => {
+          console.error('[Legacy Check-in] Failed to send check-in confirmation email:', err);
+        });
+      }
+      
+      return res.json({ 
+        ok: true,
+        attendeeName: `${registration.firstName} ${registration.lastName}`,
+        eventName: event.name,
+        checkedInAt: updatedRegistration?.checkedInAt || new Date().toISOString(),
+        legacy: true,
+        message: "Check-in successful"
+      });
+      
+    } catch (error) {
+      console.error("[Legacy Check-in] Error:", error);
+      res.status(500).json({ ok: false, code: "INTERNAL_ERROR", message: "Unable to process check-in. Please try again." });
+    }
+  });
+
   // Apple Wallet Pass Generation
   // GET /api/wallet/:token - Generates and returns a .pkpass file for Apple Wallet
   app.get("/api/wallet/:token", async (req, res) => {

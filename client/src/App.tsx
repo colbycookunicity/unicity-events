@@ -36,6 +36,7 @@ import PrintersPage from "@/pages/PrintersPage";
 import GuestRegistrationPage from "@/pages/GuestRegistrationPage";
 import GuestPaymentSuccessPage from "@/pages/GuestPaymentSuccessPage";
 import ProfilePage from "@/pages/ProfilePage";
+import ScanPage from "@/pages/ScanPage";
 
 function AdminLayout({ children }: { children: React.ReactNode }) {
   const { theme } = useTheme();
@@ -113,6 +114,7 @@ function PublicRouter() {
   return (
     <Switch>
       <Route path="/admin/login" component={LoginPage} />
+      <Route path="/scan" component={ScanPage} />
       <Route path="/register/:eventId" component={RegistrationPage} />
       <Route path="/register">{() => <EventListPage />}</Route>
       <Route path="/events/:eventSlug/guest-register" component={GuestRegistrationPage} />
