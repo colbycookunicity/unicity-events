@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Plus, Search, Calendar, MapPin, Users, MoreHorizontal, Archive, Trash2, Eye, EyeOff, FileEdit, ExternalLink } from "lucide-react";
+import { Plus, Search, Calendar, MapPin, Users, MoreHorizontal, Archive, Trash2, Eye, EyeOff, FileEdit, ExternalLink, Lock, Unlock } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +56,21 @@ export default function EventsPage() {
     },
     onError: () => {
       toast({ title: t("error"), description: "Failed to archive event", variant: "destructive" });
+    },
+  });
+
+  const toggleRegistrationMutation = useMutation({
+    mutationFn: async (eventId: string) => {
+      return apiRequest("POST", `/api/events/${eventId}/toggle-registration`);
+    },
+    onSuccess: async (res) => {
+      const data = await res.json();
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      const isClosed = !!data.registrationClosedAt;
+      toast({ title: t("success"), description: isClosed ? "Registration closed" : "Registration reopened" });
+    },
+    onError: () => {
+      toast({ title: t("error"), description: "Failed to toggle registration", variant: "destructive" });
     },
   });
 
@@ -228,6 +243,18 @@ export default function EventsPage() {
                           >
                             <Archive className="h-4 w-4 mr-2" />
                             Archive
+                          </DropdownMenuItem>
+                        )}
+                        {event.status === "published" && (
+                          <DropdownMenuItem
+                            onClick={(e) => { e.stopPropagation(); toggleRegistrationMutation.mutate(event.id); }}
+                            data-testid={`action-toggle-registration-${event.id}`}
+                          >
+                            {event.registrationClosedAt ? (
+                              <><Unlock className="h-4 w-4 mr-2" /> Open Registration</>
+                            ) : (
+                              <><Lock className="h-4 w-4 mr-2" /> Close Registration</>
+                            )}
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuSeparator />
