@@ -3769,6 +3769,64 @@ export default function RegistrationPage() {
     );
   }
 
+  // If registration is closed, show event info with a "Registration Closed" message instead of the form
+  if (event.registrationClosedAt) {
+    return (
+      <>
+        <div className="min-h-screen bg-card">
+          {renderHeader()}
+          {heroImageUrl && (
+            <div 
+              className="h-80 md:h-96 bg-cover bg-center relative"
+              style={{ backgroundImage: `url(${heroImageUrl})` }}
+            >
+              <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
+            </div>
+          )}
+          <div className="bg-card py-10 text-center border-b">
+            <div className="max-w-2xl mx-auto px-4">
+              <h1 className="text-3xl md:text-4xl font-bold text-[#1a365d] mb-2">
+                {getCustomHeading() || getEventName()}
+              </h1>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4 text-[#1a365d]/70 mt-4">
+                {event.startDate && (
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">{language === "es" ? "Fecha:" : "Date:"}</span>
+                    <span>
+                      {format(parseLocalDate(event.startDate)!, "MMMM d")}
+                      {event.endDate && event.endDate !== event.startDate && (
+                        <> - {format(parseLocalDate(event.endDate)!, "d, yyyy")}</>
+                      )}
+                      {(!event.endDate || event.endDate === event.startDate) && (
+                        <>, {format(parseLocalDate(event.startDate)!, "yyyy")}</>
+                      )}
+                    </span>
+                  </div>
+                )}
+                {event.location && (
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">{language === "es" ? "Ubicación:" : "Location:"}</span>
+                    <span>{event.location}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="bg-gray-50 py-8">
+            <div className="max-w-2xl mx-auto px-4">
+              {renderRegistrationClosed()}
+              <footer className="mt-8 pb-8 text-center text-sm text-muted-foreground">
+                <a href="https://unicity.com" target="_blank" rel="noopener noreferrer" className="hover:underline">Unicity International</a>
+                <span className="mx-2">|</span>
+                <a href="mailto:americasevent@unicity.com" className="hover:underline">americasevent@unicity.com</a>
+              </footer>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   // Hero-background layout - bright hero image with event info below
   return (
     <>
