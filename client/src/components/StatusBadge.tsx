@@ -50,6 +50,11 @@ export function StatusBadge({ status, type = "registration" }: StatusBadgeProps)
           label: t("private"),
           className: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400",
         };
+      case "registration_closed":
+        return {
+          label: "Registration Closed",
+          className: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+        };
       case "archived":
         return {
           label: t("archived"),

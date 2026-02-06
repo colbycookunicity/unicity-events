@@ -203,7 +203,7 @@ export default function EventsPage() {
                     {getEventName(event)}
                   </CardTitle>
                   <div className="flex items-center gap-2 pointer-events-auto">
-                    <StatusBadge status={event.status} type="event" />
+                    <StatusBadge status={event.registrationClosedAt ? "registration_closed" : event.status} type="event" />
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`button-event-menu-${event.id}`}>
