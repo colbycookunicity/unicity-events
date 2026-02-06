@@ -4,8 +4,9 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowLeft, Loader2, Copy, ExternalLink, Check, FileEdit, Clock, Plus, Trash2, Star, Users, XCircle, CheckCircle } from "lucide-react";
+import { ArrowLeft, Loader2, Copy, ExternalLink, Check, FileEdit, Clock, Plus, Trash2, Star, Users, XCircle, CheckCircle, Lock, Unlock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -523,22 +524,48 @@ export default function EventFormPage() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {isEditing ? t("editEvent") : t("createEvent")}
-            </h1>
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-2xl font-semibold tracking-tight">
+                {isEditing ? t("editEvent") : t("createEvent")}
+              </h1>
+              {isEditing && event && (
+                <>
+                  <StatusBadge status={event.registrationClosedAt ? "registration_closed" : event.status} type="event" />
+                </>
+              )}
+            </div>
             <p className="text-muted-foreground">
               {isEditing ? "Update event details" : "Create a new event"}
             </p>
           </div>
         </div>
-        {isEditing && params.id && (
-          <Link href={`/admin/attendees?event=${params.id}`}>
-            <Button variant="outline" data-testid="button-view-attendees">
-              <Users className="h-4 w-4 mr-2" />
-              View Attendees
+        <div className="flex items-center gap-2 flex-wrap">
+          {isEditing && event && (
+            <Button
+              type="button"
+              variant={event.registrationClosedAt ? "default" : "destructive"}
+              size="sm"
+              onClick={() => toggleRegistrationMutation.mutate()}
+              disabled={toggleRegistrationMutation.isPending}
+              data-testid="button-toggle-registration-header"
+            >
+              {toggleRegistrationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {event.registrationClosedAt ? (
+                <><Unlock className="h-4 w-4 mr-1" /> Reopen Registration</>
+              ) : (
+                <><Lock className="h-4 w-4 mr-1" /> Close Registration</>
+              )}
             </Button>
-          </Link>
-        )}
+          )}
+          {isEditing && params.id && (
+            <Link href={`/admin/attendees?event=${params.id}`}>
+              <Button variant="outline" size="sm" data-testid="button-view-attendees">
+                <Users className="h-4 w-4 mr-2" />
+                View Attendees
+              </Button>
+            </Link>
+          )}
+        </div>
       </div>
 
       {isEditing && event && (
