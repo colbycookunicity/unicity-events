@@ -219,6 +219,7 @@ export const events = pgTable("events", {
   // Iterable campaigns per event: maps email types to campaign IDs by language
   // If not set, falls back to environment variable campaigns
   iterableCampaigns: jsonb("iterable_campaigns").$type<EventIterableCampaigns>(),
+  registrationClosedAt: timestamp("registration_closed_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   lastModified: timestamp("last_modified").defaultNow().notNull(),
 });

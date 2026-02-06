@@ -1391,8 +1391,16 @@ export async function registerRoutes(
   app.get("/api/events/public", async (req, res) => {
     try {
       const publicEvents = await storage.getPublicEvents();
+      const now = new Date();
+      // Filter out events whose registration was closed more than 30 days ago
+      const visibleEvents = publicEvents.filter(event => {
+        const closedAt = (event as any).registrationClosedAt;
+        if (!closedAt) return true;
+        const thirtyDaysLater = new Date(new Date(closedAt).getTime() + 30 * 24 * 60 * 60 * 1000);
+        return now <= thirtyDaysLater;
+      });
       // Return limited public-safe event data
-      res.json(publicEvents.map(event => ({
+      res.json(visibleEvents.map(event => ({
         id: event.id,
         slug: event.slug,
         name: event.name,
@@ -1402,6 +1410,7 @@ export async function registerRoutes(
         location: event.location,
         startDate: event.startDate,
         endDate: event.endDate,
+        registrationClosedAt: (event as any).registrationClosedAt,
       })));
     } catch (error) {
       console.error("Get public events error:", error);
@@ -1709,6 +1718,16 @@ export async function registerRoutes(
       const requiresQualification = registrationMode === "qualified_verified";
       const requiresVerification = registrationMode === "qualified_verified" || registrationMode === "open_verified";
       
+      // Check 30-day window: if registration was closed more than 30 days ago, hide event
+      const registrationClosedAt = (event as any).registrationClosedAt;
+      if (registrationClosedAt) {
+        const closedDate = new Date(registrationClosedAt);
+        const thirtyDaysLater = new Date(closedDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+        if (new Date() > thirtyDaysLater) {
+          return res.status(404).json({ error: "Event not available" });
+        }
+      }
+      
       // Return public-safe event data including registration and qualification settings
       res.json({
         id: event.id,
@@ -1730,6 +1749,7 @@ export async function registerRoutes(
         qualificationStartDate: event.qualificationStartDate,
         qualificationEndDate: event.qualificationEndDate,
         defaultLanguage: event.defaultLanguage,
+        registrationClosedAt,
       });
     } catch (error) {
       console.error("Get public event error:", error);
@@ -1970,6 +1990,24 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/events/:id/toggle-registration", authenticateToken, requireRole("admin", "event_manager"), requireMarketAccess() as any, async (req, res) => {
+    try {
+      const event = await storage.getEvent(req.params.id);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+      const isClosed = !!(event as any).registrationClosedAt;
+      const updates: Record<string, unknown> = {
+        registrationClosedAt: isClosed ? null : new Date(),
+      };
+      const updated = await storage.updateEvent(req.params.id, updates);
+      res.json(updated);
+    } catch (error) {
+      console.error("Toggle registration error:", error);
+      res.status(500).json({ error: "Failed to toggle registration" });
+    }
+  });
+
   app.delete("/api/events/:id", authenticateToken, requireRole("admin"), requireMarketAccess() as any, async (req, res) => {
     try {
       await storage.deleteEvent(req.params.id);
@@ -2137,6 +2175,10 @@ export async function registerRoutes(
 
       if (event.status !== "published") {
         return res.status(400).json({ error: "Registration is not open for this event" });
+      }
+
+      if ((event as any).registrationClosedAt) {
+        return res.status(400).json({ error: "Registration is closed for this event" });
       }
 
       const clientIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress;

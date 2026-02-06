@@ -2034,8 +2034,32 @@ export default function RegistrationPage() {
     </div>
   );
 
+  const renderRegistrationClosed = () => {
+    return (
+      <Card>
+        <CardHeader className="text-center">
+          <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+            <AlertCircle className="w-6 h-6 text-muted-foreground" />
+          </div>
+          <CardTitle className="text-foreground">
+            {language === "es" ? "Registro Cerrado" : "Registration Closed"}
+          </CardTitle>
+          <CardDescription className="text-muted-foreground">
+            {language === "es"
+              ? "El registro para este evento ya no está disponible."
+              : "Registration for this event is no longer available."}
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  };
+
   // Verification step UI
   const renderVerificationStep = () => {
+    if ((event as any)?.registrationClosedAt) {
+      return renderRegistrationClosed();
+    }
+
     // For qualified_verified mode, if user failed qualification, show the not qualified message
     if (qualifiedVerifiedMode && qualificationChecked && !isQualified) {
       return renderNotQualifiedMessage();

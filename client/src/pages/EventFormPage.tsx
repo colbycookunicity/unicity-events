@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowLeft, Loader2, Copy, ExternalLink, Check, FileEdit, Clock, Plus, Trash2, Star, Users } from "lucide-react";
+import { ArrowLeft, Loader2, Copy, ExternalLink, Check, FileEdit, Clock, Plus, Trash2, Star, Users, XCircle, CheckCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -281,6 +281,21 @@ export default function EventFormPage() {
     onError: (error: any) => {
       const message = error?.message || "Failed to update event";
       toast({ title: t("error"), description: message, variant: "destructive" });
+    },
+  });
+
+  const toggleRegistrationMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("POST", `/api/events/${params.id}/toggle-registration`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/events"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/events", params.id] });
+      const wasClosed = !!(event as any)?.registrationClosedAt;
+      toast({ title: t("success"), description: wasClosed ? "Registration reopened" : "Registration closed" });
+    },
+    onError: () => {
+      toast({ title: t("error"), description: "Failed to toggle registration", variant: "destructive" });
     },
   });
 
@@ -869,6 +884,43 @@ export default function EventFormPage() {
                   )}
                 />
               </div>
+
+              {isEditing && (
+                <div className="flex items-center justify-between gap-4 rounded-md border p-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      {(event as any)?.registrationClosedAt ? (
+                        <XCircle className="h-4 w-4 text-destructive" />
+                      ) : (
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                      )}
+                      <span className="font-medium">
+                        {(event as any)?.registrationClosedAt ? "Registration is Closed" : "Registration is Open"}
+                      </span>
+                      {(event as any)?.registrationClosedAt && (
+                        <Badge variant="secondary">
+                          Closed {new Date((event as any).registrationClosedAt).toLocaleDateString()}
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {(event as any)?.registrationClosedAt
+                        ? "The registration page shows a 'Registration Closed' message. It will remain visible for 30 days."
+                        : "The registration page is accepting new registrations."}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant={(event as any)?.registrationClosedAt ? "default" : "destructive"}
+                    onClick={() => toggleRegistrationMutation.mutate()}
+                    disabled={toggleRegistrationMutation.isPending}
+                    data-testid="button-toggle-registration"
+                  >
+                    {toggleRegistrationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {(event as any)?.registrationClosedAt ? "Reopen Registration" : "Close Registration"}
+                  </Button>
+                </div>
+              )}
 
               <div className="grid gap-4 md:grid-cols-3">
                 <FormField
