@@ -2277,6 +2277,11 @@ export default function RegistrationPage() {
 
   // Main content renderer - decides what to show based on verification state
   const renderMainContent = () => {
+    // Check registration closed FIRST - before any verification or form rendering
+    if ((event as any)?.registrationClosedAt) {
+      return renderRegistrationClosed();
+    }
+
     // CRITICAL GUARD for qualified_verified mode:
     // Form MUST NOT render until BOTH qualification AND OTP are verified
     if (qualifiedVerifiedMode && !skipVerification) {
