@@ -1,0 +1,105 @@
+content.min.js:2 Uncaught (in promise) TypeError: e.className.includes is not a function
+    at content.min.js:2:444932
+    at Array.some (<anonymous>)
+    at content.min.js:2:444881
+    at Array.filter (<anonymous>)
+    at Object.<anonymous> (content.min.js:2:444568)
+    at f (content.min.js:2:172036)
+    at Generator.<anonymous> (content.min.js:2:173391)
+    at Generator.next (content.min.js:2:172399)
+    at e (content.min.js:2:326764)
+    at s (content.min.js:2:326967)
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+f @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+e @ content.min.js:2
+s @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+f @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+e @ content.min.js:2
+s @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+(anonymous) @ content.min.js:2
+Promise.then
+yr @ content.min.js:2
+param @ content.min.js:2
+(anonymous) @ content.min.js:2
+childList
+Iy @ index-j92s_Zr6.js:37
+Fo @ index-j92s_Zr6.js:40
+pV @ index-j92s_Zr6.js:40
+to @ index-j92s_Zr6.js:40
+pV @ index-j92s_Zr6.js:40
+to @ index-j92s_Zr6.js:40
+pV @ index-j92s_Zr6.js:40
+to @ index-j92s_Zr6.js:40
+pV @ index-j92s_Zr6.js:40
+to @ index-j92s_Zr6.js:40
+pV @ index-j92s_Zr6.js:40
+to @ index-j92s_Zr6.js:40
+pV @ index-j92s_Zr6.js:40
+to @ index-j92s_Zr6.js:40
+pV @ index-j92s_Zr6.js:40
+to @ index-j92s_Zr6.js:40
+pV @ index-j92s_Zr6.js:40
+to @ index-j92s_Zr6.js:40
+pV @ index-j92s_Zr6.js:40
+to @ index-j92s_Zr6.js:40
+pV @ index-j92s_Zr6.js:40
+to @ index-j92s_Zr6.js:40
+pV @ index-j92s_Zr6.js:40
+to @ index-j92s_Zr6.js:40
+pV @ index-j92s_Zr6.js:40
+to @ index-j92s_Zr6.js:40
+pV @ index-j92s_Zr6.js:40
+to @ index-j92s_Zr6.js:40
+pV @ index-j92s_Zr6.js:40
+to @ index-j92s_Zr6.js:40
+pV @ index-j92s_Zr6.js:40
+to @ index-j92s_Zr6.js:40
+pV @ index-j92s_Zr6.js:40
+to @ index-j92s_Zr6.js:40
+pV @ index-j92s_Zr6.js:40
+to @ index-j92s_Zr6.js:40
+pV @ index-j92s_Zr6.js:40
+to @ index-j92s_Zr6.js:40
+pV @ index-j92s_Zr6.js:40
+to @ index-j92s_Zr6.js:40
+pV @ index-j92s_Zr6.js:40
+to @ index-j92s_Zr6.js:40
+pV @ index-j92s_Zr6.js:40
+to @ index-j92s_Zr6.js:40
+pV @ index-j92s_Zr6.js:40
+to @ index-j92s_Zr6.js:40
+pV @ index-j92s_Zr6.js:40
+to @ index-j92s_Zr6.js:40
+pV @ index-j92s_Zr6.js:40
+to @ index-j92s_Zr6.js:40
+pV @ index-j92s_Zr6.js:40
+to @ index-j92s_Zr6.js:40
+pV @ index-j92s_Zr6.js:40
+Mse @ index-j92s_Zr6.js:40
+xd @ index-j92s_Zr6.js:40
+jR @ index-j92s_Zr6.js:40
+Ku @ index-j92s_Zr6.js:38
+(anonymous) @ index-j92s_Zr6.js:40Understand this error
+content.min.js:2 Uncaught (in promise) TypeError: e.className.includes is not a function
+    at content.min.js:2:444753
+    at Array.some (<anonymous>)
+    at content.min.js:2:444702
+    at Array.filter (<anonymous>)
+    at Object.<anonymous> (content.min.js:2:444568)
+    at f (content.min.js:2:172036)
+    at Generator.<anonymous> (content.min.js:2:173391)
+    at Generator.next (content.min.js:2:172399)
+    at e (content.min.js:2:326764)
+    at s (content.min.js:2:326967)
