@@ -231,7 +231,7 @@ export default function EventFormPage() {
         registrationMode: ((event as any).registrationMode as EventFormData["registrationMode"]) || "open_verified",
         capacity: event.capacity || undefined,
         guestPolicy: (event.guestPolicy as EventFormData["guestPolicy"]) || "not_allowed",
-        buyInPrice: event.buyInPrice || undefined,
+        buyInPrice: event.buyInPrice ? event.buyInPrice / 100 : undefined,
         requiresQualification: event.requiresQualification || false,
         qualificationStartDate: formatDateForInput(event.qualificationStartDate),
         qualificationEndDate: formatDateForInput(event.qualificationEndDate),
@@ -312,6 +312,8 @@ export default function EventFormPage() {
       slug: normalizedSlug || undefined,
       // Explicitly include formTemplateId to ensure it's sent even when empty
       formTemplateId,
+      // Convert dollars back to cents for storage
+      buyInPrice: data.buyInPrice ? Math.round(data.buyInPrice * 100) : undefined,
       // Convert Eastern Time dates to UTC for storage
       startDate: convertEasternToUTC(data.startDate),
       endDate: convertEasternToUTC(data.endDate),
@@ -359,7 +361,7 @@ export default function EventFormPage() {
     mutationFn: async (data: typeof ruleForm) => {
       return apiRequest("POST", `/api/events/${params.id}/guest-rules`, {
         ...data,
-        paidGuestPriceCents: data.paidGuestPriceCents ? parseInt(data.paidGuestPriceCents) : null,
+        paidGuestPriceCents: data.paidGuestPriceCents ? Math.round(parseFloat(data.paidGuestPriceCents) * 100) : null,
       });
     },
     onSuccess: () => {
@@ -377,7 +379,7 @@ export default function EventFormPage() {
     mutationFn: async ({ id, data }: { id: string; data: typeof ruleForm }) => {
       return apiRequest("PATCH", `/api/guest-rules/${id}`, {
         ...data,
-        paidGuestPriceCents: data.paidGuestPriceCents ? parseInt(data.paidGuestPriceCents) : null,
+        paidGuestPriceCents: data.paidGuestPriceCents ? Math.round(parseFloat(data.paidGuestPriceCents) * 100) : null,
       });
     },
     onSuccess: () => {
@@ -427,7 +429,7 @@ export default function EventFormPage() {
       descriptionEs: rule.descriptionEs || "",
       freeGuestCount: rule.freeGuestCount ?? 0,
       maxPaidGuests: rule.maxPaidGuests ?? 0,
-      paidGuestPriceCents: rule.paidGuestPriceCents?.toString() || "",
+      paidGuestPriceCents: rule.paidGuestPriceCents ? (rule.paidGuestPriceCents / 100).toString() : "",
       isDefault: rule.isDefault ?? false,
     });
     setShowRuleDialog(true);
@@ -1000,17 +1002,19 @@ export default function EventFormPage() {
                   name="buyInPrice"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Guest Buy-In Price (cents)</FormLabel>
+                      <FormLabel>Guest Buy-In Price ($)</FormLabel>
                       <FormControl>
                         <Input 
                           type="number" 
+                          step="0.01"
+                          min="0"
                           {...field} 
-                          placeholder="e.g., 50000 for $500.00" 
+                          placeholder="e.g., 500.00" 
                           data-testid="input-buyin-price" 
                         />
                       </FormControl>
                       <FormDescription>
-                        Enter the price in cents (e.g., 50000 = $500.00)
+                        Enter the price in dollars (e.g., 500.00)
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -1097,13 +1101,14 @@ export default function EventFormPage() {
                               </div>
                             </div>
                             <div className="space-y-2">
-                              <label className="text-sm font-medium">Paid Guest Price (cents)</label>
+                              <label className="text-sm font-medium">Paid Guest Price ($)</label>
                               <Input
                                 type="number"
+                                step="0.01"
                                 min={0}
                                 value={ruleForm.paidGuestPriceCents}
                                 onChange={(e) => setRuleForm({ ...ruleForm, paidGuestPriceCents: e.target.value })}
-                                placeholder="e.g., 50000 for $500.00"
+                                placeholder="e.g., 500.00"
                                 data-testid="input-rule-price"
                               />
                             </div>
