@@ -437,6 +437,19 @@ export default function RegistrationPage() {
   // Track validation errors for custom fields (field key -> error message)
   const [customFieldErrors, setCustomFieldErrors] = useState<Record<string, string>>({});
 
+  // Sync preferredLanguage custom field with the language toggle selection
+  useEffect(() => {
+    const customFields = getCustomOnlyFields(event?.formFields as any[]);
+    const langField = customFields.find(f => f.name === "preferredLanguage");
+    if (langField) {
+      const mappedValue = language === "es" ? "spanish" : "english";
+      // Only auto-set if user hasn't picked a value yet
+      if (!customFormData["preferredLanguage"]) {
+        setCustomFormData(prev => ({ ...prev, preferredLanguage: mappedValue }));
+      }
+    }
+  }, [language, event?.formFields]);
+
   // Multi-attendee support for open_anonymous mode
   const [ticketCount, setTicketCount] = useState(1);
   const [additionalAttendees, setAdditionalAttendees] = useState<Array<{
