@@ -437,16 +437,15 @@ export default function RegistrationPage() {
   // Track validation errors for custom fields (field key -> error message)
   const [customFieldErrors, setCustomFieldErrors] = useState<Record<string, string>>({});
 
-  // Sync preferredLanguage custom field with the language toggle selection
+  // Sync preferredLanguage custom field with the language toggle selection.
+  // Always matches the site-wide locale so the field is pre-selected on load
+  // and updates if the user switches the language toggle.
   useEffect(() => {
     const customFields = getCustomOnlyFields(event?.formFields as any[]);
     const langField = customFields.find(f => f.name === "preferredLanguage");
     if (langField) {
       const mappedValue = language === "es" ? "spanish" : "english";
-      // Only auto-set if user hasn't picked a value yet
-      if (!customFormData["preferredLanguage"]) {
-        setCustomFormData(prev => ({ ...prev, preferredLanguage: mappedValue }));
-      }
+      setCustomFormData(prev => ({ ...prev, preferredLanguage: mappedValue }));
     }
   }, [language, event?.formFields]);
 
