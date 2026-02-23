@@ -434,6 +434,8 @@ export default function RegistrationPage() {
 
   // Custom form fields data (for events with custom form fields)
   const [customFormData, setCustomFormData] = useState<Record<string, any>>({});
+  // Track validation errors for custom fields (field key -> error message)
+  const [customFieldErrors, setCustomFieldErrors] = useState<Record<string, string>>({});
 
   // Multi-attendee support for open_anonymous mode
   const [ticketCount, setTicketCount] = useState(1);
@@ -751,6 +753,7 @@ export default function RegistrationPage() {
     if (loadedForKey && currentKey && loadedForKey !== currentKey) {
       setExistingRegistrationId(null);
       setCustomFormData({});
+      setCustomFieldErrors({});
       setLoadedForKey(null);
     }
   }, [verifiedProfile?.email, verificationEmail, prePopulatedEmail, params.eventId, loadedForKey]);
@@ -1139,6 +1142,7 @@ export default function RegistrationPage() {
     setOtpJustVerified(false); // Reset flag to allow session checks on restart
     setExistingRegistrationId(null);
     setCustomFormData({});
+    setCustomFieldErrors({});
     setLoadedForKey(null);
     fetchingExistingRef.current = null;
     
@@ -1655,11 +1659,12 @@ export default function RegistrationPage() {
     const customFields = getCustomOnlyFields(event?.formFields as any[]);
     if (customFields.length > 0) {
       const missingFields: string[] = [];
-      
+      const fieldErrors: Record<string, string> = {};
+
       for (const field of customFields) {
         const fieldKey = field.name || (field as any).id;
         const conditionalOn = (field as any).conditionalOn;
-        
+
         // Check if this field is conditionally required
         let isRequired = field.required;
         if (conditionalOn) {
@@ -1671,29 +1676,44 @@ export default function RegistrationPage() {
             continue; // Skip validation if field is hidden
           }
         }
-        
+
         if (isRequired) {
           const value = customFormData[fieldKey];
-          const isEmpty = value === undefined || value === null || value === "" || 
+          const isEmpty = value === undefined || value === null || value === "" ||
             (field.type === "checkbox" && value !== true);
-          
+
           if (isEmpty) {
             const fieldLabel = language === "es" && field.labelEs ? field.labelEs : field.label;
             missingFields.push(fieldLabel);
+            fieldErrors[fieldKey] = language === "es"
+              ? "Este campo es requerido"
+              : "This field is required";
           }
         }
       }
-      
+
+      setCustomFieldErrors(fieldErrors);
+
       if (missingFields.length > 0) {
         toast({
           title: language === "es" ? "Campos requeridos" : "Required Fields",
-          description: language === "es" 
+          description: language === "es"
             ? `Por favor complete: ${missingFields.join(", ")}`
             : `Please complete: ${missingFields.join(", ")}`,
           variant: "destructive",
         });
+        // Scroll to first field with an error
+        const firstErrorKey = Object.keys(fieldErrors)[0];
+        if (firstErrorKey) {
+          const el = document.querySelector(`[data-field-key="${firstErrorKey}"]`);
+          if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+        }
         return;
       }
+    } else {
+      setCustomFieldErrors({});
     }
     
     // Validate additional attendees for multi-attendee anonymous mode
@@ -2402,7 +2422,16 @@ export default function RegistrationPage() {
           </div>
         )}
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit, (errors) => {
+            // Scroll to first field with a validation error
+            const firstErrorField = Object.keys(errors)[0];
+            if (firstErrorField) {
+              const el = document.querySelector(`[name="${firstErrorField}"]`);
+              if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+              }
+            }
+          })} className="space-y-6">
             {/* Personal Information Section */}
             <div className="space-y-4">
               <h3 className="text-lg font-medium border-b pb-2">
@@ -2902,7 +2931,9 @@ export default function RegistrationPage() {
                     const fieldKey = field.name || (field as any).id;
                     const fieldLabel = language === "es" && field.labelEs ? field.labelEs : field.label;
                     const fieldPlaceholder = language === "es" && field.placeholderEs ? field.placeholderEs : field.placeholder;
-                    
+                    const fieldError = customFieldErrors[fieldKey];
+                    const errorBorderClass = fieldError ? "border-destructive ring-destructive" : "";
+
                     // Check conditional visibility
                     const conditionalOn = (field as any).conditionalOn;
                     if (conditionalOn) {
@@ -2911,85 +2942,101 @@ export default function RegistrationPage() {
                         return null; // Hide field if condition not met
                       }
                     }
-                    
+
                     // If field has conditionalOn, make it required when visible
                     const isRequired = conditionalOn ? true : field.required;
-                  
+
+                    // Helper to clear this field's error on change
+                    const clearError = () => {
+                      if (fieldError) {
+                        setCustomFieldErrors(prev => {
+                          const next = { ...prev };
+                          delete next[fieldKey];
+                          return next;
+                        });
+                      }
+                    };
+
                     return (
-                      <div key={fieldKey} className="space-y-2">
-                        <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                      <div key={fieldKey} className="space-y-2" data-field-key={fieldKey}>
+                        <label className={`text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 ${fieldError ? "text-destructive" : ""}`}>
                           {fieldLabel}{isRequired && " *"}
                         </label>
-                        
+
                         {field.type === "text" && (
                           <Input
                             placeholder={fieldPlaceholder}
                             value={customFormData[fieldKey] || ""}
-                            onChange={(e) => setCustomFormData(prev => ({ ...prev, [fieldKey]: e.target.value }))}
+                            onChange={(e) => { clearError(); setCustomFormData(prev => ({ ...prev, [fieldKey]: e.target.value })); }}
+                            className={errorBorderClass}
                             required={isRequired}
                             data-testid={`input-custom-${fieldKey}`}
                           />
                         )}
-                        
+
                         {field.type === "email" && (
                           <Input
                             type="email"
                             placeholder={fieldPlaceholder}
                             value={customFormData[fieldKey] || ""}
-                            onChange={(e) => setCustomFormData(prev => ({ ...prev, [fieldKey]: e.target.value }))}
+                            onChange={(e) => { clearError(); setCustomFormData(prev => ({ ...prev, [fieldKey]: e.target.value })); }}
+                            className={errorBorderClass}
                             required={isRequired}
                             data-testid={`input-custom-${fieldKey}`}
                           />
                         )}
-                        
+
                         {field.type === "phone" && (
                           <PhoneInput
                             international
                             defaultCountry="US"
                             value={customFormData[fieldKey] || ""}
-                            onChange={(value) => setCustomFormData(prev => ({ ...prev, [fieldKey]: value }))}
-                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm"
+                            onChange={(value) => { clearError(); setCustomFormData(prev => ({ ...prev, [fieldKey]: value })); }}
+                            className={`flex h-9 w-full rounded-md border bg-transparent px-3 py-1 text-base shadow-sm ${fieldError ? "border-destructive" : "border-input"}`}
                             data-testid={`input-custom-${fieldKey}`}
                           />
                         )}
-                        
+
                         {field.type === "number" && (
                           <Input
                             type="number"
                             placeholder={fieldPlaceholder}
                             value={customFormData[fieldKey] || ""}
-                            onChange={(e) => setCustomFormData(prev => ({ ...prev, [fieldKey]: e.target.value }))}
+                            onChange={(e) => { clearError(); setCustomFormData(prev => ({ ...prev, [fieldKey]: e.target.value })); }}
+                            className={errorBorderClass}
                             required={isRequired}
                             data-testid={`input-custom-${fieldKey}`}
                           />
                         )}
-                        
+
                         {field.type === "date" && (
                           <Input
                             type="date"
                             value={customFormData[fieldKey] || ""}
-                            onChange={(e) => setCustomFormData(prev => ({ ...prev, [fieldKey]: e.target.value }))}
+                            onChange={(e) => { clearError(); setCustomFormData(prev => ({ ...prev, [fieldKey]: e.target.value })); }}
+                            className={errorBorderClass}
                             required={isRequired}
                             data-testid={`input-custom-${fieldKey}`}
                           />
                         )}
-                        
+
                         {field.type === "textarea" && (
                           <Textarea
                             placeholder={fieldPlaceholder}
                             value={customFormData[fieldKey] || ""}
-                            onChange={(e) => setCustomFormData(prev => ({ ...prev, [fieldKey]: e.target.value }))}
+                            onChange={(e) => { clearError(); setCustomFormData(prev => ({ ...prev, [fieldKey]: e.target.value })); }}
+                            className={errorBorderClass}
                             required={isRequired}
                             data-testid={`input-custom-${fieldKey}`}
                           />
                         )}
-                        
+
                         {field.type === "select" && field.options && (
                           <Select
                             value={customFormData[fieldKey] || ""}
-                            onValueChange={(value) => setCustomFormData(prev => ({ ...prev, [fieldKey]: value }))}
+                            onValueChange={(value) => { clearError(); setCustomFormData(prev => ({ ...prev, [fieldKey]: value })); }}
                           >
-                            <SelectTrigger data-testid={`select-custom-${fieldKey}`}>
+                            <SelectTrigger data-testid={`select-custom-${fieldKey}`} className={errorBorderClass}>
                               <SelectValue placeholder={fieldPlaceholder || (language === "es" ? "Seleccionar" : "Select")} />
                             </SelectTrigger>
                             <SelectContent>
@@ -3001,16 +3048,17 @@ export default function RegistrationPage() {
                             </SelectContent>
                           </Select>
                         )}
-                        
+
                         {field.type === "checkbox" && (
                           <div className="flex items-center space-x-2">
                             <Checkbox
                               id={`custom-${fieldKey}`}
                               checked={customFormData[fieldKey] || false}
-                              onCheckedChange={(checked) => setCustomFormData(prev => ({ ...prev, [fieldKey]: checked }))}
+                              onCheckedChange={(checked) => { clearError(); setCustomFormData(prev => ({ ...prev, [fieldKey]: checked })); }}
+                              className={fieldError ? "border-destructive data-[state=unchecked]:border-destructive" : ""}
                               data-testid={`checkbox-custom-${fieldKey}`}
                             />
-                            <label 
+                            <label
                               htmlFor={`custom-${fieldKey}`}
                               className="text-sm text-muted-foreground cursor-pointer"
                             >
@@ -3018,11 +3066,12 @@ export default function RegistrationPage() {
                             </label>
                           </div>
                         )}
-                        
+
                         {field.type === "radio" && field.options && (
                           <RadioGroup
                             value={customFormData[fieldKey] || ""}
                             onValueChange={(value) => {
+                              clearError();
                               setCustomFormData(prev => {
                                 const newData: Record<string, any> = { ...prev, [fieldKey]: value };
                                 // Clear conditional fields when parent value changes
@@ -3036,17 +3085,17 @@ export default function RegistrationPage() {
                                 return newData;
                               });
                             }}
-                            className="space-y-2"
+                            className={`space-y-2 ${fieldError ? "rounded-md border border-destructive p-3" : ""}`}
                             data-testid={`radio-custom-${fieldKey}`}
                           >
                             {field.options.map((option) => (
                               <div key={option.value} className="flex items-center space-x-2">
-                                <RadioGroupItem 
-                                  value={option.value} 
+                                <RadioGroupItem
+                                  value={option.value}
                                   id={`${fieldKey}-${option.value}`}
                                   data-testid={`radio-option-${fieldKey}-${option.value}`}
                                 />
-                                <Label 
+                                <Label
                                   htmlFor={`${fieldKey}-${option.value}`}
                                   className="cursor-pointer font-normal"
                                 >
@@ -3055,6 +3104,10 @@ export default function RegistrationPage() {
                               </div>
                             ))}
                           </RadioGroup>
+                        )}
+
+                        {fieldError && (
+                          <p className="text-sm font-medium text-destructive">{fieldError}</p>
                         )}
                       </div>
                     );
