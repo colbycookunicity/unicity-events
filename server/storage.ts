@@ -1147,9 +1147,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getQualifyingEventsForEmail(email: string): Promise<{ event: Event; registration: Registration | null; qualifiedRegistrant: QualifiedRegistrant | null }[]> {
-    // Get all published events
+    // Get published events that haven't ended yet (or have no end date)
+    const now = new Date();
     const publishedEvents = await db.select().from(events)
-      .where(eq(events.status, 'published'))
+      .where(and(
+        eq(events.status, 'published'),
+        or(sql`${events.endDate} IS NULL`, gte(events.endDate, now))
+      ))
       .orderBy(desc(events.startDate));
 
     const results: { event: Event; registration: Registration | null; qualifiedRegistrant: QualifiedRegistrant | null }[] = [];
