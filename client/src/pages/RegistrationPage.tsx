@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { useParams } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -288,6 +288,7 @@ export default function RegistrationPage() {
   const { toast } = useToast();
   const { theme } = useTheme();
   const params = useParams<{ eventId: string }>();
+  const [, setLocation] = useLocation();
   const [isSuccess, setIsSuccess] = useState(false);
   
   // Verification flow state
@@ -1507,22 +1508,15 @@ export default function RegistrationPage() {
     onSuccess: () => {
       setShowCancelDialog(false);
       setExistingRegistrationId(null);
-      setVerifiedProfile(null);
-      setVerificationStep("email");
-      setVerificationEmail("");
-      setVerificationSessionToken(null);
-      setOtpCode("");
-      setIsSuccess(false);
-      localStorage.removeItem("attendeeAuthToken");
       queryClient.invalidateQueries({ queryKey: ["/api/events", params.eventId, "public"] });
       queryClient.invalidateQueries({ queryKey: ["/api/attendee/events"] });
-      form.reset();
       toast({
         title: language === "es" ? "Registro cancelado" : "Registration Cancelled",
         description: language === "es"
           ? "Su registro ha sido cancelado exitosamente."
           : "Your registration has been successfully cancelled.",
       });
+      setLocation("/my-events");
     },
     onError: (error: any) => {
       setShowCancelDialog(false);
