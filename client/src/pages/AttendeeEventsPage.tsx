@@ -519,8 +519,18 @@ export default function AttendeeEventsPage() {
 
             {eventsData && eventsData.events.length > 0 && (
               <div className="space-y-4">
-                {eventsData.events.map((event) => (
-                  <Card key={event.id} className="overflow-visible" data-testid={`card-event-${event.id}`}>
+                {[...eventsData.events]
+                  .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
+                  .map((event) => (
+                  <Card
+                    key={event.id}
+                    className={`overflow-visible ${
+                      event.registrationStatus === "registered" || event.registrationStatus === "checked_in"
+                        ? "border-emerald-500/60 bg-emerald-50/40 dark:bg-emerald-950/20 dark:border-emerald-500/40"
+                        : ""
+                    }`}
+                    data-testid={`card-event-${event.id}`}
+                  >
                     <CardContent className="p-0">
                       <div className="flex flex-col sm:flex-row gap-4 p-4">
                         {event.heroImageUrl && (
