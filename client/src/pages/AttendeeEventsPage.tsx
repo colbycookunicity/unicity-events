@@ -15,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
-import { MapPin, Calendar, ChevronRight, LogOut, Mail, Loader2, CheckCircle2, Clock, ShieldCheck, CalendarX, ArrowLeft, HelpCircle, QrCode } from "lucide-react";
+import { MapPin, Calendar, ChevronRight, LogOut, Mail, Loader2, CheckCircle2, Clock, ShieldCheck, CalendarX, ArrowLeft, HelpCircle, QrCode, XCircle } from "lucide-react";
 import { QRCodeDialog } from "@/components/RegistrationQRCode";
 import unicityIcon from "@/assets/unicity-logo.png";
 import unicityLogoDark from "@/assets/unicity-logo-dark.png";
@@ -30,7 +30,7 @@ interface AttendeeEvent {
   startDate: string;
   endDate: string | null;
   heroImageUrl: string | null;
-  registrationStatus: "registered" | "not_registered";
+  registrationStatus: "registered" | "checked_in" | "not_coming" | "qualified" | "not_registered";
   registrationId: string | null;
   lastUpdated: string | null;
   qualifiedSince: string | null;
@@ -562,16 +562,25 @@ export default function AttendeeEventsPage() {
                           )}
                         </div>
                         <div className="flex flex-col items-end gap-2 justify-center shrink-0">
-                          {event.registrationStatus === "registered" ? (
-                            <Badge 
+                          {event.registrationStatus === "not_coming" ? (
+                            <Badge
+                              variant="outline"
+                              className="border-gray-400/50 text-gray-500 dark:text-gray-400 bg-gray-50/50 dark:bg-gray-900/20"
+                              data-testid={`badge-status-${event.id}`}
+                            >
+                              <XCircle className="h-3 w-3 mr-1" />
+                              {t("Cancelled", "Cancelado")}
+                            </Badge>
+                          ) : event.registrationStatus === "registered" || event.registrationStatus === "checked_in" ? (
+                            <Badge
                               variant="default"
                               data-testid={`badge-status-${event.id}`}
                             >
                               <CheckCircle2 className="h-3 w-3 mr-1" />
-                              {t("Registered", "Registrado")}
+                              {event.registrationStatus === "checked_in" ? t("Checked In", "Registrado") : t("Registered", "Registrado")}
                             </Badge>
                           ) : (
-                            <Badge 
+                            <Badge
                               variant="outline"
                               className="border-amber-500/50 text-amber-600 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-950/20"
                               data-testid={`badge-status-${event.id}`}
@@ -581,14 +590,14 @@ export default function AttendeeEventsPage() {
                             </Badge>
                           )}
                           <div className="flex items-center gap-2">
-                            {event.registrationStatus === "registered" && event.registrationId && (
+                            {(event.registrationStatus === "registered" || event.registrationStatus === "checked_in") && event.registrationId && (
                               <QRCodeDialog
                                 registrationId={event.registrationId}
                                 eventName={getEventName(event)}
                                 t={t}
                                 trigger={
-                                  <Button 
-                                    variant="outline" 
+                                  <Button
+                                    variant="outline"
                                     size="icon"
                                     data-testid={`button-qr-${event.id}`}
                                   >
@@ -598,19 +607,21 @@ export default function AttendeeEventsPage() {
                               />
                             )}
                             <Link href={`/register/${event.slug || event.id}`}>
-                              <Button 
-                                variant={event.registrationStatus === "registered" ? "outline" : "default"}
+                              <Button
+                                variant={event.registrationStatus === "registered" || event.registrationStatus === "checked_in" || event.registrationStatus === "not_coming" ? "outline" : "default"}
                                 className="gap-1"
                                 data-testid={`button-event-action-${event.id}`}
                               >
-                                {event.registrationStatus === "registered" 
+                                {event.registrationStatus === "registered" || event.registrationStatus === "checked_in"
                                   ? t("View Registration", "Ver Registro")
+                                  : event.registrationStatus === "not_coming"
+                                  ? t("View Details", "Ver Detalles")
                                   : t("Complete Registration", "Completar Registro")}
                                 <ChevronRight className="h-4 w-4" />
                               </Button>
                             </Link>
                           </div>
-                          {event.registrationStatus !== "registered" && (
+                          {event.registrationStatus !== "registered" && event.registrationStatus !== "checked_in" && event.registrationStatus !== "not_coming" && (
                             <p className="text-xs text-muted-foreground text-right max-w-[160px]">
                               {t("You're invited! Complete your registration.", "¡Estás invitado! Completa tu registro.")}
                             </p>

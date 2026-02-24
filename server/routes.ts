@@ -1575,7 +1575,7 @@ export async function registerRoutes(
         startDate: event.startDate,
         endDate: event.endDate,
         heroImageUrl: event.heroImageUrl,
-        registrationStatus: registration ? "registered" : "not_registered",
+        registrationStatus: registration ? registration.status : "not_registered",
         registrationId: registration?.id || null,
         lastUpdated: registration?.lastModified || null,
         qualifiedSince: qualifiedRegistrant?.createdAt || null,
