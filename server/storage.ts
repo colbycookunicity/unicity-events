@@ -1159,12 +1159,14 @@ export class DatabaseStorage implements IStorage {
     const results: { event: Event; registration: Registration | null; qualifiedRegistrant: QualifiedRegistrant | null }[] = [];
 
     for (const event of publishedEvents) {
-      // Check if user has existing registration
+      // Check if user has existing registration — order by lastModified DESC so
+      // the most-recently-updated record wins when duplicates exist.
       const [existingReg] = await db.select().from(registrations)
         .where(and(
           eq(registrations.eventId, event.id),
           sql`LOWER(${registrations.email}) = LOWER(${email})`
-        ));
+        ))
+        .orderBy(desc(registrations.lastModified));
 
       if (existingReg) {
         results.push({ event, registration: existingReg, qualifiedRegistrant: null });
