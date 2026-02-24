@@ -569,7 +569,7 @@ export default function AttendeeEventsPage() {
                               data-testid={`badge-status-${event.id}`}
                             >
                               <XCircle className="h-3 w-3 mr-1" />
-                              {t("Cancelled", "Cancelado")}
+                              {t("Not Coming", "No Asistirá")}
                             </Badge>
                           ) : event.registrationStatus === "registered" || event.registrationStatus === "checked_in" ? (
                             <Badge
