@@ -2164,48 +2164,44 @@ export default function RegistrationPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* For qualified_verified mode: Email OR Distributor ID (at least one required) */}
-            {qualifiedVerifiedMode && (
-              <>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">
-                    {language === "es" ? "ID de Distribuidor" : "Distributor ID"}
-                  </label>
-                  <Input
-                    type="text"
-                    placeholder={language === "es" ? "Su ID de distribuidor" : "Your distributor ID"}
-                    value={verificationDistributorId}
-                    onChange={(e) => setVerificationDistributorId(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
-                    data-testid="input-verification-distributor-id"
-                  />
-                </div>
-                <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                  <div className="flex-1 h-px bg-border" />
-                  <span>{language === "es" ? "o" : "or"}</span>
-                  <div className="flex-1 h-px bg-border" />
-                </div>
-              </>
-            )}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
-                {language === "es" ? "Correo Electrónico" : "Email"}{!qualifiedVerifiedMode && " *"}
-              </label>
-              <Input
-                type="email"
-                placeholder={language === "es" ? "correo@ejemplo.com" : "email@example.com"}
-                value={verificationEmail}
-                onChange={(e) => setVerificationEmail(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
-                data-testid="input-verification-email"
-              />
-            </div>
-            {qualifiedVerifiedMode && (
-              <p className="text-xs text-muted-foreground text-center">
-                {language === "es" 
-                  ? "Ingrese su ID de distribuidor O correo electrónico (solo uno es necesario)"
-                  : "Enter your Distributor ID OR Email (only one is needed)"}
-              </p>
+            {/* For qualified_verified mode: single smart field — email or distributor ID */}
+            {qualifiedVerifiedMode ? (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">
+                  {language === "es" ? "ID de Distribuidor o Correo Electrónico" : "Distributor ID or Email"}
+                </label>
+                <Input
+                  type="text"
+                  placeholder={language === "es" ? "Su ID o correo@ejemplo.com" : "Your ID or email@example.com"}
+                  value={verificationDistributorId || verificationEmail}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val.includes("@")) {
+                      setVerificationEmail(val);
+                      setVerificationDistributorId("");
+                    } else {
+                      setVerificationDistributorId(val);
+                      setVerificationEmail("");
+                    }
+                  }}
+                  onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
+                  data-testid="input-verification-distributor-id"
+                />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">
+                  {language === "es" ? "Correo Electrónico" : "Email"} *
+                </label>
+                <Input
+                  type="email"
+                  placeholder={language === "es" ? "correo@ejemplo.com" : "email@example.com"}
+                  value={verificationEmail}
+                  onChange={(e) => setVerificationEmail(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSendOtp()}
+                  data-testid="input-verification-email"
+                />
+              </div>
             )}
             <Button 
               onClick={handleSendOtp} 
