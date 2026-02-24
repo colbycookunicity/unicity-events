@@ -1478,6 +1478,62 @@ export default function RegistrationPage() {
     },
   });
 
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+
+  const cancelMutation = useMutation({
+    mutationFn: async () => {
+      if (!existingRegistrationId || !params.eventId) throw new Error("Missing registration data");
+      const attendeeToken = localStorage.getItem("attendeeAuthToken");
+      const headers: HeadersInit = { "Content-Type": "application/json" };
+      if (attendeeToken) {
+        headers["Authorization"] = `Bearer ${attendeeToken}`;
+      }
+      const res = await fetch(`/api/events/${params.eventId}/register/${existingRegistrationId}`, {
+        method: "DELETE",
+        headers,
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        try {
+          const json = JSON.parse(text);
+          throw new Error(json.error || `${res.status}: ${text}`);
+        } catch {
+          throw new Error(`${res.status}: ${text}`);
+        }
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      setShowCancelDialog(false);
+      setExistingRegistrationId(null);
+      setVerifiedProfile(null);
+      setVerificationStep("email");
+      setVerificationEmail("");
+      setVerificationSessionToken(null);
+      setOtpCode("");
+      setIsSuccess(false);
+      localStorage.removeItem("attendeeAuthToken");
+      queryClient.invalidateQueries({ queryKey: ["/api/events", params.eventId, "public"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/attendee/events"] });
+      form.reset();
+      toast({
+        title: language === "es" ? "Registro cancelado" : "Registration Cancelled",
+        description: language === "es"
+          ? "Su registro ha sido cancelado exitosamente."
+          : "Your registration has been successfully cancelled.",
+      });
+    },
+    onError: (error: any) => {
+      setShowCancelDialog(false);
+      toast({
+        title: language === "es" ? "Error" : "Error",
+        description: error.message || (language === "es" ? "No se pudo cancelar el registro" : "Failed to cancel registration"),
+        variant: "destructive",
+      });
+    },
+  });
+
   // Send OTP for open_verified mode (form submission gated by verification)
   const handleOpenVerifiedSendOtp = async (email: string) => {
     if (!email || !email.includes("@")) {
@@ -3270,8 +3326,62 @@ export default function RegistrationPage() {
                 getCtaLabel()
               )}
             </Button>
+
+            {existingRegistrationId && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full mt-3 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                onClick={() => setShowCancelDialog(true)}
+                disabled={cancelMutation.isPending}
+                data-testid="button-cancel-registration"
+              >
+                {cancelMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  language === "es" ? "Cancelar Registro" : "Cancel Registration"
+                )}
+              </Button>
+            )}
           </form>
         </Form>
+
+        <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-destructive">
+                <AlertCircle className="h-5 w-5" />
+                {language === "es" ? "Cancelar Registro" : "Cancel Registration"}
+              </DialogTitle>
+              <DialogDescription>
+                {language === "es"
+                  ? "¿Está seguro de que desea cancelar su registro para este evento? Esta acción no se puede deshacer."
+                  : "Are you sure you want to cancel your registration for this event? This action cannot be undone."}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="flex gap-2 sm:gap-0">
+              <Button
+                variant="outline"
+                onClick={() => setShowCancelDialog(false)}
+                disabled={cancelMutation.isPending}
+                data-testid="button-cancel-dialog-no"
+              >
+                {language === "es" ? "No, mantener registro" : "No, keep registration"}
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => cancelMutation.mutate()}
+                disabled={cancelMutation.isPending}
+                data-testid="button-cancel-dialog-yes"
+              >
+                {cancelMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : null}
+                {language === "es" ? "Sí, cancelar registro" : "Yes, cancel registration"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
     );

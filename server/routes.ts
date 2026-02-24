@@ -2682,6 +2682,66 @@ export async function registerRoutes(
     }
   });
 
+  // Public Registration Cancel (for attendees cancelling their own registration)
+  app.delete("/api/events/:eventIdOrSlug/register/:registrationId", async (req, res) => {
+    try {
+      const event = await storage.getEventByIdOrSlug(req.params.eventIdOrSlug);
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+
+      const registration = await storage.getRegistration(req.params.registrationId);
+      if (!registration) {
+        return res.status(404).json({ error: "Registration not found" });
+      }
+      if (registration.eventId !== event.id) {
+        return res.status(400).json({ error: "Registration does not belong to this event" });
+      }
+
+      let isAuthenticated = false;
+
+      const authHeader = req.headers.authorization;
+      const attendeeToken = authHeader?.split(" ")[1];
+      if (attendeeToken) {
+        const attendeeSession = await storage.getAttendeeSessionByToken(attendeeToken);
+        if (attendeeSession && attendeeSession.email.toLowerCase() === registration.email.toLowerCase()) {
+          isAuthenticated = true;
+        }
+      }
+
+      if (!isAuthenticated) {
+        const session = await storage.getOtpSessionForRegistration(registration.email, event.id);
+        if (session && session.verified) {
+          const verifiedAt = session.verifiedAt ? new Date(session.verifiedAt) : null;
+          if (verifiedAt && (Date.now() - verifiedAt.getTime()) <= 30 * 60 * 1000) {
+            isAuthenticated = true;
+          }
+        }
+      }
+
+      if (!isAuthenticated) {
+        return res.status(403).json({ error: "Authentication required. Please verify your identity first." });
+      }
+
+      await storage.deleteRegistration(req.params.registrationId);
+
+      // Send cancellation email (non-blocking)
+      iterableService.sendRegistrationCanceled(
+        registration.email,
+        registration,
+        event,
+        registration.language
+      ).catch(err => {
+        console.error('[Iterable] Failed to send registration canceled email:', err);
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Public registration cancel error:", error);
+      res.status(500).json({ error: "Failed to cancel registration" });
+    }
+  });
+
   // Registrations Routes
   app.get("/api/registrations", authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
