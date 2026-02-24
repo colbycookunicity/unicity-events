@@ -4326,7 +4326,7 @@ export async function registerRoutes(
       locale: z.enum(["en", "es"]).optional().default("en"),
     })),
     clearExisting: z.boolean().optional().default(false),
-    skipDuplicates: z.boolean().optional().default(false),
+    skipDuplicates: z.boolean().optional().default(true),
   });
 
   app.post("/api/events/:eventId/qualifiers/import", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
