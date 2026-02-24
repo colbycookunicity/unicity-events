@@ -592,11 +592,11 @@ export default function AttendeeEventsPage() {
                           ) : (
                             <Badge
                               variant="outline"
-                              className="border-amber-500/50 text-amber-600 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-950/20"
+                              className="border-emerald-500/60 text-emerald-700 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20"
                               data-testid={`badge-status-${event.id}`}
                             >
-                              <Clock className="h-3 w-3 mr-1" />
-                              {t("Action needed", "Acción requerida")}
+                              <CheckCircle2 className="h-3 w-3 mr-1" />
+                              {t("Qualified - Awaiting Registration", "Calificado - Pendiente de Registro")}
                             </Badge>
                           )}
                           <div className="flex items-center gap-2">
