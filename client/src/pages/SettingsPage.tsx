@@ -99,6 +99,24 @@ export default function SettingsPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [deletingUser, setDeletingUser] = useState<User | null>(null);
+  const [importResult, setImportResult] = useState<{ created: number; skippedDuplicate: number; skippedInvalid: number; failed: number; failures: string[] } | null>(null);
+  const [showImportConfirm, setShowImportConfirm] = useState(false);
+
+  const importMayMethodMutation = useMutation({
+    mutationFn: async () => apiRequest("POST", "/api/admin/import-may-method-97"),
+    onSuccess: (data: any) => {
+      setImportResult(data);
+      setShowImportConfirm(false);
+      toast({
+        title: "Import complete",
+        description: `${data.created} registrations created, ${data.skippedDuplicate} already existed.`,
+      });
+    },
+    onError: (error: any) => {
+      setShowImportConfirm(false);
+      toast({ title: "Import failed", description: error.message || "Unknown error", variant: "destructive" });
+    },
+  });
 
   const { data: users, isLoading } = useQuery<User[]>({
     queryKey: ["/api/admin/users"],
@@ -323,6 +341,63 @@ export default function SettingsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Data Migrations */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-5 w-5" />
+            Data Migrations
+          </CardTitle>
+          <CardDescription>One-time data import tools. Safe to run multiple times — duplicates are skipped automatically.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <p className="font-medium text-sm">May Method Event — Attendee Import</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Imports 64 previously registered attendees into the Las Vegas Method Seminar May 2026 event.
+                No emails or notifications will be sent.
+              </p>
+              {importResult && (
+                <div className="mt-2 text-xs space-y-0.5">
+                  <p className="text-green-600 dark:text-green-400">✓ {importResult.created} registrations created</p>
+                  <p className="text-muted-foreground">↷ {importResult.skippedDuplicate} already existed (skipped)</p>
+                  {importResult.skippedInvalid > 0 && <p className="text-amber-600">⚠ {importResult.skippedInvalid} invalid rows skipped</p>}
+                  {importResult.failed > 0 && <p className="text-destructive">✗ {importResult.failed} failed</p>}
+                </div>
+              )}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowImportConfirm(true)}
+              disabled={importMayMethodMutation.isPending}
+              data-testid="button-import-may-method"
+            >
+              {importMayMethodMutation.isPending ? "Importing..." : importResult ? "Re-run Import" : "Run Import"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <AlertDialog open={showImportConfirm} onOpenChange={setShowImportConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Run May Method Import?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will silently import up to 64 attendees into the Las Vegas Method Seminar May 2026 event.
+              No emails will be sent. Existing registrations will be skipped.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => importMayMethodMutation.mutate()} data-testid="button-confirm-import">
+              Yes, run import
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={isAddDialogOpen || !!editingUser} onOpenChange={(open) => {
         if (!open) {

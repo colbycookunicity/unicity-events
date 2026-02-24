@@ -1,6 +1,11 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
+import fs from "fs";
+import path from "path";
 import { storage } from "./storage";
+import { db } from "./db";
+import { registrations } from "@shared/schema";
+import { eq } from "drizzle-orm";
 import { insertEventSchema, insertRegistrationSchema, insertGuestSchema, insertFlightSchema, insertReimbursementSchema, insertSwagItemSchema, insertSwagAssignmentSchema, insertQualifiedRegistrantSchema, insertUserSchema, insertPrinterSchema, insertPrintLogSchema, insertBadgeTemplateSchema, userRoleEnum, deriveRegistrationFlags, deriveRegistrationMode, type RegistrationMode, generateCheckInToken, parseCheckInQRPayload, buildCheckInQRPayload } from "@shared/schema";
 import { z } from "zod";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
@@ -6057,6 +6062,160 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error sending test print:", error);
       res.status(500).json({ error: "Failed to send test print" });
+    }
+  });
+
+  // ── One-time silent migration: May Method Event (97d6166f) ─────────────────
+  // Admin-only endpoint. Reads the bundled CSV and inserts registrations
+  // directly into the database — no emails, no Iterable events.
+  app.post("/api/admin/import-may-method-97", authenticateToken, requireRole("admin", "event_manager"), async (req: AuthenticatedRequest, res) => {
+
+    const EVENT_ID = "97d6166f-c686-4891-8b73-6c69f1dfd915";
+
+    try {
+      // Locate the CSV (works in both dev and production)
+      const possiblePaths = [
+        path.join(process.cwd(), "attached_assets", "registered-the-method-may_1771970127290.csv"),
+        path.join(__dirname, "..", "attached_assets", "registered-the-method-may_1771970127290.csv"),
+      ];
+      let csvContent: string | null = null;
+      for (const p of possiblePaths) {
+        if (fs.existsSync(p)) { csvContent = fs.readFileSync(p, "utf-8"); break; }
+      }
+      if (!csvContent) {
+        return res.status(500).json({ error: "CSV file not found on server" });
+      }
+
+      // ── Parse CSV ──────────────────────────────────────────────────────────
+      const parseLine = (line: string): string[] => {
+        const result: string[] = [];
+        let inQ = false, cur = "";
+        for (const ch of line) {
+          if (ch === '"') { inQ = !inQ; }
+          else if (ch === ',' && !inQ) { result.push(cur.trim()); cur = ""; }
+          else { cur += ch; }
+        }
+        result.push(cur.trim());
+        return result;
+      };
+
+      const lines = csvContent.split(/\r?\n/).filter(l => l.trim());
+      const headers = parseLine(lines[0]);
+      const rows = lines.slice(1).map(parseLine);
+
+      const hIdx = (name: string) =>
+        headers.findIndex(h => h.toLowerCase().includes(name.toLowerCase()));
+
+      const idxId     = hIdx("Distributor");
+      const idxEmail  = hIdx("Email");
+      const idxFirst  = hIdx("First Name");
+      const idxLast   = hIdx("Last Name");
+      const idxLang   = hIdx("language");
+      const idxFmEn   = hIdx("first Method you are attending");
+      const idxFmEs   = hIdx("primer Método");
+      const idxDiet   = hIdx("Vegetarian or Vegan");
+      const idxHp     = hIdx("Headphones and travel");
+      const idxBreath = hIdx("Breathing");
+      const idxRel    = hIdx("Release Forms");
+      const idxNS     = hIdx("200");
+      const idxCancel = hIdx("Cancellation Fee");
+      const idxTravel = hIdx("Travel Agreement and Headphones");
+
+      const get = (cols: string[], idx: number) => idx >= 0 ? (cols[idx] ?? "").trim() : "";
+      const bool = (v: string) => v.trim().toLowerCase() === "yes";
+      const lang = (v: string): "en" | "es" =>
+        v.trim().toLowerCase().includes("spanish") ? "es" : "en";
+      const dietary = (v: string): string[] => {
+        const s = v.trim().toLowerCase();
+        if (!s || s === "no" || s === "n/a") return [];
+        const r: string[] = [];
+        if (s.includes("vegan")) r.push("vegan");
+        else if (s.includes("vegetarian")) r.push("vegetarian");
+        if (s.includes("gluten")) r.push("gluten-free");
+        if (s.includes("halal")) r.push("halal");
+        if (s.includes("pork")) r.push("no-pork");
+        if (r.length === 0 && s) r.push(s);
+        return r;
+      };
+
+      // ── Duplicate check ────────────────────────────────────────────────────
+      const existing = await db
+        .select({ email: registrations.email })
+        .from(registrations)
+        .where(eq(registrations.eventId, EVENT_ID));
+      const existingEmails = new Set(existing.map(r => r.email.toLowerCase()));
+
+      // ── Insert ─────────────────────────────────────────────────────────────
+      const now = new Date();
+      let created = 0, skippedDuplicate = 0, skippedInvalid = 0, failed = 0;
+      const failures: string[] = [];
+
+      for (let i = 0; i < rows.length; i++) {
+        const cols = rows[i];
+        const rowNum = i + 2;
+        const unicityId = get(cols, idxId);
+        const email     = get(cols, idxEmail);
+        const firstName = get(cols, idxFirst);
+        const lastName  = get(cols, idxLast);
+
+        if (!unicityId || !email || !email.includes("@") || !firstName || !lastName) {
+          skippedInvalid++;
+          continue;
+        }
+        if (existingEmails.has(email.toLowerCase())) {
+          skippedDuplicate++;
+          continue;
+        }
+
+        const language = lang(get(cols, idxLang));
+        const fmRaw    = language === "es" ? get(cols, idxFmEs) : get(cols, idxFmEn);
+
+        try {
+          await db.insert(registrations).values({
+            eventId: EVENT_ID,
+            email,
+            firstName,
+            lastName,
+            unicityId,
+            language,
+            status: "registered",
+            paymentStatus: "not_required",
+            dietaryRestrictions: dietary(get(cols, idxDiet)),
+            termsAccepted: true,
+            termsAcceptedAt: now,
+            registeredAt: now,
+            formData: {
+              firstMethodAttending:               bool(fmRaw) ? "yes" : "no",
+              headphonesAccommodationAcknowledgment: bool(get(cols, idxHp)),
+              breathingExercisesAcknowledgment:   bool(get(cols, idxBreath)),
+              releaseForms:                       bool(get(cols, idxRel)),
+              cancellationFeeAgreement:           bool(get(cols, idxNS)) || bool(get(cols, idxCancel)),
+              travelAgreement:                    bool(get(cols, idxTravel)),
+              silentImport: true,
+              importSource: "migration_may_method_external",
+            },
+          });
+          existingEmails.add(email.toLowerCase()); // prevent dupes within same run
+          created++;
+        } catch (err) {
+          failed++;
+          failures.push(`Row ${rowNum} (${email}): ${(err as Error).message}`);
+        }
+      }
+
+      console.log(`[Import] May Method migration complete: created=${created} skippedDuplicate=${skippedDuplicate} skippedInvalid=${skippedInvalid} failed=${failed}`);
+
+      res.json({
+        success: true,
+        created,
+        skippedDuplicate,
+        skippedInvalid,
+        failed,
+        failures,
+      });
+    } catch (error) {
+      console.error("Import May Method error:", error);
+      res.status(500).json({ error: "Import failed", details: (error as Error).message });
     }
   });
 
