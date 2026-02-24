@@ -1,0 +1,197 @@
+<pre>
+# REPLIT AGENT PROMPT — MAY METHOD EVENT IMPORT (SILENT MIGRATION)
+
+## GOAL
+
+Import a CSV list of previously registered May Method attendees into the Events Platform.
+
+Event ID:
+97d6166f-c686-4891-8b73-6c69f1dfd915
+
+These users already registered on another platform.
+We are migrating them into this system.
+
+CRITICAL REQUIREMENTS:
+- DO NOT SEND ANY EMAILS
+- DO NOT TRIGGER CONFIRMATION EMAILS
+- DO NOT TRIGGER CHECK-IN EMAILS
+- DO NOT FIRE ITERABLE EVENTS
+- DO NOT ENQUEUE BACKGROUND JOBS
+- DO NOT RUN POST-REGISTRATION HOOKS
+
+This must be a completely silent backfill migration.
+
+--------------------------------------------------
+
+## BACKGROUND
+
+The event registration form collects the following fields:
+
+CORE IDENTITY FIELDS
+- distributor_id (verified, locked field)
+- email
+- first_name
+- last_name
+
+ADDITIONAL INFORMATION FIELDS
+- language_preference
+- is_first_method (Yes / No)
+- dietary_preference
+    - No dietary restrictions
+    - Vegetarian
+    - Vegan
+    - Other / Allergies
+
+REQUIRED ACKNOWLEDGEMENTS (boolean)
+- headphones_acknowledgement
+- deduction_acknowledgement ($200 commission deduction agreement)
+
+The system contains:
+- users table
+- events table
+- event_registrations table
+- existing registration triggers tied to email + Iterable
+
+We must bypass all automation.
+
+--------------------------------------------------
+
+## CHANGE REQUEST
+
+1) Create a one-time admin-only import script:
+
+/scripts/import-may-method-event-97.ts
+
+2) Script must:
+
+- Parse an uploaded CSV file
+- Validate all required fields
+- Trim whitespace
+- Normalize values
+- For each row:
+
+    A) UPSERT USER
+       - Match by distributor_id (primary)
+       - Fallback match by email
+       - If user does not exist, create user
+       - If exists, update missing fields only (do NOT overwrite verified data)
+
+    B) CREATE EVENT REGISTRATION
+       - event_id = 97d6166f-c686-4891-8b73-6c69f1dfd915
+       - registration_status = "registered"
+       - payment_status = "paid"
+       - source = "migration_may_method_external"
+       - created_by = "admin_import_script"
+       - silent_import = true (NEW FLAG)
+
+    C) MUST BYPASS:
+       - Email triggers
+       - Iterable events
+       - Webhooks
+       - Confirmation flows
+       - Background jobs
+       - Post-registration hooks
+
+If needed:
+- Add a conditional in registration creation:
+    if (silent_import === true) {
+        skip all automation
+    }
+
+--------------------------------------------------
+
+## CSV EXPECTED COLUMNS
+
+The CSV will contain the following headers:
+
+distributor_id
+email
+first_name
+last_name
+language_preference
+is_first_method
+dietary_preference
+headphones_acknowledgement
+deduction_acknowledgement
+
+--------------------------------------------------
+
+## DATA NORMALIZATION RULES
+
+- language_preference → default to "English" if blank
+- is_first_method:
+    "Yes" → true
+    "No" → false
+- dietary_preference must match enum exactly
+- acknowledgements convert to boolean true/false
+- Trim all string fields
+- distributor_id must be valid format
+- Email must be valid format
+
+If any required value is missing:
+- Fail validation
+- Log row number
+- Do not insert that row
+
+--------------------------------------------------
+
+## SAFETY CHECK BEFORE INSERT
+
+Before performing inserts:
+
+- Log total rows detected
+- Log users to be created
+- Log users to be updated
+- Log registrations to be created
+
+Require manual confirmation in console:
+
+Type:
+YES_IMPORT
+
+Only proceed if exact string matches.
+
+--------------------------------------------------
+
+## SUCCESS CRITERIA
+
+After script runs:
+
+- All users appear under event:
+  97d6166f-c686-4891-8b73-6c69f1dfd915
+- No confirmation emails were sent
+- No Iterable events were fired
+- No check-in emails triggered
+- No duplicate registrations created
+- Admin dashboard reflects correct count
+- Users can log in normally
+- Users are fully registered
+
+--------------------------------------------------
+
+## POST-IMPORT SUMMARY OUTPUT
+
+After completion, print:
+
+- Total rows processed
+- Users created
+- Users updated
+- Registrations created
+- Failures (if any)
+- Execution time
+
+--------------------------------------------------
+
+## OPTIONAL (RECOMMENDED)
+
+Add:
+- Dry run mode (no inserts)
+- Rollback script
+- Duplicate detection safety check
+
+This is a one-time controlled migration.
+All automation must remain intact for normal registrations.
+Only this script bypasses automation.
+
+END.
+</pre>
