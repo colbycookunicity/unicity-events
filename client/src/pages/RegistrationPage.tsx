@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { useParams, useLocation } from "wouter";
+import { useParams, useLocation, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, CheckCircle, Calendar, MapPin, ExternalLink, Mail, ShieldCheck, AlertCircle, LogOut, QrCode, Ticket } from "lucide-react";
+import { Loader2, CheckCircle, Calendar, CalendarDays, MapPin, ExternalLink, Mail, ShieldCheck, AlertCircle, LogOut, QrCode, Ticket } from "lucide-react";
 import PhoneInput, { isPossiblePhoneNumber } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -2016,6 +2016,14 @@ export default function RegistrationPage() {
                 <p>{format(formattedDate, "MMMM d, yyyy")}</p>
               )}
             </div>
+            <div className="mt-6">
+              <Link href="/my-events">
+                <Button variant="outline" className="w-full gap-2" data-testid="button-view-my-events-cms">
+                  <CalendarDays className="h-4 w-4" />
+                  {language === "es" ? "Ver Mis Eventos" : "View My Events"}
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
       );
@@ -2069,6 +2077,15 @@ export default function RegistrationPage() {
                 {formattedDate && (
                   <p>{format(formattedDate, "MMMM d, yyyy")}</p>
                 )}
+              </div>
+
+              <div className="mt-6 pt-4 border-t">
+                <Link href="/my-events">
+                  <Button variant="outline" className="w-full gap-2" data-testid="button-view-my-events">
+                    <CalendarDays className="h-4 w-4" />
+                    {language === "es" ? "Ver Mis Eventos" : "View My Events"}
+                  </Button>
+                </Link>
               </div>
             </CardContent>
           </Card>
