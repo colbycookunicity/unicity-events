@@ -88,6 +88,43 @@ function formatDate(dateStr: string | Date | null | undefined, language: string 
   return date.toLocaleDateString(locale, options);
 }
 
+// Returns a smart date range string, e.g. "May 11 - 12, 2026" or "May 11 - June 1, 2026"
+function formatDateRange(
+  startStr: string | Date | null | undefined,
+  endStr: string | Date | null | undefined,
+  language: string = 'en'
+): string {
+  if (!startStr) return '';
+  const start = typeof startStr === 'string' ? new Date(startStr) : startStr;
+  if (isNaN(start.getTime())) return '';
+
+  const locale = language === 'es' ? 'es-ES' : 'en-US';
+
+  if (!endStr) {
+    // No end date — just return start date fully formatted
+    return start.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' });
+  }
+
+  const end = typeof endStr === 'string' ? new Date(endStr) : endStr;
+  if (isNaN(end.getTime())) {
+    return start.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' });
+  }
+
+  const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
+
+  if (sameMonth) {
+    // e.g. "May 11 - 12, 2026"
+    const month = start.toLocaleDateString(locale, { month: 'long' });
+    const year = start.getFullYear();
+    return `${month} ${start.getDate()} - ${end.getDate()}, ${year}`;
+  } else {
+    // e.g. "May 30 - June 1, 2026"
+    const startPart = start.toLocaleDateString(locale, { month: 'long', day: 'numeric' });
+    const endPart = end.toLocaleDateString(locale, { month: 'long', day: 'numeric', year: 'numeric' });
+    return `${startPart} - ${endPart}`;
+  }
+}
+
 export interface EmailResult {
   success: boolean;
   messageId?: string;
@@ -341,6 +378,9 @@ export class IterableService {
         date: formatDate(event.startDate, language),
         endDate: formatDate(event.endDate, language),
         eventEndDate: formatDate(event.endDate, language),
+        // Full date range e.g. "May 11 - 12, 2026"
+        eventDateRange: formatDateRange(event.startDate, event.endDate, language),
+        dateRange: formatDateRange(event.startDate, event.endDate, language),
         eventUrl: buildEventUrl(event),
         registrationId: registration.id,
         language,
