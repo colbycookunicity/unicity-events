@@ -1144,9 +1144,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getQualifyingEventsForEmail(email: string): Promise<{ event: Event; registration: Registration | null; qualifiedRegistrant: QualifiedRegistrant | null }[]> {
-    // Get all published events
+    // Get published events that haven't ended yet (or have no end date)
+    const now = new Date();
     const publishedEvents = await db.select().from(events)
-      .where(eq(events.status, 'published'))
+      .where(and(
+        eq(events.status, 'published'),
+        or(sql`${events.endDate} IS NULL`, gte(events.endDate, now))
+      ))
       .orderBy(desc(events.startDate));
 
     if (publishedEvents.length === 0) return [];
@@ -1154,12 +1158,16 @@ export class DatabaseStorage implements IStorage {
     const eventIds = publishedEvents.map(e => e.id);
 
     // Batch fetch: all registrations for this email across all published events (replaces N+1)
+    // Order by lastModified DESC so most-recently-updated record wins when duplicates exist
     const userRegs = await db.select().from(registrations)
       .where(and(
         inArray(registrations.eventId, eventIds),
         sql`LOWER(${registrations.email}) = LOWER(${email})`
-      ));
-    const regsByEvent = new Map(userRegs.map(r => [r.eventId, r]));
+      ))
+      .orderBy(desc(registrations.lastModified));
+    // Map keeps first (most recent) entry per event due to DESC ordering
+    const regsByEvent = new Map<string, Registration>();
+    for (const r of userRegs) { if (!regsByEvent.has(r.eventId)) regsByEvent.set(r.eventId, r); }
 
     // Batch fetch: all qualified registrant entries for this email across all published events
     const userQualified = await db.select().from(qualifiedRegistrants)

@@ -875,7 +875,7 @@ export default function AttendeesPage() {
   const importMutation = useMutation({
     mutationFn: async (data: { registrants: typeof csvData; clearExisting: boolean }) => {
       if (eventFilter === "all") throw new Error("Cannot import qualifiers without selecting an event");
-      const response = await apiRequest("POST", `/api/events/${eventFilter}/qualifiers/import`, data);
+      const response = await apiRequest("POST", `/api/events/${eventFilter}/qualifiers/import`, { ...data, skipDuplicates: true });
       return response.json();
     },
     onSuccess: (data) => {

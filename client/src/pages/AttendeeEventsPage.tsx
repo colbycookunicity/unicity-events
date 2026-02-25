@@ -519,8 +519,18 @@ export default function AttendeeEventsPage() {
 
             {eventsData && eventsData.events.length > 0 && (
               <div className="space-y-4">
-                {eventsData.events.map((event) => (
-                  <Card key={event.id} className="overflow-visible" data-testid={`card-event-${event.id}`}>
+                {[...eventsData.events]
+                  .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
+                  .map((event) => (
+                  <Card
+                    key={event.id}
+                    className={`overflow-visible ${
+                      event.registrationStatus === "registered" || event.registrationStatus === "checked_in"
+                        ? "border-emerald-500/60 bg-emerald-50/40 dark:bg-emerald-950/20 dark:border-emerald-500/40"
+                        : ""
+                    }`}
+                    data-testid={`card-event-${event.id}`}
+                  >
                     <CardContent className="p-0">
                       <div className="flex flex-col sm:flex-row gap-4 p-4">
                         {event.heroImageUrl && (
@@ -569,7 +579,7 @@ export default function AttendeeEventsPage() {
                               data-testid={`badge-status-${event.id}`}
                             >
                               <XCircle className="h-3 w-3 mr-1" />
-                              {t("Cancelled", "Cancelado")}
+                              {t("Not Coming", "No Asistirá")}
                             </Badge>
                           ) : event.registrationStatus === "registered" || event.registrationStatus === "checked_in" ? (
                             <Badge
@@ -582,11 +592,11 @@ export default function AttendeeEventsPage() {
                           ) : (
                             <Badge
                               variant="outline"
-                              className="border-amber-500/50 text-amber-600 dark:text-amber-400 bg-amber-50/50 dark:bg-amber-950/20"
+                              className="border-emerald-500/60 text-emerald-700 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20"
                               data-testid={`badge-status-${event.id}`}
                             >
-                              <Clock className="h-3 w-3 mr-1" />
-                              {t("Action needed", "Acción requerida")}
+                              <CheckCircle2 className="h-3 w-3 mr-1" />
+                              {t("Qualified - Awaiting Registration", "Calificado - Pendiente de Registro")}
                             </Badge>
                           )}
                           <div className="flex items-center gap-2">

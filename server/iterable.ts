@@ -332,10 +332,16 @@ export class IterableService {
         lastName: registration.lastName,
         eventId: event.id,
         eventName,
+        // Location — multiple aliases for template compatibility
         eventLocation: event.location,
-        eventUrl: buildEventUrl(event),
+        location: event.location,
+        // Date — multiple aliases for template compatibility
         startDate: formatDate(event.startDate, language),
+        eventDate: formatDate(event.startDate, language),
+        date: formatDate(event.startDate, language),
         endDate: formatDate(event.endDate, language),
+        eventEndDate: formatDate(event.endDate, language),
+        eventUrl: buildEventUrl(event),
         registrationId: registration.id,
         language,
         locale, // Iterable uses this to select the correct localized template
