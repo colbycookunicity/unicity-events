@@ -89,6 +89,8 @@ function formatDate(dateStr: string | Date | null | undefined, language: string 
 }
 
 // Returns a smart date range string, e.g. "May 11 - 12, 2026" or "May 11 - June 1, 2026"
+// Dates are formatted in America/New_York so that ET event times display correctly
+// (avoids UTC midnight-bleed where "May 12 8 PM ET" becomes "May 13 00:00 UTC")
 function formatDateRange(
   startStr: string | Date | null | undefined,
   endStr: string | Date | null | undefined,
@@ -99,28 +101,40 @@ function formatDateRange(
   if (isNaN(start.getTime())) return '';
 
   const locale = language === 'es' ? 'es-ES' : 'en-US';
+  const tz = 'America/New_York';
+
+  const fmt = (date: Date, opts: Intl.DateTimeFormatOptions) =>
+    new Intl.DateTimeFormat(locale, { ...opts, timeZone: tz }).format(date);
+
+  const dayOf = (date: Date) =>
+    parseInt(new Intl.DateTimeFormat('en-US', { day: 'numeric', timeZone: tz }).format(date), 10);
+
+  const monthOf = (date: Date) =>
+    parseInt(new Intl.DateTimeFormat('en-US', { month: 'numeric', timeZone: tz }).format(date), 10);
+
+  const yearOf = (date: Date) =>
+    parseInt(new Intl.DateTimeFormat('en-US', { year: 'numeric', timeZone: tz }).format(date), 10);
 
   if (!endStr) {
-    // No end date — just return start date fully formatted
-    return start.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' });
+    return fmt(start, { year: 'numeric', month: 'long', day: 'numeric' });
   }
 
   const end = typeof endStr === 'string' ? new Date(endStr) : endStr;
   if (isNaN(end.getTime())) {
-    return start.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' });
+    return fmt(start, { year: 'numeric', month: 'long', day: 'numeric' });
   }
 
-  const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
+  const sameMonth = monthOf(start) === monthOf(end) && yearOf(start) === yearOf(end);
 
   if (sameMonth) {
     // e.g. "May 11 - 12, 2026"
-    const month = start.toLocaleDateString(locale, { month: 'long' });
-    const year = start.getFullYear();
-    return `${month} ${start.getDate()} - ${end.getDate()}, ${year}`;
+    const month = fmt(start, { month: 'long' });
+    const year = yearOf(start);
+    return `${month} ${dayOf(start)} - ${dayOf(end)}, ${year}`;
   } else {
     // e.g. "May 30 - June 1, 2026"
-    const startPart = start.toLocaleDateString(locale, { month: 'long', day: 'numeric' });
-    const endPart = end.toLocaleDateString(locale, { month: 'long', day: 'numeric', year: 'numeric' });
+    const startPart = fmt(start, { month: 'long', day: 'numeric' });
+    const endPart = fmt(end, { month: 'long', day: 'numeric', year: 'numeric' });
     return `${startPart} - ${endPart}`;
   }
 }
