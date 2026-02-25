@@ -2165,13 +2165,6 @@ export async function registerRoutes(
 
   // Public Event Registration (supports both ID and slug)
   app.post("/api/events/:eventIdOrSlug/register", async (req, res) => {
-    // Debug: Log incoming phone value
-    console.log('[DataFlow] POST /register - req.body.phone:', JSON.stringify({
-      phone: req.body.phone,
-      phoneType: typeof req.body.phone,
-      hasPhone: 'phone' in req.body,
-    }));
-    
     try {
       const event = await storage.getEventByIdOrSlug(req.params.eventIdOrSlug);
       if (!event) {
@@ -2405,7 +2398,6 @@ export async function registerRoutes(
           const customPhone = extractPhoneFromFormData(req.body.formData, event.formFields as any[]);
           if (customPhone) {
             updateData.phone = customPhone;
-            console.log('[DataFlow] POST UPSERT: Using phone from custom formData field:', customPhone);
           }
         }
         
@@ -2423,11 +2415,6 @@ export async function registerRoutes(
         
         const updatedRegistration = await storage.updateRegistration(existingReg.id, updateData);
         
-        console.log('[DataFlow] Registration updated - phone in DB:', JSON.stringify({
-          id: updatedRegistration?.id,
-          phone: updatedRegistration?.phone,
-          email: updatedRegistration?.email,
-        }));
         // Return 200 for updates (not 201) to indicate existing record was updated
         return res.status(200).json({ ...updatedRegistration, wasUpdated: true });
       }
@@ -2446,7 +2433,6 @@ export async function registerRoutes(
         const customPhone = extractPhoneFromFormData(req.body.formData, formFields);
         if (customPhone) {
           phoneValue = customPhone;
-          console.log('[DataFlow] Using phone from custom formData field for new registration:', customPhone);
         }
       }
       
@@ -2457,12 +2443,6 @@ export async function registerRoutes(
         String(clientIp)
       );
       
-      console.log('[DataFlow] Creating registration - phone from request:', JSON.stringify({
-        phone: phoneValue,
-        phoneType: typeof phoneValue,
-        email: normalizedEmail,
-        firstName: req.body.firstName,
-      }));
       const registration = await storage.createRegistration({
         eventId: event.id,
         email: normalizedEmail,
@@ -2659,7 +2639,6 @@ export async function registerRoutes(
         const customPhone = extractPhoneFromFormData(req.body.formData, event.formFields as any[]);
         if (customPhone) {
           updateData.phone = customPhone;
-          console.log('[DataFlow] PUT: Using phone from custom formData field:', customPhone);
         }
       }
       

@@ -82,10 +82,21 @@ export const queryClient = new QueryClient({
       refetchInterval: false,
       refetchOnWindowFocus: false,
       staleTime: Infinity,
-      retry: false,
+      // Retry failed queries with exponential backoff (helps under heavy load)
+      retry: (failureCount, error) => {
+        // Don't retry auth errors or client errors
+        if (error instanceof Error && /^(401|403|404|422):/.test(error.message)) return false;
+        return failureCount < 2;
+      },
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 8000),
     },
     mutations: {
-      retry: false,
+      // Retry server errors on mutations (e.g., registration submit under load)
+      retry: (failureCount, error) => {
+        if (error instanceof Error && /^(4\d\d):/.test(error.message)) return false;
+        return failureCount < 1;
+      },
+      retryDelay: 2000,
     },
   },
 });
