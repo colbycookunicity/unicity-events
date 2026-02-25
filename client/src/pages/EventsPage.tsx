@@ -107,15 +107,19 @@ export default function EventsPage() {
     return [...filteredEvents].sort((a, b) => {
       const aArchived = a.status === "archived";
       const bArchived = b.status === "archived";
-      // Archived events go to the bottom
+      const aClosed = !!a.registrationClosedAt;
+      const bClosed = !!b.registrationClosedAt;
+      // Archived go to the very bottom
       if (aArchived !== bArchived) return aArchived ? 1 : -1;
-      // Among non-archived: sort by absolute distance from now (closest first)
-      if (!aArchived) {
+      // Registration closed go above archived but below active
+      if (!aArchived && aClosed !== bClosed) return aClosed ? 1 : -1;
+      // Among active (non-closed, non-archived): sort by closest date first
+      if (!aArchived && !aClosed && !bClosed) {
         const aTime = a.startDate ? Math.abs(new Date(a.startDate).getTime() - now) : Infinity;
         const bTime = b.startDate ? Math.abs(new Date(b.startDate).getTime() - now) : Infinity;
         return aTime - bTime;
       }
-      // Among archived: most recent first
+      // Among archived or closed: most recent first
       const aTime = a.startDate ? new Date(a.startDate).getTime() : 0;
       const bTime = b.startDate ? new Date(b.startDate).getTime() : 0;
       return bTime - aTime;
@@ -204,7 +208,11 @@ export default function EventsPage() {
           {sortedEvents?.map((event) => (
             <div
               key={event.id}
-              className="group relative flex items-center gap-4 rounded-lg border bg-card px-4 py-3 hover-elevate transition-colors"
+              className={`group relative flex items-center gap-4 rounded-lg border px-4 py-3 hover-elevate transition-colors ${
+                event.registrationClosedAt
+                  ? "bg-muted/40 opacity-60 grayscale-[30%]"
+                  : "bg-card"
+              }`}
               data-testid={`card-event-${event.id}`}
             >
               <Link href={`/admin/events/${event.id}`} className="absolute inset-0 z-0" />
