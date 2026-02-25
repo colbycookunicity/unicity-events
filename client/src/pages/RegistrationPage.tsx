@@ -1908,6 +1908,17 @@ export default function RegistrationPage() {
           data-testid="img-header-logo"
         />
         <div className="flex items-center gap-2">
+          <Link href="/my-events">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground gap-1.5 text-sm"
+              data-testid="button-my-events-header"
+            >
+              <CalendarDays className="h-4 w-4" />
+              {language === "es" ? "Mis Eventos" : "My Events"}
+            </Button>
+          </Link>
           {verifiedProfile && (
             <Button
               variant="ghost"
