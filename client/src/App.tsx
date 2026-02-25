@@ -13,35 +13,53 @@ import unicityLogoDark from "@/assets/unicity-logo-dark.png";
 import unicityLogoWhite from "@/assets/unicity-logo-white.png";
 import unicityIcon from "@/assets/unicity-logo.png";
 import { useTheme } from "@/components/ThemeProvider";
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
 
+// Eagerly loaded: public-facing pages (what 200+ users will hit)
 import NotFound from "@/pages/not-found";
-import LoginPage from "@/pages/LoginPage";
-import AdminDashboard from "@/pages/AdminDashboard";
-import EventsPage from "@/pages/EventsPage";
-import EventFormPage from "@/pages/EventFormPage";
-import AttendeesPage from "@/pages/AttendeesPage";
-import CheckInPage from "@/pages/CheckInPage";
-import SwagPage from "@/pages/SwagPage";
 import RegistrationPage from "@/pages/RegistrationPage";
-import UserDashboard from "@/pages/UserDashboard";
-import PublicLoginPage from "@/pages/PublicLoginPage";
-import EventLandingPage from "@/pages/EventLandingPage";
-import LandingEditorPage from "@/pages/LandingEditorPage";
-import EventListPage from "@/pages/EventListPage";
-import SettingsPage from "@/pages/SettingsPage";
-import ReportsPage from "@/pages/ReportsPage";
 import AttendeeEventsPage from "@/pages/AttendeeEventsPage";
-import PrintersPage from "@/pages/PrintersPage";
+import EventLandingPage from "@/pages/EventLandingPage";
+import EventListPage from "@/pages/EventListPage";
 import GuestRegistrationPage from "@/pages/GuestRegistrationPage";
 import GuestPaymentSuccessPage from "@/pages/GuestPaymentSuccessPage";
-import ProfilePage from "@/pages/ProfilePage";
+import UserDashboard from "@/pages/UserDashboard";
+import PublicLoginPage from "@/pages/PublicLoginPage";
 import ScanPage from "@/pages/ScanPage";
+import ProfilePage from "@/pages/ProfilePage";
+
+// Lazy loaded: admin-only pages (only a few admins will use these)
+const LoginPage = lazy(() => import("@/pages/LoginPage"));
+const AdminDashboard = lazy(() => import("@/pages/AdminDashboard"));
+const EventsPage = lazy(() => import("@/pages/EventsPage"));
+const EventFormPage = lazy(() => import("@/pages/EventFormPage"));
+const AttendeesPage = lazy(() => import("@/pages/AttendeesPage"));
+const CheckInPage = lazy(() => import("@/pages/CheckInPage"));
+const SwagPage = lazy(() => import("@/pages/SwagPage"));
+const LandingEditorPage = lazy(() => import("@/pages/LandingEditorPage"));
+const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
+const ReportsPage = lazy(() => import("@/pages/ReportsPage"));
+const PrintersPage = lazy(() => import("@/pages/PrintersPage"));
+
+function LazyFallback() {
+  return (
+    <div className="flex items-center justify-center p-8">
+      <div className="flex flex-col items-center gap-4">
+        <img
+          src={unicityIcon}
+          alt="Unicity"
+          className="h-14 w-14 rounded-md object-cover animate-pulse"
+        />
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    </div>
+  );
+}
 
 function AdminLayout({ children }: { children: React.ReactNode }) {
   const { theme } = useTheme();
   const unicityLogo = theme === 'dark' ? unicityLogoWhite : unicityLogoDark;
-  
+
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3.5rem",
@@ -57,9 +75,9 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
               <SidebarTrigger data-testid="button-sidebar-toggle" />
             </div>
             <div className="flex items-center gap-3 min-w-0">
-              <img 
-                src={unicityLogo} 
-                alt="Unicity" 
+              <img
+                src={unicityLogo}
+                alt="Unicity"
                 className="h-6 object-contain"
                 data-testid="img-header-logo"
               />
@@ -81,23 +99,25 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
 function AdminRouter() {
   return (
     <AdminLayout>
-      <Switch>
-        <Route path="/admin" component={AdminDashboard} />
-        <Route path="/admin/events" component={EventsPage} />
-        <Route path="/admin/events/new" component={EventFormPage} />
-        <Route path="/admin/events/:id/pages/:pageType" component={LandingEditorPage} />
-        <Route path="/admin/events/:id/landing" component={LandingEditorPage} />
-        <Route path="/admin/events/:id/edit" component={EventFormPage} />
-        <Route path="/admin/events/:id" component={EventFormPage} />
-        <Route path="/admin/attendees" component={AttendeesPage} />
-        <Route path="/admin/profile" component={ProfilePage} />
-        <Route path="/admin/check-in" component={CheckInPage} />
-        <Route path="/admin/swag" component={SwagPage} />
-        <Route path="/admin/reports" component={ReportsPage} />
-        <Route path="/admin/printers" component={PrintersPage} />
-        <Route path="/admin/settings" component={SettingsPage} />
-        <Route component={NotFound} />
-      </Switch>
+      <Suspense fallback={<LazyFallback />}>
+        <Switch>
+          <Route path="/admin" component={AdminDashboard} />
+          <Route path="/admin/events" component={EventsPage} />
+          <Route path="/admin/events/new" component={EventFormPage} />
+          <Route path="/admin/events/:id/pages/:pageType" component={LandingEditorPage} />
+          <Route path="/admin/events/:id/landing" component={LandingEditorPage} />
+          <Route path="/admin/events/:id/edit" component={EventFormPage} />
+          <Route path="/admin/events/:id" component={EventFormPage} />
+          <Route path="/admin/attendees" component={AttendeesPage} />
+          <Route path="/admin/profile" component={ProfilePage} />
+          <Route path="/admin/check-in" component={CheckInPage} />
+          <Route path="/admin/swag" component={SwagPage} />
+          <Route path="/admin/reports" component={ReportsPage} />
+          <Route path="/admin/printers" component={PrintersPage} />
+          <Route path="/admin/settings" component={SettingsPage} />
+          <Route component={NotFound} />
+        </Switch>
+      </Suspense>
     </AdminLayout>
   );
 }
@@ -113,7 +133,11 @@ function RedirectToMyEvents() {
 function PublicRouter() {
   return (
     <Switch>
-      <Route path="/admin/login" component={LoginPage} />
+      <Route path="/admin/login">{() => (
+        <Suspense fallback={<LazyFallback />}>
+          <LoginPage />
+        </Suspense>
+      )}</Route>
       <Route path="/scan" component={ScanPage} />
       <Route path="/register/:eventId" component={RegistrationPage} />
       <Route path="/register">{() => <EventListPage />}</Route>
@@ -173,9 +197,9 @@ function AppRouter() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
-          <img 
-            src={unicityIcon} 
-            alt="Unicity" 
+          <img
+            src={unicityIcon}
+            alt="Unicity"
             className="h-14 w-14 rounded-md object-cover animate-pulse"
           />
           <p className="text-muted-foreground">Loading...</p>

@@ -30,6 +30,26 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Split large vendor libraries into separate cached chunks
+          "vendor-react": ["react", "react-dom"],
+          "vendor-ui": [
+            "@radix-ui/react-dialog",
+            "@radix-ui/react-select",
+            "@radix-ui/react-popover",
+            "@radix-ui/react-tabs",
+            "@radix-ui/react-accordion",
+            "@radix-ui/react-toast",
+            "@radix-ui/react-tooltip",
+            "@radix-ui/react-dropdown-menu",
+          ],
+          "vendor-forms": ["react-hook-form", "@hookform/resolvers", "zod"],
+          "vendor-query": ["@tanstack/react-query"],
+        },
+      },
+    },
   },
   server: {
     fs: {

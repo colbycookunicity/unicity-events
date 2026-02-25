@@ -309,6 +309,40 @@ async function runMigrations() {
       console.log('form_template_id column already exists in events.');
     }
     
+    // Performance indexes for high-traffic queries (200+ concurrent users)
+    console.log('Creating performance indexes...');
+
+    // Registrations: most frequently queried table
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_registrations_event_email ON registrations (event_id, email)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_registrations_event_status ON registrations (event_id, status)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_registrations_email ON registrations (email)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_registrations_unicity_id ON registrations (unicity_id) WHERE unicity_id IS NOT NULL`);
+
+    // Events: public endpoint lookups by slug
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_events_slug ON events (slug) WHERE slug IS NOT NULL`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_events_status ON events (status)`);
+
+    // Qualified registrants: checked during registration flow
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_qualified_event_email ON qualified_registrants (event_id, email)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_qualified_event_unicity ON qualified_registrants (event_id, unicity_id) WHERE unicity_id IS NOT NULL`);
+
+    // OTP sessions: checked on every registration verification
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_otp_sessions_email_event ON otp_sessions (email)`);
+
+    // Attendee sessions: checked on every authenticated attendee request
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_attendee_sessions_token ON attendee_sessions (token)`);
+
+    // Guests: looked up by registration
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_guests_registration ON guests (registration_id)`);
+
+    // Flights: looked up by registration
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_flights_registration ON flights (registration_id)`);
+
+    // Event pages: looked up by event + page type
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_event_pages_event_type ON event_pages (event_id, page_type)`);
+
+    console.log('Performance indexes created.');
+
     console.log('Migrations complete!');
   } finally {
     await client.end();

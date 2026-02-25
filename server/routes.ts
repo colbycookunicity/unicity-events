@@ -18,13 +18,10 @@ const HYDRA_API_BASE = process.env.NODE_ENV === "production"
   : "https://hydraqa.unicity.net/v6-test";
 
 // Fallback admin emails for initial setup (used only if no users exist in database)
-const FALLBACK_ADMIN_EMAILS = [
-  "colby.cook@unicity.com",
-  "biani.gonzalez@unicity.com",
-  "ashley.milliken@unicity.com",
-  "william.hall@unicity.com",
-  "carolina.martinez@unicity.com",
-];
+// Set via FALLBACK_ADMIN_EMAILS env var as comma-separated list, or uses defaults
+const FALLBACK_ADMIN_EMAILS = (process.env.FALLBACK_ADMIN_EMAILS ||
+  "colby.cook@unicity.com,biani.gonzalez@unicity.com,ashley.milliken@unicity.com,william.hall@unicity.com,carolina.martinez@unicity.com"
+).split(",").map(e => e.trim().toLowerCase()).filter(Boolean);
 
 // Check if email is an authorized admin user (database-driven with fallback)
 // Allows all user roles: admin, event_manager, marketing, readonly
@@ -51,7 +48,7 @@ interface AuthenticatedRequest extends Request {
 }
 
 function generateToken(): string {
-  return Math.random().toString(36).substring(2) + Date.now().toString(36);
+  return crypto.randomUUID() + crypto.randomUUID().replace(/-/g, '');
 }
 
 async function authenticateToken(req: AuthenticatedRequest, res: Response, next: NextFunction) {
@@ -2165,13 +2162,6 @@ export async function registerRoutes(
 
   // Public Event Registration (supports both ID and slug)
   app.post("/api/events/:eventIdOrSlug/register", async (req, res) => {
-    // Debug: Log incoming phone value
-    console.log('[DataFlow] POST /register - req.body.phone:', JSON.stringify({
-      phone: req.body.phone,
-      phoneType: typeof req.body.phone,
-      hasPhone: 'phone' in req.body,
-    }));
-    
     try {
       const event = await storage.getEventByIdOrSlug(req.params.eventIdOrSlug);
       if (!event) {
@@ -2405,7 +2395,6 @@ export async function registerRoutes(
           const customPhone = extractPhoneFromFormData(req.body.formData, event.formFields as any[]);
           if (customPhone) {
             updateData.phone = customPhone;
-            console.log('[DataFlow] POST UPSERT: Using phone from custom formData field:', customPhone);
           }
         }
         
@@ -2423,11 +2412,6 @@ export async function registerRoutes(
         
         const updatedRegistration = await storage.updateRegistration(existingReg.id, updateData);
         
-        console.log('[DataFlow] Registration updated - phone in DB:', JSON.stringify({
-          id: updatedRegistration?.id,
-          phone: updatedRegistration?.phone,
-          email: updatedRegistration?.email,
-        }));
         // Return 200 for updates (not 201) to indicate existing record was updated
         return res.status(200).json({ ...updatedRegistration, wasUpdated: true });
       }
@@ -2446,7 +2430,6 @@ export async function registerRoutes(
         const customPhone = extractPhoneFromFormData(req.body.formData, formFields);
         if (customPhone) {
           phoneValue = customPhone;
-          console.log('[DataFlow] Using phone from custom formData field for new registration:', customPhone);
         }
       }
       
@@ -2457,12 +2440,6 @@ export async function registerRoutes(
         String(clientIp)
       );
       
-      console.log('[DataFlow] Creating registration - phone from request:', JSON.stringify({
-        phone: phoneValue,
-        phoneType: typeof phoneValue,
-        email: normalizedEmail,
-        firstName: req.body.firstName,
-      }));
       const registration = await storage.createRegistration({
         eventId: event.id,
         email: normalizedEmail,
@@ -2659,7 +2636,6 @@ export async function registerRoutes(
         const customPhone = extractPhoneFromFormData(req.body.formData, event.formFields as any[]);
         if (customPhone) {
           updateData.phone = customPhone;
-          console.log('[DataFlow] PUT: Using phone from custom formData field:', customPhone);
         }
       }
       
@@ -6080,7 +6056,7 @@ export async function registerRoutes(
       ];
       let csvContent: string | null = null;
       for (const p of possiblePaths) {
-        if (fs.existsSync(p)) { csvContent = fs.readFileSync(p, "utf-8"); break; }
+        try { csvContent = await fs.promises.readFile(p, "utf-8"); break; } catch { /* file not found, try next */ }
       }
       if (!csvContent) {
         return res.status(500).json({ error: "CSV file not found on server" });
