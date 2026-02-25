@@ -2084,10 +2084,7 @@ export default function RegistrationPage() {
 
     return (
       <div className="min-h-screen bg-background">
-        <header className="flex items-center justify-end gap-2 p-4">
-          <ThemeToggle />
-          <LanguageToggle />
-        </header>
+        {renderHeader()}
         <div className="flex items-center justify-center min-h-[80vh] p-4">
           <Card className="max-w-md w-full">
             <CardContent className="p-8 text-center">
