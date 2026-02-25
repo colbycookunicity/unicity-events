@@ -26,7 +26,7 @@ import {
   type SwagItemWithStats, type SwagAssignmentWithDetails,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, gte, sql, count, or } from "drizzle-orm";
+import { eq, desc, and, gte, sql, count, or, inArray } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -445,48 +445,45 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(registrations).orderBy(desc(registrations.createdAt)).limit(limit);
   }
 
+  // Batch-load related data for multiple registrations (eliminates N+1 queries)
+  private async hydrateRegistrations(regs: Registration[]): Promise<RegistrationWithDetails[]> {
+    if (regs.length === 0) return [];
+
+    const regIds = regs.map(r => r.id);
+    const [allGuests, allFlights, allReimbursements] = await Promise.all([
+      db.select().from(guests).where(inArray(guests.registrationId, regIds)),
+      db.select().from(flights).where(inArray(flights.registrationId, regIds)),
+      db.select().from(reimbursements).where(inArray(reimbursements.registrationId, regIds)),
+    ]);
+
+    // Group by registration ID
+    const guestsByReg = new Map<string, Guest[]>();
+    for (const g of allGuests) { const arr = guestsByReg.get(g.registrationId) || []; arr.push(g); guestsByReg.set(g.registrationId, arr); }
+    const flightsByReg = new Map<string, Flight[]>();
+    for (const f of allFlights) { const arr = flightsByReg.get(f.registrationId) || []; arr.push(f); flightsByReg.set(f.registrationId, arr); }
+    const reimbursementsByReg = new Map<string, Reimbursement[]>();
+    for (const r of allReimbursements) { const arr = reimbursementsByReg.get(r.registrationId) || []; arr.push(r); reimbursementsByReg.set(r.registrationId, arr); }
+
+    return regs.map(reg => ({
+      ...reg,
+      guests: guestsByReg.get(reg.id) || [],
+      flights: flightsByReg.get(reg.id) || [],
+      reimbursements: reimbursementsByReg.get(reg.id) || [],
+    }));
+  }
+
   async getRegistrationsByUser(email: string): Promise<RegistrationWithDetails[]> {
     const regs = await db.select().from(registrations).where(eq(registrations.email, email));
-    
-    return Promise.all(
-      regs.map(async (reg) => {
-        const regGuests = await db.select().from(guests).where(eq(guests.registrationId, reg.id));
-        const regFlights = await db.select().from(flights).where(eq(flights.registrationId, reg.id));
-        const regReimbursements = await db.select().from(reimbursements).where(eq(reimbursements.registrationId, reg.id));
-
-        return {
-          ...reg,
-          guests: regGuests,
-          flights: regFlights,
-          reimbursements: regReimbursements,
-        };
-      })
-    );
+    return this.hydrateRegistrations(regs);
   }
 
   async getRegistrationsByUnicityIdAll(unicityId: string): Promise<RegistrationWithDetails[]> {
     const regs = await db.select().from(registrations).where(eq(registrations.unicityId, unicityId));
-    
-    return Promise.all(
-      regs.map(async (reg) => {
-        const regGuests = await db.select().from(guests).where(eq(guests.registrationId, reg.id));
-        const regFlights = await db.select().from(flights).where(eq(flights.registrationId, reg.id));
-        const regReimbursements = await db.select().from(reimbursements).where(eq(reimbursements.registrationId, reg.id));
-
-        return {
-          ...reg,
-          guests: regGuests,
-          flights: regFlights,
-          reimbursements: regReimbursements,
-        };
-      })
-    );
+    return this.hydrateRegistrations(regs);
   }
 
   async createRegistration(registration: InsertRegistration): Promise<Registration> {
-    console.log('[DataFlow] storage.createRegistration input phone:', registration.phone);
     const [newReg] = await db.insert(registrations).values(registration).returning();
-    console.log('[DataFlow] storage.createRegistration result phone:', newReg.phone, 'id:', newReg.id);
     return newReg;
   }
 
@@ -1152,16 +1149,30 @@ export class DatabaseStorage implements IStorage {
       .where(eq(events.status, 'published'))
       .orderBy(desc(events.startDate));
 
+    if (publishedEvents.length === 0) return [];
+
+    const eventIds = publishedEvents.map(e => e.id);
+
+    // Batch fetch: all registrations for this email across all published events (replaces N+1)
+    const userRegs = await db.select().from(registrations)
+      .where(and(
+        inArray(registrations.eventId, eventIds),
+        sql`LOWER(${registrations.email}) = LOWER(${email})`
+      ));
+    const regsByEvent = new Map(userRegs.map(r => [r.eventId, r]));
+
+    // Batch fetch: all qualified registrant entries for this email across all published events
+    const userQualified = await db.select().from(qualifiedRegistrants)
+      .where(and(
+        inArray(qualifiedRegistrants.eventId, eventIds),
+        sql`LOWER(${qualifiedRegistrants.email}) = LOWER(${email})`
+      ));
+    const qualifiedByEvent = new Map(userQualified.map(q => [q.eventId, q]));
+
     const results: { event: Event; registration: Registration | null; qualifiedRegistrant: QualifiedRegistrant | null }[] = [];
 
     for (const event of publishedEvents) {
-      // Check if user has existing registration
-      const [existingReg] = await db.select().from(registrations)
-        .where(and(
-          eq(registrations.eventId, event.id),
-          sql`LOWER(${registrations.email}) = LOWER(${email})`
-        ));
-
+      const existingReg = regsByEvent.get(event.id);
       if (existingReg) {
         results.push({ event, registration: existingReg, qualifiedRegistrant: null });
         continue;
@@ -1169,32 +1180,26 @@ export class DatabaseStorage implements IStorage {
 
       // Check if event requires qualification
       if (event.requiresQualification) {
-        // Check qualified registrants list
-        const [qualifiedReg] = await db.select().from(qualifiedRegistrants)
-          .where(and(
-            eq(qualifiedRegistrants.eventId, event.id),
-            sql`LOWER(${qualifiedRegistrants.email}) = LOWER(${email})`
-          ));
-
+        const qualifiedReg = qualifiedByEvent.get(event.id);
         if (qualifiedReg) {
           // Check if qualification period is active (check each boundary independently)
           const now = new Date();
           let isWithinWindow = true;
-          
+
           if (event.qualificationStartDate) {
             const start = new Date(event.qualificationStartDate);
             if (now < start) {
               isWithinWindow = false;
             }
           }
-          
+
           if (event.qualificationEndDate) {
             const end = new Date(event.qualificationEndDate);
             if (now > end) {
               isWithinWindow = false;
             }
           }
-          
+
           if (isWithinWindow) {
             results.push({ event, registration: null, qualifiedRegistrant: qualifiedReg });
           }

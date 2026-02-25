@@ -18,13 +18,10 @@ const HYDRA_API_BASE = process.env.NODE_ENV === "production"
   : "https://hydraqa.unicity.net/v6-test";
 
 // Fallback admin emails for initial setup (used only if no users exist in database)
-const FALLBACK_ADMIN_EMAILS = [
-  "colby.cook@unicity.com",
-  "biani.gonzalez@unicity.com",
-  "ashley.milliken@unicity.com",
-  "william.hall@unicity.com",
-  "carolina.martinez@unicity.com",
-];
+// Set via FALLBACK_ADMIN_EMAILS env var as comma-separated list, or uses defaults
+const FALLBACK_ADMIN_EMAILS = (process.env.FALLBACK_ADMIN_EMAILS ||
+  "colby.cook@unicity.com,biani.gonzalez@unicity.com,ashley.milliken@unicity.com,william.hall@unicity.com,carolina.martinez@unicity.com"
+).split(",").map(e => e.trim().toLowerCase()).filter(Boolean);
 
 // Check if email is an authorized admin user (database-driven with fallback)
 // Allows all user roles: admin, event_manager, marketing, readonly
@@ -51,7 +48,7 @@ interface AuthenticatedRequest extends Request {
 }
 
 function generateToken(): string {
-  return Math.random().toString(36).substring(2) + Date.now().toString(36);
+  return crypto.randomUUID() + crypto.randomUUID().replace(/-/g, '');
 }
 
 async function authenticateToken(req: AuthenticatedRequest, res: Response, next: NextFunction) {
@@ -6059,7 +6056,7 @@ export async function registerRoutes(
       ];
       let csvContent: string | null = null;
       for (const p of possiblePaths) {
-        if (fs.existsSync(p)) { csvContent = fs.readFileSync(p, "utf-8"); break; }
+        try { csvContent = await fs.promises.readFile(p, "utf-8"); break; } catch { /* file not found, try next */ }
       }
       if (!csvContent) {
         return res.status(500).json({ error: "CSV file not found on server" });
