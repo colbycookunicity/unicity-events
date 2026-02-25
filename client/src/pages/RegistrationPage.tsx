@@ -1189,15 +1189,48 @@ export default function RegistrationPage() {
             const data = await res.json();
             setLoadedForKey(currentKey);
             
-            // If we're on email step but have valid token, skip to form
-            // CRITICAL: Do NOT skip for qualified_verified mode - require full verification flow
-            if (verificationStep === "email" && !qualifiedVerifiedMode) {
+            // Valid attendee token = proven identity — always advance to form.
+            // The attendeeAuthToken was issued after OTP verification on /my-events,
+            // so the user has already proved who they are.
+            if (verificationStep === "email") {
               setVerificationEmail(attendeeEmail);
               setVerificationStep("form");
             }
             
             if (data.success && data.exists && data.registration) {
+              // Existing registration — populate form and set profile
               populateFormWithRegistration(data.registration);
+              setVerifiedProfile({
+                unicityId: data.registration.unicityId || "",
+                email: attendeeEmail,
+                firstName: data.registration.firstName || "",
+                lastName: data.registration.lastName || "",
+                phone: data.registration.phone || "",
+              });
+            } else {
+              // No registration yet — fetch qualifier data to pre-populate name fields
+              try {
+                const qualRes = await fetch(`/api/public/qualifier-info/${params.eventId}?email=${encodeURIComponent(attendeeEmail)}`);
+                if (qualRes.ok) {
+                  const qual = await qualRes.json();
+                  setVerifiedProfile({
+                    unicityId: qual.unicityId || "",
+                    email: attendeeEmail,
+                    firstName: qual.firstName || "",
+                    lastName: qual.lastName || "",
+                    phone: "",
+                  });
+                  form.setValue("email", attendeeEmail);
+                  if (qual.firstName) form.setValue("firstName", qual.firstName);
+                  if (qual.lastName) form.setValue("lastName", qual.lastName);
+                  if (qual.unicityId) form.setValue("unicityId", qual.unicityId);
+                } else {
+                  setVerifiedProfile({ unicityId: "", email: attendeeEmail, firstName: "", lastName: "", phone: "" });
+                  form.setValue("email", attendeeEmail);
+                }
+              } catch {
+                form.setValue("email", attendeeEmail);
+              }
             }
             setIsLoadingExisting(false);
             return;
