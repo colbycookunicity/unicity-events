@@ -208,6 +208,10 @@ export interface IStorage {
   updateBadgeTemplate(id: string, data: Partial<InsertBadgeTemplate>): Promise<BadgeTemplate | undefined>;
   deleteBadgeTemplate(id: string): Promise<boolean>;
   setDefaultBadgeTemplate(eventId: string, templateId: string): Promise<void>;
+
+  // App settings
+  getAppSetting(key: string): Promise<string | undefined>;
+  setAppSetting(key: string, value: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {

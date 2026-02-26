@@ -1043,6 +1043,14 @@ export function buildCheckInQRPayload(eventId: string, registrationId: string, t
   return `CHECKIN:${eventId}:${registrationId}:${token}`;
 }
 
+// App-wide key-value settings table
+export const appSettings = pgTable("app_settings", {
+  key: varchar("key", { length: 255 }).primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+export type AppSetting = typeof appSettings.$inferSelect;
+
 // Helper to parse QR payload string
 export function parseCheckInQRPayload(payload: string): { eventId: string; registrationId: string; token: string } | null {
   if (!payload.startsWith('CHECKIN:')) return null;
